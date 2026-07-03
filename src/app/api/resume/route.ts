@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { parseResumeFile } from "@/lib/extraction/parse";
+import { renderPdfToImages } from "@/lib/extraction/render";
 import { runAgent } from "@/agents/run";
 import { resumeExtractor } from "@/agents/resume-extractor";
 import { ensureProfile } from "@/lib/profile/ensure";
@@ -32,10 +33,19 @@ export async function POST(req: NextRequest) {
     // the source is the evidence that actually matters, so this is non-blocking.
     const storagePath: string | null = null;
 
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+
+    // keep reconstructed text as the stored evidence (source.rawText) regardless
     const rawText = await parseResumeFile(buffer, file.type, file.name);
-    if (rawText.length < 30) {
+
+    // image-first extraction for PDFs (model reads the real layout)
+    const images = isPdf ? await renderPdfToImages(buffer, { scale: 2 }) : [];
+
+    if (!images.length && rawText.length < 30) {
       return NextResponse.json(
-        { error: "Could not read enough text from the file" },
+        { error: "Could not read the file" },
         { status: 422 },
       );
     }
@@ -45,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const { output: extraction } = await runAgent(
       resumeExtractor,
-      { rawText },
+      { rawText, images },
       { userId, profileId },
     );
 

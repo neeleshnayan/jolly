@@ -85,10 +85,25 @@ export default function ResumeEditor({
     <>
       <div className="topbar">
         <span className="brand">Career Co-Pilot</span>
-        <span className="status">{status}</span>
+        <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <a href={`/mentor?u=${userId}`}>Talk to your mentor →</a>
+          <span className="status">{status}</span>
+        </span>
       </div>
 
       <main className="resume-wrap">
+        <div
+          style={{
+            maxWidth: 780,
+            margin: "0 auto 16px",
+            fontSize: 14,
+            color: "var(--muted)",
+          }}
+        >
+          Here&apos;s what we pulled from your résumé. <strong>Review and fix
+          anything that&apos;s off</strong> — edits save automatically — then
+          talk to your mentor.
+        </div>
         <div className="resume">
           {/* header */}
           <Field
@@ -224,6 +239,21 @@ export default function ResumeEditor({
               ))}
             </section>
           )}
+        </div>
+
+        <div style={{ maxWidth: 780, margin: "24px auto 0", textAlign: "center" }}>
+          <a
+            className="btn"
+            style={{
+              display: "inline-block",
+              width: "auto",
+              padding: "12px 28px",
+              textDecoration: "none",
+            }}
+            href={`/mentor?u=${userId}`}
+          >
+            Looks good — talk to your mentor →
+          </a>
         </div>
       </main>
     </>

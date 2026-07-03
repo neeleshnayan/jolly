@@ -9,10 +9,27 @@ function client(): Anthropic {
 }
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
+const LIVE_MODEL = process.env.ANTHROPIC_LIVE_MODEL ?? "claude-sonnet-5";
 
 export const anthropicProvider: LLMProvider = {
   name: "anthropic",
   async extractStructured(req) {
+    type UserContent = Anthropic.Messages.MessageParam["content"];
+    const imageType = "image/png" as const;
+    const content: UserContent = req.images?.length
+      ? [
+          ...req.images.map((img) => ({
+            type: "image" as const,
+            source: {
+              type: "base64" as const,
+              media_type: (img.mediaType || imageType) as typeof imageType,
+              data: img.dataBase64,
+            },
+          })),
+          { type: "text" as const, text: req.prompt },
+        ]
+      : req.prompt;
+
     const msg = await client().messages.create({
       model: MODEL,
       max_tokens: req.maxTokens ?? 4096,
@@ -25,7 +42,7 @@ export const anthropicProvider: LLMProvider = {
         },
       ],
       tool_choice: { type: "tool", name: req.schemaName },
-      messages: [{ role: "user", content: req.prompt }],
+      messages: [{ role: "user", content }],
     });
 
     const block = msg.content.find((b) => b.type === "tool_use");
@@ -40,5 +57,32 @@ export const anthropicProvider: LLMProvider = {
         outputTokens: msg.usage.output_tokens,
       },
     };
+  },
+
+  async *streamChat(req) {
+    // Anthropic keeps system separate and requires messages to start with user.
+    const system =
+      [req.system, ...req.messages.filter((m) => m.role === "system").map((m) => m.content)]
+        .filter(Boolean)
+        .join("\n\n") || undefined;
+
+    const msgs = req.messages
+      .filter((m) => m.role !== "system")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    while (msgs.length && msgs[0].role === "assistant") msgs.shift();
+    if (msgs.length === 0) msgs.push({ role: "user", content: "Hello." });
+
+    const stream = client().messages.stream({
+      model: req.model ?? LIVE_MODEL,
+      max_tokens: req.maxTokens ?? 1024,
+      system,
+      messages: msgs,
+    });
+
+    for await (const ev of stream) {
+      if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+        yield ev.delta.text;
+      }
+    }
   },
 };
