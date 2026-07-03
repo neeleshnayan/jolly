@@ -1,0 +1,152 @@
+:root {
+  --ink: #1a1a1a;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #2563eb;
+  --bg: #f6f7f9;
+  --paper: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+
+/* ---------- top bar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.topbar .brand { font-weight: 700; letter-spacing: -0.01em; }
+.topbar .status { font-size: 13px; color: var(--muted); min-height: 18px; }
+
+/* ---------- upload ---------- */
+.upload-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.upload-card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+}
+.upload-card h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.02em; }
+.upload-card p.sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
+.dropzone {
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover { border-color: var(--accent); background: #f8faff; }
+.dropzone.has-file { border-color: var(--accent); background: #f8faff; }
+.dropzone .filename { font-weight: 600; font-size: 14px; }
+.dropzone .hint { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.status-line { margin-top: 14px; font-size: 13px; color: var(--muted); min-height: 18px; }
+.status-line.error { color: #dc2626; }
+
+/* ---------- resume paper ---------- */
+.resume-wrap { padding: 32px 20px 80px; }
+.resume {
+  max-width: 780px;
+  margin: 0 auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 48px 56px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
+}
+.resume .name {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.resume .headline { font-size: 15px; color: var(--accent); font-weight: 600; margin-top: 2px; }
+.resume .contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.section { margin-top: 28px; }
+.section > h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin: 0 0 12px;
+}
+.entry { margin-bottom: 18px; }
+.entry .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.entry .title { font-weight: 600; font-size: 15px; }
+.entry .org { color: var(--ink); font-size: 14px; }
+.entry .dates { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.bullets { margin: 8px 0 0; }
+.skills-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  background: #f1f5f9;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+/* ---------- inline editable fields ---------- */
+.f {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 6px;
+  resize: none;
+}
+.f:hover { background: #f8faff; }
+.f:focus { background: #eef4ff; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25); }
+.f.name { font: inherit; }
+textarea.f { line-height: 1.55; }
+.dates-input { max-width: 160px; text-align: right; }
