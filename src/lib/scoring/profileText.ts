@@ -15,7 +15,7 @@ export function buildProfileText(
     .map(
       (e) =>
         `- ${e.title ?? "role"}${e.org ? ` @ ${e.org}` : ""} (${e.startDate ?? "?"}–${e.endDate ?? "?"})` +
-        (e.bullets?.length ? `\n  ${e.bullets.map((b) => b.text).join("\n  ")}` : ""),
+        (e.bullets?.length ? `\n  ${e.bullets.map((b) => stripHtml(b.text)).join("\n  ")}` : ""),
     )
     .join("\n");
   const edu = full.education
@@ -40,4 +40,16 @@ Skills: ${skills || "(none)"}
 
 What the mentor has learned so far:
 ${learned}`;
+}
+
+// bullets may now contain rich-text HTML (links, bold); the LLM wants plain text
+function stripHtml(s: string): string {
+  return s
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RichBullets } from "./RichBullets";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
@@ -108,6 +109,48 @@ export default function ResumeEditor({
     }
   }
 
+  type EntryKind = "experience" | "education" | "skill" | "project";
+
+  async function addEntry(kind: EntryKind) {
+    setStatus("Adding…");
+    try {
+      const res = await fetch("/api/profile/entry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, kind, action: "create" }),
+      });
+      const json = await res.json();
+      if (!json.id) throw new Error(json.error || "Add failed");
+      const id = json.id as string;
+      setData((d) => {
+        if (kind === "experience")
+          return { ...d, experiences: [...d.experiences, { id, org: null, title: null, location: null, startDate: null, endDate: null, isCurrent: false, bullets: [] }] };
+        if (kind === "education")
+          return { ...d, education: [...d.education, { id, institution: null, degree: null, field: null, startDate: null, endDate: null, details: null }] };
+        if (kind === "skill") return { ...d, skills: [...d.skills, { id, name: "New skill", category: null }] };
+        return { ...d, projects: [...d.projects, { id, name: null, description: null, bullets: [] }] };
+      });
+      setStatus("");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Add failed");
+    }
+  }
+
+  function removeEntry(kind: EntryKind, id: string) {
+    setData((d) => ({
+      ...d,
+      experiences: kind === "experience" ? d.experiences.filter((x) => x.id !== id) : d.experiences,
+      education: kind === "education" ? d.education.filter((x) => x.id !== id) : d.education,
+      skills: kind === "skill" ? d.skills.filter((x) => x.id !== id) : d.skills,
+      projects: kind === "project" ? d.projects.filter((x) => x.id !== id) : d.projects,
+    }));
+    void fetch("/api/profile/entry", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, kind, action: "delete", id }),
+    }).catch(() => setStatus("Delete failed"));
+  }
+
   const p = data.profile;
 
   return (
@@ -190,6 +233,7 @@ export default function ResumeEditor({
               <h2>Experience</h2>
               {data.experiences.map((e) => (
                 <div className="entry" key={e.id}>
+                  <button className="entry-x no-print" title="Remove role" onClick={() => removeEntry("experience", e.id)}>×</button>
                   <div className="row">
                     <Field
                       className="f title"
@@ -217,6 +261,7 @@ export default function ResumeEditor({
                   />
                 </div>
               ))}
+              <button className="add-btn no-print" onClick={() => addEntry("experience")}>+ Add role</button>
             </section>
           )}
 
@@ -226,6 +271,7 @@ export default function ResumeEditor({
               <h2>Education</h2>
               {data.education.map((ed) => (
                 <div className="entry" key={ed.id}>
+                  <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("education", ed.id)}>×</button>
                   <div className="row">
                     <Field
                       className="f title"
@@ -249,6 +295,7 @@ export default function ResumeEditor({
                   />
                 </div>
               ))}
+              <button className="add-btn no-print" onClick={() => addEntry("education")}>+ Add education</button>
             </section>
           )}
 
@@ -264,8 +311,10 @@ export default function ResumeEditor({
                       placeholder="skill"
                       onSave={(v) => save("skill", s.id, { name: v })}
                     />
+                    <button className="chip-x no-print" title="Remove" onClick={() => removeEntry("skill", s.id)}>×</button>
                   </span>
                 ))}
+                <button className="chip add-chip no-print" onClick={() => addEntry("skill")}>+ Add</button>
               </div>
             </section>
           )}
@@ -276,6 +325,7 @@ export default function ResumeEditor({
               <h2>Projects</h2>
               {data.projects.map((pr) => (
                 <div className="entry" key={pr.id}>
+                  <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("project", pr.id)}>×</button>
                   <Field
                     className="f title"
                     value={pr.name}
@@ -289,8 +339,17 @@ export default function ResumeEditor({
                   />
                 </div>
               ))}
+              <button className="add-btn no-print" onClick={() => addEntry("project")}>+ Add project</button>
             </section>
           )}
+
+          {/* add any empty sections */}
+          <div className="add-sections no-print">
+            {data.experiences.length === 0 && <button onClick={() => addEntry("experience")}>+ Experience</button>}
+            {data.education.length === 0 && <button onClick={() => addEntry("education")}>+ Education</button>}
+            {data.skills.length === 0 && <button onClick={() => addEntry("skill")}>+ Skills</button>}
+            {data.projects.length === 0 && <button onClick={() => addEntry("project")}>+ Projects</button>}
+          </div>
         </div>
 
         <div
@@ -434,25 +493,28 @@ function BulletsField({
   bullets: Bullet[];
   onSave: (bullets: Bullet[]) => void;
 }) {
-  const initial = bullets.map((b) => b.text).join("\n");
-  const [text, setText] = useState(initial);
   return (
-    <textarea
-      className="f bullets"
-      rows={Math.max(text.split("\n").length, 1)}
-      value={text}
-      placeholder="• one achievement per line"
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        if (text !== initial) {
-          const next = text
-            .split("\n")
-            .map((t) => t.trim())
-            .filter(Boolean)
-            .map((t) => ({ text: t }));
-          onSave(next);
-        }
+    <RichBullets
+      value={bulletsToHtml(bullets)}
+      onSave={(html) => {
+        const next = htmlToBullets(html);
+        const before = bullets.map((b) => b.text).join("");
+        const after = next.map((b) => b.text).join("");
+        if (after !== before) onSave(next);
       }}
     />
   );
+}
+
+function bulletsToHtml(bullets: Bullet[]): string {
+  if (!bullets?.length) return "";
+  return `<ul>${bullets.map((b) => `<li>${b.text}</li>`).join("")}</ul>`;
+}
+function htmlToBullets(html: string): Bullet[] {
+  if (typeof window === "undefined") return [];
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return Array.from(doc.querySelectorAll("li"))
+    .map((li) => li.innerHTML.trim())
+    .filter((t) => t && t !== "<br>")
+    .map((text) => ({ text }));
 }

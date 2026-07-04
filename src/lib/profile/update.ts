@@ -77,9 +77,61 @@ const patchByKind = {
 } as const;
 
 export type EditKind = keyof typeof patchByKind;
+export type EntryKind = "experience" | "education" | "skill" | "project";
 
 function requireId(id: string | undefined): asserts id is string {
   if (!id) throw new Error("id is required for this edit");
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function profileIdFor(tx: Tx, userId: string): Promise<string> {
+  const [profile] = await tx.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  if (!profile) throw new Error("Profile not found");
+  return profile.id;
+}
+
+/** Add a blank entry to a section; returns its id so the client can edit it. */
+export async function createEntry(userId: string, kind: EntryKind) {
+  return db.transaction(async (tx) => {
+    const pid = await profileIdFor(tx, userId);
+    let id: string;
+    switch (kind) {
+      case "experience": {
+        const [r] = await tx.insert(experiences).values({ profileId: pid, bullets: [], isCurrent: false }).returning({ id: experiences.id });
+        id = r.id;
+        break;
+      }
+      case "education": {
+        const [r] = await tx.insert(education).values({ profileId: pid }).returning({ id: education.id });
+        id = r.id;
+        break;
+      }
+      case "skill": {
+        const [r] = await tx.insert(skills).values({ profileId: pid, name: "New skill" }).returning({ id: skills.id });
+        id = r.id;
+        break;
+      }
+      case "project": {
+        const [r] = await tx.insert(projects).values({ profileId: pid, bullets: [] }).returning({ id: projects.id });
+        id = r.id;
+        break;
+      }
+    }
+    await tx.insert(sources).values({ profileId: pid, kind: "user_edit", metadata: { action: "create", entity: kind, id } });
+    return { id };
+  });
+}
+
+/** Remove an entry. */
+export async function deleteEntry(userId: string, kind: EntryKind, id: string) {
+  return db.transaction(async (tx) => {
+    const pid = await profileIdFor(tx, userId);
+    const where = { experience: experiences, education, skill: skills, project: projects }[kind];
+    await tx.delete(where).where(and(eq(where.id, id), eq(where.profileId, pid)));
+    await tx.insert(sources).values({ profileId: pid, kind: "user_edit", metadata: { action: "delete", entity: kind, id } });
+    return { ok: true as const };
+  });
 }
 
 export async function applyEdit(input: {
