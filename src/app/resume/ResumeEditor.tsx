@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
@@ -62,6 +62,35 @@ export default function ResumeEditor({
 }) {
   const [data, setData] = useState<FullProfile>(initial);
   const [status, setStatus] = useState("");
+  // background probe generation (kicked off by the upload, runs on the server)
+  const [probeStatus, setProbeStatus] = useState<"working" | "ready" | null>(null);
+  const [probeCount, setProbeCount] = useState(0);
+
+  useEffect(() => {
+    let stop = false;
+    let tries = 0;
+    const tick = async () => {
+      if (stop) return;
+      try {
+        const r = await fetch(`/api/resume/probes?u=${userId}`);
+        const j = await r.json();
+        if (j.count > 0 && !j.generating) {
+          setProbeCount(j.count);
+          setProbeStatus("ready");
+          return; // done — stop polling
+        }
+        setProbeStatus("working");
+      } catch {
+        /* keep trying */
+      }
+      if (!stop && tries++ < 40) setTimeout(tick, 3000);
+      else if (!stop) setProbeStatus(null);
+    };
+    void tick();
+    return () => {
+      stop = true;
+    };
+  }, [userId]);
 
   async function save(kind: string, id: string | undefined, patch: object) {
     setStatus("Saving…");
@@ -99,6 +128,21 @@ export default function ResumeEditor({
       </div>
 
       <main className="resume-wrap">
+        {probeStatus === "working" && (
+          <div className="probe-banner no-print">
+            <span>Prepping your mentor with questions from your résumé…</span>
+            <span className="bar" />
+          </div>
+        )}
+        {probeStatus === "ready" && (
+          <div className="probe-banner ready no-print">
+            <span>
+              ✓ Your mentor is prepped with {probeCount} question
+              {probeCount === 1 ? "" : "s"} from your résumé —{" "}
+              <a href={`/mentor?u=${userId}`}>start the call →</a>
+            </span>
+          </div>
+        )}
         <div
           className="no-print"
           style={{

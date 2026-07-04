@@ -233,6 +233,17 @@ textarea.f { line-height: 1.55; }
 }
 @keyframes orb-spin { to { transform: rotate(360deg); } }
 
+/* in-call idle — hands-free, actively listening (green, gently breathing) */
+.orb.ready {
+  background: radial-gradient(circle at 35% 30%, #4ade80, #16a34a 72%);
+  box-shadow: 0 12px 40px rgba(22, 163, 74, 0.32);
+  animation: orb-breathe 2.6s ease-in-out infinite;
+}
+.orb.ready::before {
+  border-color: rgba(22, 163, 74, 0.4);
+  animation: orb-ring 2.4s ease-out infinite;
+}
+
 /* pre-call hero */
 .call-hero {
   text-align: center;
@@ -411,6 +422,72 @@ textarea.f { line-height: 1.55; }
   margin-top: 20px;
   flex-wrap: wrap;
 }
+
+/* ---------- probe progress banner ---------- */
+.probe-banner {
+  max-width: 780px;
+  margin: 0 auto 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #eef4ff;
+  border: 1px solid #dbe6ff;
+  color: var(--ink);
+}
+.probe-banner.ready { background: #ecfdf5; border-color: #bbf7d0; }
+.probe-banner .bar {
+  flex: 1;
+  height: 4px;
+  background: #dbe6ff;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.probe-banner .bar::after {
+  content: "";
+  position: absolute;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  animation: probe-slide 1.2s ease-in-out infinite;
+}
+@keyframes probe-slide {
+  to { left: 100%; }
+}
+
+/* ---------- debug view ---------- */
+.debug { max-width: 860px; margin: 0 auto; padding: 24px 20px 80px; }
+.debug-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.debug-head h1 { margin: 0 0 2px; font-size: 20px; }
+.debug section { margin-top: 28px; }
+.debug section > h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; margin: 0 0 12px;
+}
+.score-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 44px;
+  grid-template-areas: "label bar num" "why why why";
+  gap: 4px 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.score-label { grid-area: label; font-size: 13px; font-weight: 600; text-transform: capitalize; }
+.score-bar { grid-area: bar; height: 8px; background: #eef1f5; border-radius: 999px; overflow: hidden; }
+.score-fill { height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); border-radius: 999px; }
+.score-num { grid-area: num; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); }
+.score-why { grid-area: why; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.debug-item { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+.debug-item .tag {
+  flex: 0 0 auto; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  background: #f1f5f9; color: var(--muted); border-radius: 6px; padding: 2px 8px;
+}
+.debug-item .conf { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--accent); }
 
 /* ---------- print / PDF export ----------
    "Download PDF" calls window.print(); the browser's "Save as PDF" turns this

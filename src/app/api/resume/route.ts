@@ -3,14 +3,17 @@
  * multipart: file (pdf/docx/txt) + userId (TEMP until auth is wired).
  * flow: parse -> source -> extract -> spine.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { parseResumeFile } from "@/lib/extraction/parse";
 import { runAgent } from "@/agents/run";
 import { resumeExtractor } from "@/agents/resume-extractor";
+import { probeGenerator } from "@/agents/probe-generator";
 import { ensureProfile } from "@/lib/profile/ensure";
 import { persistExtraction } from "@/lib/profile/persist";
+import { persistProbes } from "@/lib/probes/persist";
+import { getProvider } from "@/llm";
 import type { ResumeExtraction } from "@/lib/extraction/schema";
 
 export const runtime = "nodejs";
@@ -62,6 +65,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing 'userId'" }, { status: 400 });
     }
 
+    // Start loading the extraction model now, in parallel with parsing/rendering,
+    // so it's hot by the time we call it (and it unloads itself right after).
+    void getProvider().warm?.();
+
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // TODO: upload `buffer` to Supabase storage and set storagePath. rawText in
@@ -104,7 +111,8 @@ export async function POST(req: NextRequest) {
 
     const { output: extraction, usage } = await runAgent(
       resumeExtractor,
-      { rawText, images },
+      // keep the model warm for the probe pass that follows (only when persisting)
+      { rawText, images, keepAlive: shouldPersist ? "60s" : undefined },
       { userId, profileId },
     );
 
@@ -140,7 +148,27 @@ export async function POST(req: NextRequest) {
       storagePath,
     });
 
-    return NextResponse.json({ ok: true, ...result, extraction });
+    // Generate the mentor's probes AFTER the response is sent — the user goes
+    // straight to the editor while gemma3 (still warm from extraction) works in
+    // the background. `after` keeps this alive server-side even if they navigate
+    // away; the model unloads once probes finish (default keep_alive).
+    const willProbe = rawText.length > 50;
+    if (willProbe) {
+      after(async () => {
+        try {
+          const { output: probes } = await runAgent(
+            probeGenerator,
+            { rawText },
+            { userId, profileId },
+          );
+          await persistProbes({ userId, extraction: probes, sourceId: result.sourceId });
+        } catch (err) {
+          console.warn("[/api/resume] probe generation failed (background)", err);
+        }
+      });
+    }
+
+    return NextResponse.json({ ok: true, ...result, probesPending: willProbe, extraction });
   } catch (err) {
     console.error("[/api/resume]", err);
     return NextResponse.json(

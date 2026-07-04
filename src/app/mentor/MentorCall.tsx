@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type Phase = "idle" | "recording" | "thinking" | "speaking";
 type Turn = { role: "user" | "assistant"; text: string };
 type Insight = { dimension: string; content: string; confidence: number };
 type Review = { loading: boolean; summary: string; insights: Insight[]; error?: string };
@@ -17,35 +18,58 @@ const DIMENSIONS = [
   "blocker",
 ];
 
+// --- voice-activity tuning (all in one place; adjust to taste) ---
+const SPEECH_RMS = 0.018; // mic energy above this counts as speech
+const BARGE_RMS = 0.05; // louder threshold to interrupt the mentor mid-sentence
+const SILENCE_HANG_MS = 1000; // this much quiet ends your turn
+const MIN_SPEECH_MS = 350; // ignore blips shorter than this
+const POLL_MS = 60;
+
 export default function MentorCall({ userId }: { userId: string }) {
+  // media + analysis
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ctxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
+  const vadTimerRef = useRef<number | null>(null);
+  // refs the VAD loop reads without stale closures
+  const liveRef = useRef(false);
+  const recordingRef = useRef(false);
+  const busyRef = useRef(false);
+  const speakingRef = useRef(false);
+  const speechStartRef = useRef(0);
+  const lastVoiceRef = useRef(0);
+  // conversation
   const turnsRef = useRef<Turn[]>([]);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   const [live, setLive] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [status, setStatus] = useState("Connecting…");
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [spokenText, setSpokenText] = useState(""); // text of the line being spoken
-  const [revealFrac, setRevealFrac] = useState(1); // how much of it to show (synced to audio)
-  const [showTranscript, setShowTranscript] = useState(false); // hidden by default
+  const [spokenText, setSpokenText] = useState("");
+  const [revealFrac, setRevealFrac] = useState(1);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [review, setReview] = useState<Review | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMsg, setSaveMsg] = useState("");
 
-  // warm the STT/LLM/TTS models on page load so the first turn isn't cold
+  function enter(p: Phase) {
+    setPhase(p);
+    recordingRef.current = p === "recording";
+    busyRef.current = p === "thinking";
+    speakingRef.current = p === "speaking";
+  }
+
+  // warm the models on page load; run the call timer while live
   useEffect(() => {
     fetch("/api/voice/warmup", { method: "POST" }).catch(() => {});
   }, []);
-
-  // call timer
   useEffect(() => {
     if (!live) return;
     const t0 = Date.now();
@@ -53,6 +77,10 @@ export default function MentorCall({ userId }: { userId: string }) {
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
     return () => clearInterval(id);
   }, [live]);
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [turns, showTranscript]);
 
   function pushTurn(t: Turn) {
     turnsRef.current = [...turnsRef.current, t];
@@ -61,50 +89,170 @@ export default function MentorCall({ userId }: { userId: string }) {
   function buildTranscript(list: Turn[]) {
     return list.map((t) => `${t.role === "user" ? "You" : "Mentor"}: ${t.text}`).join("\n");
   }
+
   function playAudio(b64: string, mime = "audio/wav", text = "") {
     audioRef.current?.pause();
     const audio = new Audio(`data:${mime};base64,${b64}`);
     audioRef.current = audio;
     setSpokenText(text);
     setRevealFrac(text ? 0 : 1);
-    setSpeaking(true);
-    // reveal the caption in step with the audio so it "prints as the mentor speaks"
+    enter("speaking");
     audio.ontimeupdate = () => {
       if (audio.duration) setRevealFrac(Math.min(1, audio.currentTime / audio.duration));
     };
-    audio.onended = () => {
-      setSpeaking(false);
+    const done = () => {
       setRevealFrac(1);
+      if (liveRef.current) {
+        enter("idle");
+        setStatus("Listening — just start talking.");
+      }
     };
-    audio.onerror = () => {
-      setSpeaking(false);
-      setRevealFrac(1);
-    };
-    void audio.play().catch(() => setSpeaking(false));
+    audio.onended = done;
+    audio.onerror = done;
+    void audio.play().catch(done);
   }
 
-  // auto-scroll the secondary transcript to the newest line
-  useEffect(() => {
-    const el = transcriptRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, showTranscript]);
+  // ---- the voice-activity loop: decides when you start and stop talking ----
+  function vadTick() {
+    const analyser = analyserRef.current;
+    if (!analyser || !liveRef.current || busyRef.current) return;
+    analyser.getFloatTimeDomainData(dataRef.current);
+    let sum = 0;
+    for (let i = 0; i < dataRef.current.length; i++) sum += dataRef.current[i] * dataRef.current[i];
+    const rms = Math.sqrt(sum / dataRef.current.length);
+    const now = performance.now();
+    const voiced = rms > SPEECH_RMS;
+
+    if (speakingRef.current) {
+      // mentor is talking — only a clear, loud interruption takes the floor
+      if (rms > BARGE_RMS) {
+        audioRef.current?.pause();
+        beginRecording(now);
+      }
+      return;
+    }
+    if (recordingRef.current) {
+      if (voiced) lastVoiceRef.current = now;
+      if (now - lastVoiceRef.current >= SILENCE_HANG_MS) endRecording(now);
+    } else if (voiced) {
+      beginRecording(now);
+    }
+  }
+
+  function beginRecording(now: number) {
+    const stream = streamRef.current;
+    if (!stream) return;
+    chunksRef.current = [];
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(stream, { mimeType: pickMime() });
+    } catch {
+      mr = new MediaRecorder(stream);
+    }
+    mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
+    mr.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type || "audio/webm" });
+      void submitTurn(blob);
+    };
+    recorderRef.current = mr;
+    mr.start();
+    speechStartRef.current = now;
+    lastVoiceRef.current = now;
+    enter("recording");
+    setStatus("I hear you…");
+  }
+
+  function endRecording(now: number) {
+    const mr = recorderRef.current;
+    recordingRef.current = false;
+    if (!mr) return;
+    if (now - speechStartRef.current < MIN_SPEECH_MS) {
+      mr.onstop = null; // too short — discard, keep listening
+      try {
+        mr.stop();
+      } catch {}
+      enter("idle");
+      setStatus("Listening — just start talking.");
+      return;
+    }
+    try {
+      mr.stop(); // → onstop → submitTurn
+    } catch {}
+  }
+
+  async function submitTurn(blob: Blob) {
+    enter("thinking");
+    setStatus("Thinking…");
+    try {
+      // Whisper (via voicebox) decodes PCM WAV reliably but 500s on webm/opus,
+      // so transcode to 16kHz mono WAV in the browser before sending.
+      let audioBlob = blob;
+      let filename = "turn.wav";
+      try {
+        audioBlob = await toWav(blob);
+      } catch {
+        filename = blob.type.includes("ogg") ? "turn.ogg" : "turn.webm";
+      }
+      const fd = new FormData();
+      fd.append("audio", audioBlob, filename);
+      fd.append("userId", userId);
+      fd.append(
+        "history",
+        JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))),
+      );
+      const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Turn failed");
+      if (!json.userText) {
+        enter("idle");
+        setStatus("Didn't catch that — go ahead.");
+        return;
+      }
+      pushTurn({ role: "user", text: json.userText });
+      if (json.replyText) pushTurn({ role: "assistant", text: json.replyText });
+      if (json.audioBase64) playAudio(json.audioBase64, json.mime, json.replyText ?? "");
+      else {
+        enter("idle");
+        setStatus("Listening — just start talking.");
+      }
+    } catch (err) {
+      enter("idle");
+      setStatus(err instanceof Error ? err.message : "Something went wrong.");
+    }
+  }
 
   async function startSession() {
     setError(null);
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
     } catch {
       setError("Microphone access is needed for the call. Allow it and try again.");
       return;
     }
+    // set up energy analysis for voice-activity detection
+    const ctx = new AudioContext();
+    ctxRef.current = ctx;
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    ctx.createMediaStreamSource(streamRef.current).connect(analyser);
+    analyserRef.current = analyser;
+    dataRef.current = new Float32Array(analyser.fftSize);
+
     turnsRef.current = [];
     setTurns([]);
     setReview(null);
+    setShowTranscript(false);
     setSaveState("idle");
     setSaveMsg("");
+    liveRef.current = true;
     setLive(true);
+    enter("thinking");
     setStatus("Getting up to speed on your background…");
+    vadTimerRef.current = window.setInterval(vadTick, POLL_MS);
 
+    // mentor opens, personalized from the résumé/map
     try {
       const res = await fetch("/api/voice/greeting", {
         method: "POST",
@@ -115,82 +263,33 @@ export default function MentorCall({ userId }: { userId: string }) {
       if (res.ok && json.text) {
         pushTurn({ role: "assistant", text: json.text });
         if (json.audioBase64) playAudio(json.audioBase64, json.mime, json.text);
-      } else {
-        throw new Error(json.error || "greeting failed");
-      }
+        else enter("idle");
+      } else throw new Error(json.error || "greeting failed");
     } catch {
       pushTurn({
         role: "assistant",
         text: "Hey — I'm your career mentor. Where are you in your search right now, and how's it feeling?",
       });
-    }
-    setStatus("Your turn — tap the mic and talk.");
-  }
-
-  function toggleRecording() {
-    if (busy || !live) return;
-    if (recording) {
-      recorderRef.current?.stop();
-      setRecording(false);
-      return;
-    }
-    if (!streamRef.current) return;
-    chunksRef.current = [];
-    const mr = new MediaRecorder(streamRef.current, { mimeType: pickMime() });
-    mr.ondataavailable = (e) => {
-      if (e.data.size) chunksRef.current.push(e.data);
-    };
-    mr.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type || "audio/webm" });
-      void submitTurn(blob);
-    };
-    recorderRef.current = mr;
-    audioRef.current?.pause(); // stop the mentor if the user jumps in
-    setSpeaking(false);
-    mr.start();
-    setRecording(true);
-    setStatus("Listening…");
-  }
-
-  async function submitTurn(blob: Blob) {
-    setBusy(true);
-    setStatus("Thinking…");
-    try {
-      const fd = new FormData();
-      const ext = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "mp4" : "webm";
-      fd.append("audio", blob, `turn.${ext}`);
-      fd.append("userId", userId);
-      fd.append(
-        "history",
-        JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))),
-      );
-      const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Turn failed");
-
-      if (!json.userText) {
-        setStatus("Didn't catch that — tap the mic and try again.");
-        return;
-      }
-      pushTurn({ role: "user", text: json.userText });
-      if (json.replyText) pushTurn({ role: "assistant", text: json.replyText });
-      if (json.audioBase64) playAudio(json.audioBase64, json.mime, json.replyText ?? "");
-      setStatus("Your turn — tap the mic and talk.");
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
+      enter("idle");
+      setStatus("Listening — just start talking.");
     }
   }
 
   function endSession() {
-    recorderRef.current?.stop();
+    liveRef.current = false;
+    if (vadTimerRef.current) clearInterval(vadTimerRef.current);
+    const mr = recorderRef.current;
+    if (mr) {
+      mr.onstop = null;
+      try {
+        mr.stop();
+      } catch {}
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+    ctxRef.current?.close().catch(() => {});
     audioRef.current?.pause();
-    setSpeaking(false);
+    enter("idle");
     setLive(false);
-    setRecording(false);
     setStatus("Session ended. Pulling together a recap…");
     void generateSummary();
   }
@@ -269,20 +368,29 @@ export default function MentorCall({ userId }: { userId: string }) {
     );
   }
 
-  const orbState = recording ? "listening" : busy ? "thinking" : speaking ? "speaking" : "idle";
-  const stateLabel = recording
-    ? "Listening…"
-    : busy
-      ? "Thinking…"
-      : speaking
-        ? "Mentor is speaking"
-        : "Your turn — tap the mic";
-  const lastTurn = turns[turns.length - 1];
-  const caption = recording
-    ? ""
-    : speaking && spokenText
-      ? revealWords(spokenText, revealFrac)
-      : lastTurn?.text ?? "";
+  const orbClass =
+    phase === "recording"
+      ? "listening"
+      : phase === "thinking"
+        ? "thinking"
+        : phase === "speaking"
+          ? "speaking"
+          : "ready";
+  const label =
+    phase === "recording"
+      ? "I hear you…"
+      : phase === "thinking"
+        ? "Thinking…"
+        : phase === "speaking"
+          ? "Mentor is speaking"
+          : "Listening — just start talking";
+  const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant");
+  const caption =
+    phase === "recording"
+      ? ""
+      : phase === "speaking" && spokenText
+        ? revealWords(spokenText, revealFrac)
+        : lastAssistant?.text ?? "";
 
   return (
     <div className="call">
@@ -295,7 +403,6 @@ export default function MentorCall({ userId }: { userId: string }) {
         )}
       </div>
 
-      {/* pre-call */}
       {!live && !review && (
         <div className="call-hero">
           <div className="orb idle">
@@ -303,8 +410,8 @@ export default function MentorCall({ userId }: { userId: string }) {
           </div>
           <h1>Talk to your mentor</h1>
           <p className="sub">
-            A short voice call — it listens, replies out loud, and afterwards you
-            review what it learned before it lands on your map.
+            A short voice call — no buttons, just talk. It listens, replies out
+            loud, and afterwards you review what it learned.
           </p>
           <button className="btn call-cta" onClick={startSession}>
             Start call
@@ -312,29 +419,17 @@ export default function MentorCall({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* in-call stage */}
       {live && (
         <div className="call-stage">
-          <div className={`orb ${orbState}`}>
+          <div className={`orb ${orbClass}`}>
             <div className="orb-face">🎧</div>
           </div>
           <div className="call-name">Your mentor</div>
           <div className="call-timer">{fmtTime(elapsed)}</div>
 
           <div className="caption">
-            <div className="caption-label">{stateLabel}</div>
+            <div className="caption-label">{label}</div>
             {caption && <div className="caption-text">{caption}</div>}
-          </div>
-
-          <div className="call-controls">
-            <button
-              className={`mic ${recording ? "on" : ""}`}
-              onClick={toggleRecording}
-              disabled={busy}
-              title={recording ? "Stop and send" : "Tap to talk"}
-            >
-              {busy ? "…" : recording ? "■" : "🎙"}
-            </button>
           </div>
 
           {turns.length > 0 && (
@@ -356,7 +451,6 @@ export default function MentorCall({ userId }: { userId: string }) {
         </div>
       )}
 
-      {/* post-call review */}
       {review && (
         <div className="review">
           <h2>Your recap</h2>
@@ -419,6 +513,9 @@ export default function MentorCall({ userId }: { userId: string }) {
                 <a className="ghost-btn" href={`/resume?u=${userId}`}>
                   Back to résumé →
                 </a>
+                <a className="ghost-btn" href={`/debug?u=${userId}`} target="_blank" rel="noreferrer">
+                  Debug: scores & insights ↗
+                </a>
                 <span className={`status-line ${saveState === "error" ? "error" : ""}`}>
                   {saveMsg}
                 </span>
@@ -435,14 +532,70 @@ function fmtTime(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// reveal a fraction of the text by whole words, so the caption keeps pace with speech
 function revealWords(text: string, frac: number): string {
   const words = text.split(" ");
   const n = Math.max(1, Math.ceil(frac * words.length));
   return words.slice(0, n).join(" ");
 }
 
-// prefer a container the browser can actually record; whisper handles all of these
+// Decode the recorded blob and re-encode as 16kHz mono 16-bit PCM WAV — the
+// format Whisper ingests without an ffmpeg step on the server.
+async function toWav(blob: Blob, targetRate = 16000): Promise<Blob> {
+  const arr = await blob.arrayBuffer();
+  const AC: typeof AudioContext =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new AC();
+  try {
+    const decoded = await ctx.decodeAudioData(arr);
+    const chs = decoded.numberOfChannels;
+    const len = decoded.length;
+    const mono = new Float32Array(len);
+    for (let c = 0; c < chs; c++) {
+      const d = decoded.getChannelData(c);
+      for (let i = 0; i < len; i++) mono[i] += d[i] / chs;
+    }
+    // linear resample to targetRate
+    const ratio = decoded.sampleRate / targetRate;
+    const outLen = Math.max(1, Math.floor(len / ratio));
+    const out = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+      const idx = i * ratio;
+      const i0 = Math.floor(idx);
+      const i1 = Math.min(i0 + 1, len - 1);
+      const frac = idx - i0;
+      out[i] = mono[i0] * (1 - frac) + mono[i1] * frac;
+    }
+    // WAV container
+    const buf = new ArrayBuffer(44 + outLen * 2);
+    const view = new DataView(buf);
+    const str = (o: number, s: string) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i));
+    };
+    str(0, "RIFF");
+    view.setUint32(4, 36 + outLen * 2, true);
+    str(8, "WAVE");
+    str(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, targetRate, true);
+    view.setUint32(28, targetRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    str(36, "data");
+    view.setUint32(40, outLen * 2, true);
+    let off = 44;
+    for (let i = 0; i < outLen; i++) {
+      const s = Math.max(-1, Math.min(1, out[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      off += 2;
+    }
+    return new Blob([buf], { type: "audio/wav" });
+  } finally {
+    void ctx.close();
+  }
+}
+
 function pickMime(): string {
   const candidates = [
     "audio/webm;codecs=opus",

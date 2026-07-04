@@ -9,7 +9,7 @@ import { extractResume } from "@/lib/extraction/extract";
 import type { ResumeExtraction } from "@/lib/extraction/schema";
 
 export const resumeExtractor: Agent<
-  { rawText?: string; images?: ImagePart[] },
+  { rawText?: string; images?: ImagePart[]; keepAlive?: string | number },
   ResumeExtraction
 > = {
   name: "resume-extractor",

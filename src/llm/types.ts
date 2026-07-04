@@ -18,6 +18,8 @@ export interface StructuredRequest {
   maxTokens?: number;
   /** page images for multimodal extraction — used if the provider supports it */
   images?: ImagePart[];
+  /** override how long the model stays resident after this call (Ollama) */
+  keepAlive?: string | number;
 }
 
 export interface StructuredResponse {

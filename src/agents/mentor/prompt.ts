@@ -34,6 +34,17 @@ export function buildMentorSystemPrompt(map: MentorMap): string {
     (d) => !coveredDims.has(d.split(" ")[0]),
   );
 
+  // Specific threads the résumé raised (generated at upload). These make the
+  // call feel like the mentor actually read their story — work them in naturally.
+  const probes = map.probes.length
+    ? map.probes
+        .map((p) => `- ${p.question}${p.rationale ? `  (why: ${p.rationale})` : ""}`)
+        .join("\n")
+    : "";
+  const probeBlock = probes
+    ? `\n\nTHREADS FROM THEIR RÉSUMÉ WORTH PULLING ON (raise these naturally when the moment fits — don't fire them off as a checklist):\n${probes}`
+    : "";
+
   return `You are a warm, sharp career mentor talking to ${name}${headline} on a VOICE call. This is a real-time spoken conversation.
 
 WHO YOU ARE:
@@ -58,7 +69,7 @@ Understanding so far:
 ${known}
 
 WHAT TO LEARN NEXT (steer here when the moment is natural — don't interrogate):
-${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}
+${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}
 
 Keep each of your turns to a sentence or two. This is a conversation, not a monologue.`;
 }

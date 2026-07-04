@@ -57,6 +57,8 @@ Résumé:
 export async function extractResume(input: {
   rawText?: string;
   images?: ImagePart[];
+  /** keep the model resident after extraction (e.g. for a follow-up probe pass) */
+  keepAlive?: string | number;
 }): Promise<{
   data: ResumeExtraction;
   usage: { model: string; inputTokens?: number; outputTokens?: number };
@@ -69,6 +71,7 @@ export async function extractResume(input: {
     prompt: useImages ? IMAGE_PROMPT : TEXT_PROMPT + (input.rawText ?? ""),
     images: input.images,
     maxTokens: 8000,
+    keepAlive: input.keepAlive,
   });
 
   return { data: resumeExtraction.parse(res.data), usage: res.usage };

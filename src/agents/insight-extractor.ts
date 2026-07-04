@@ -23,7 +23,7 @@ const PROMPT = `Read this career mentoring conversation and extract what it reve
 Rules:
 - Only capture what the conversation actually supports — do not invent.
 - Prefer non-obvious insights (patterns, contradictions, real motivations) over restating their résumé.
-- Each insight: a dimension, a concise first-person-neutral statement, and a confidence (how strongly the conversation supports it).
+- Each insight: a dimension, a concise first-person-neutral statement, and a confidence from 0.0 to 1.0 (how strongly the conversation supports it — 1.0 = they said it outright, lower = inferred).
 
 Conversation:
 ---

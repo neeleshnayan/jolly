@@ -14,6 +14,9 @@ const LIVE_MODEL = process.env.OLLAMA_LIVE_MODEL ?? MODEL;
 // TTS + the small live model). The live model stays warm through a call.
 const EXTRACT_KEEP_ALIVE = process.env.OLLAMA_EXTRACT_KEEP_ALIVE ?? 0;
 const LIVE_KEEP_ALIVE = process.env.OLLAMA_LIVE_KEEP_ALIVE ?? "5m";
+// a pre-warm keeps the extraction model resident just long enough for the
+// extraction call (fired seconds later) to land on a hot model
+const EXTRACT_WARM_KEEP_ALIVE = process.env.OLLAMA_EXTRACT_WARM_KEEP_ALIVE ?? "2m";
 const NUM_GPU = process.env.OLLAMA_NUM_GPU;
 const NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 8192);
 const NUM_PREDICT = process.env.OLLAMA_NUM_PREDICT
@@ -68,6 +71,17 @@ function parseJsonLoose(content: string): unknown {
 
 export const ollamaProvider: LLMProvider = {
   name: "ollama",
+
+  // Preload the extraction model into VRAM. Ollama loads a model on a request
+  // with no prompt, so this returns as soon as the model is resident. Fire it as
+  // the upload arrives so the load overlaps PDF parsing/rendering.
+  async warm() {
+    await fetch(`${BASE}/api/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: MODEL, keep_alive: EXTRACT_WARM_KEEP_ALIVE }),
+    }).catch(() => {});
+  },
   async extractStructured(req) {
     const res = await fetch(`${BASE}/api/chat`, {
       method: "POST",
@@ -75,7 +89,7 @@ export const ollamaProvider: LLMProvider = {
       body: JSON.stringify({
         model: MODEL,
         stream: false,
-        keep_alive: EXTRACT_KEEP_ALIVE, // free the big model's VRAM after this call
+        keep_alive: req.keepAlive ?? EXTRACT_KEEP_ALIVE, // default: free VRAM after this call
         ...(THINK === undefined ? {} : { think: THINK }),
         format: req.jsonSchema, // structured outputs: constrain to the schema
         options: ollamaOptions({
