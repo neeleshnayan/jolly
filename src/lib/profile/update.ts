@@ -145,57 +145,61 @@ export async function applyEdit(input: {
   const patch = patchByKind[kind].parse(input.patch) as any;
 
   return db.transaction(async (tx) => {
-    const [profile] = await tx
-      .select()
-      .from(profiles)
-      .where(eq(profiles.userId, userId))
-      .limit(1);
-    if (!profile) throw new Error("Profile not found");
-    const pid = profile.id;
-
-    switch (kind) {
-      case "profile":
-        await tx
-          .update(profiles)
-          .set({ ...patch, updatedAt: new Date() })
-          .where(eq(profiles.id, pid));
-        break;
-      case "experience":
-        requireId(id);
-        await tx
-          .update(experiences)
-          .set({ ...patch, updatedAt: new Date() })
-          .where(and(eq(experiences.id, id), eq(experiences.profileId, pid)));
-        break;
-      case "education":
-        requireId(id);
-        await tx
-          .update(education)
-          .set({ ...patch, updatedAt: new Date() })
-          .where(and(eq(education.id, id), eq(education.profileId, pid)));
-        break;
-      case "skill":
-        requireId(id);
-        await tx
-          .update(skills)
-          .set({ ...patch })
-          .where(and(eq(skills.id, id), eq(skills.profileId, pid)));
-        break;
-      case "project":
-        requireId(id);
-        await tx
-          .update(projects)
-          .set({ ...patch, updatedAt: new Date() })
-          .where(and(eq(projects.id, id), eq(projects.profileId, pid)));
-        break;
-    }
-
+    const pid = await profileIdFor(tx, userId);
+    await applyOne(tx, pid, kind, id, patch);
     await tx.insert(sources).values({
       profileId: pid,
       kind: "user_edit",
       metadata: { entity: kind, id: id ?? pid, patch },
     });
-
     return { ok: true as const };
   });
+}
+
+/** Apply many edits (from the batched autosave) in one transaction + one source. */
+export async function applyEdits(
+  userId: string,
+  edits: { kind: EditKind; id?: string; patch: unknown }[],
+) {
+  const parsed = edits.map((e) => ({
+    kind: e.kind,
+    id: e.id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    patch: patchByKind[e.kind].parse(e.patch) as any,
+  }));
+  return db.transaction(async (tx) => {
+    const pid = await profileIdFor(tx, userId);
+    for (const e of parsed) await applyOne(tx, pid, e.kind, e.id, e.patch);
+    await tx.insert(sources).values({
+      profileId: pid,
+      kind: "user_edit",
+      metadata: { batch: parsed.map((e) => ({ entity: e.kind, id: e.id ?? pid, patch: e.patch })) },
+    });
+    return { ok: true as const, count: parsed.length };
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function applyOne(tx: Tx, pid: string, kind: EditKind, id: string | undefined, patch: any) {
+  switch (kind) {
+    case "profile":
+      await tx.update(profiles).set({ ...patch, updatedAt: new Date() }).where(eq(profiles.id, pid));
+      break;
+    case "experience":
+      requireId(id);
+      await tx.update(experiences).set({ ...patch, updatedAt: new Date() }).where(and(eq(experiences.id, id), eq(experiences.profileId, pid)));
+      break;
+    case "education":
+      requireId(id);
+      await tx.update(education).set({ ...patch, updatedAt: new Date() }).where(and(eq(education.id, id), eq(education.profileId, pid)));
+      break;
+    case "skill":
+      requireId(id);
+      await tx.update(skills).set({ ...patch }).where(and(eq(skills.id, id), eq(skills.profileId, pid)));
+      break;
+    case "project":
+      requireId(id);
+      await tx.update(projects).set({ ...patch, updatedAt: new Date() }).where(and(eq(projects.id, id), eq(projects.profileId, pid)));
+      break;
+  }
 }

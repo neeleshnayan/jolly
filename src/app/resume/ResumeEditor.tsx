@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RichBullets } from "./RichBullets";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
@@ -93,21 +93,66 @@ export default function ResumeEditor({
     };
   }, [userId]);
 
-  async function save(kind: string, id: string | undefined, patch: object) {
+  // batched autosave: queue field edits, coalesce per entity, flush on a debounce
+  const pendingRef = useRef<Map<string, { kind: string; id?: string; patch: Record<string, unknown> }>>(new Map());
+  const flushTimer = useRef<number | undefined>(undefined);
+
+  function save(kind: string, id: string | undefined, patch: object) {
+    const key = `${kind}:${id ?? "profile"}`;
+    const prev = pendingRef.current.get(key);
+    pendingRef.current.set(key, {
+      kind,
+      id,
+      patch: { ...(prev?.patch ?? {}), ...(patch as Record<string, unknown>) },
+    });
+    setStatus("Editing…");
+    window.clearTimeout(flushTimer.current);
+    flushTimer.current = window.setTimeout(() => void flush(), 1200);
+  }
+
+  async function flush() {
+    window.clearTimeout(flushTimer.current);
+    if (pendingRef.current.size === 0) return;
+    const edits = [...pendingRef.current.values()];
+    pendingRef.current.clear();
     setStatus("Saving…");
     try {
-      const res = await fetch("/api/profile/update", {
+      const res = await fetch("/api/profile/batch", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, kind, id, patch }),
+        body: JSON.stringify({ userId, edits }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       setStatus("Saved ✓");
-      setTimeout(() => setStatus(""), 1200);
+      setTimeout(() => setStatus((s) => (s === "Saved ✓" ? "" : s)), 1500);
     } catch (err) {
+      // re-queue so nothing is lost
+      for (const e of edits) {
+        const key = `${e.kind}:${e.id ?? "profile"}`;
+        if (!pendingRef.current.has(key)) pendingRef.current.set(key, e);
+      }
       setStatus(err instanceof Error ? err.message : "Save failed");
     }
   }
+
+  // flush on leave: sendBeacon for a hard unload, plain flush for in-app nav
+  useEffect(() => {
+    const onLeave = () => {
+      if (!pendingRef.current.size) return;
+      const edits = [...pendingRef.current.values()];
+      navigator.sendBeacon(
+        "/api/profile/batch",
+        new Blob([JSON.stringify({ userId, edits })], { type: "application/json" }),
+      );
+      pendingRef.current.clear();
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => {
+      window.removeEventListener("beforeunload", onLeave);
+      void flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   type EntryKind = "experience" | "education" | "skill" | "project";
 
