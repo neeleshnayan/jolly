@@ -1,0 +1,21 @@
+Jane Doe
+Product Engineer
+jane@example.com | San Francisco, CA | linkedin.com/in/janedoe
+
+Experience
+Acme AI | San Francisco, CA
+Senior Product Engineer | Jan 2022 - Present
+- Built an LLM document parser that reduced review time by 42%.
+- Led a 4-person team shipping resume extraction workflows for 12,000 users.
+
+Northstar Labs | Remote
+Software Engineer | Jun 2019 - Dec 2021
+- Created React and Node.js features for an analytics dashboard.
+- Improved API latency from 900ms to 250ms.
+
+Education
+State University
+B.S. Computer Science | 2015 - 2019
+
+Skills
+TypeScript, React, Node.js, PostgreSQL, LLM evaluation

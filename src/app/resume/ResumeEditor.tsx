@@ -83,16 +83,24 @@ export default function ResumeEditor({
 
   return (
     <>
-      <div className="topbar">
+      <div className="topbar no-print">
         <span className="brand">Career Co-Pilot</span>
         <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <a href={`/mentor?u=${userId}`}>Talk to your mentor →</a>
           <span className="status">{status}</span>
+          <button
+            className="ghost-btn"
+            onClick={() => window.print()}
+            title="Opens your browser's print dialog — choose “Save as PDF”"
+          >
+            Download PDF
+          </button>
+          <a href={`/mentor?u=${userId}`}>Talk to your mentor →</a>
         </span>
       </div>
 
       <main className="resume-wrap">
         <div
+          className="no-print"
           style={{
             maxWidth: 780,
             margin: "0 auto 16px",
@@ -101,8 +109,8 @@ export default function ResumeEditor({
           }}
         >
           Here&apos;s what we pulled from your résumé. <strong>Review and fix
-          anything that&apos;s off</strong> — edits save automatically — then
-          talk to your mentor.
+          anything that&apos;s off</strong> — edits save automatically. Then
+          download it as a PDF or talk to your mentor.
         </div>
         <div className="resume">
           {/* header */}
@@ -241,12 +249,36 @@ export default function ResumeEditor({
           )}
         </div>
 
-        <div style={{ maxWidth: 780, margin: "24px auto 0", textAlign: "center" }}>
+        <div
+          className="no-print"
+          style={{
+            maxWidth: 780,
+            margin: "24px auto 0",
+            display: "flex",
+            gap: 12,
+            justifyContent: "center",
+          }}
+        >
+          <button
+            className="btn"
+            style={{
+              width: "auto",
+              margin: 0,
+              padding: "12px 28px",
+              background: "transparent",
+              color: "var(--accent)",
+              border: "1px solid var(--accent)",
+            }}
+            onClick={() => window.print()}
+          >
+            Download PDF
+          </button>
           <a
             className="btn"
             style={{
               display: "inline-block",
               width: "auto",
+              margin: 0,
               padding: "12px 28px",
               textDecoration: "none",
             }}
@@ -304,7 +336,9 @@ function InlineField({
   return (
     <input
       className="f"
-      style={{ width: `${Math.max((v || placeholder || "").length, 4)}ch` }}
+      // +2ch buffer: `ch` is the width of "0", so wider glyphs (m, w, @) in a
+      // proportional font would otherwise clip the last character.
+      style={{ width: `${Math.max((v || placeholder || "").length + 2, 4)}ch` }}
       value={v}
       placeholder={placeholder}
       onChange={(e) => setV(e.target.value)}

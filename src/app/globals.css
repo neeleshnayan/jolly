@@ -150,3 +150,59 @@ a { color: var(--accent); }
 .f.name { font: inherit; }
 textarea.f { line-height: 1.55; }
 .dates-input { max-width: 160px; text-align: right; }
+
+/* ---------- topbar actions ---------- */
+.ghost-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ghost-btn:hover { border-color: var(--accent); background: #f8faff; }
+
+/* ---------- print / PDF export ----------
+   "Download PDF" calls window.print(); the browser's "Save as PDF" turns this
+   sheet into the résumé. We print the live editable DOM (inputs render their
+   current text), so what the user sees is exactly what exports. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff; }
+
+  /* drop everything that isn't the résumé itself */
+  .no-print { display: none !important; }
+
+  .resume-wrap { padding: 0; }
+  .resume {
+    max-width: none;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  /* strip editable affordances so fields read as plain text */
+  .f,
+  .f:hover,
+  .f:focus {
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible;
+  }
+  /* never print the grey placeholders of empty fields */
+  .f::placeholder { color: transparent !important; }
+
+  /* keep a role/school block from splitting across a page break */
+  .entry { break-inside: avoid; }
+  .section > h2 { break-after: avoid; }
+
+  /* preserve chip fills and print links as plain ink */
+  .chip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  a { color: var(--ink); text-decoration: none; }
+}

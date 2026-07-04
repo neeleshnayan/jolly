@@ -1,70 +1,27 @@
 /**
- * Vapi server webhook. On end-of-call we take the transcript, run the
- * insight-extractor agent, and write the results onto the map. This is the
- * moment voice becomes lasting understanding.
+ * Vapi server webhook. We now use a REVIEW-BEFORE-COMMIT flow: after the call the
+ * client shows the recap + inferred insights, the user corrects them, and
+ * /api/mentor/review is the single path that writes insights to the map.
  *
- * NOTE: Vapi's exact payload shape should be confirmed against your dashboard's
- * webhook logs — the userId is read from call metadata (set when the call
- * starts) with a couple of fallbacks.
+ * So this webhook no longer auto-extracts/persists — doing so would double-write
+ * and bypass the user's corrections. It's kept as a 200-OK acknowledgement (Vapi
+ * expects one) and a place to log end-of-call events. If you ever want a
+ * server-side fallback for calls where the user closes the tab before reviewing,
+ * re-enable insight extraction here behind a flag.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { runAgent } from "@/agents/run";
-import { insightExtractor } from "@/agents/insight-extractor";
-import { ensureProfile } from "@/lib/profile/ensure";
-import { persistInsights } from "@/lib/insights/persist";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-interface VapiTurn {
-  role?: string;
-  message?: string;
-  content?: string;
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const message = body?.message ?? body;
-    const type = message?.type;
-
-    // We only act on the end-of-call report.
-    if (type !== "end-of-call-report" && type !== "end-of-call") {
-      return NextResponse.json({ ok: true, ignored: type ?? "unknown" });
-    }
-
-    const userId: string | undefined =
-      message?.call?.metadata?.userId ??
-      message?.assistant?.metadata?.userId ??
-      body?.call?.metadata?.userId;
-
-    const transcript: string =
-      typeof message?.transcript === "string" && message.transcript.length > 0
-        ? message.transcript
-        : Array.isArray(message?.messages)
-          ? message.messages
-              .map((m: VapiTurn) => `${m.role ?? "?"}: ${m.message ?? m.content ?? ""}`)
-              .join("\n")
-          : "";
-
-    if (!userId || transcript.trim().length < 20) {
-      return NextResponse.json({ ok: true, skipped: "missing userId or transcript" });
-    }
-
-    const profileId = await ensureProfile(userId);
-    const { output } = await runAgent(
-      insightExtractor,
-      { transcript },
-      { userId, profileId },
-    );
-    const result = await persistInsights({ userId, extraction: output, transcript });
-
-    return NextResponse.json({ ok: true, ...result });
+    const body = await req.json().catch(() => ({}));
+    const type = body?.message?.type ?? body?.type;
+    console.log("[voice/webhook] event:", type ?? "unknown");
+    return NextResponse.json({ ok: true, received: type ?? "unknown" });
   } catch (err) {
     console.error("[voice/webhook]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unknown error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: true, error: "logged" });
   }
 }

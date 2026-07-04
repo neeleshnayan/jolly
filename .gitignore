@@ -7,6 +7,7 @@ build/
 .env.local
 .env*.local
 *.log
+logs/
 .DS_Store
 .drizzle/
 next-env.d.ts

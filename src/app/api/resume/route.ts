@@ -4,21 +4,56 @@
  * flow: parse -> source -> extract -> spine.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { appendFile, mkdir } from "node:fs/promises";
+import path from "node:path";
 import { parseResumeFile } from "@/lib/extraction/parse";
-import { renderPdfToImages } from "@/lib/extraction/render";
 import { runAgent } from "@/agents/run";
 import { resumeExtractor } from "@/agents/resume-extractor";
 import { ensureProfile } from "@/lib/profile/ensure";
 import { persistExtraction } from "@/lib/profile/persist";
+import type { ResumeExtraction } from "@/lib/extraction/schema";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+async function appendExtractionLog(entry: {
+  userId: string;
+  fileName: string;
+  fileType: string;
+  persisted: boolean;
+  rawTextLength: number;
+  imageCount: number;
+  extraction: ResumeExtraction;
+  usage?: { model: string; inputTokens?: number; outputTokens?: number };
+}) {
+  try {
+    const logDir = path.join(process.cwd(), "logs");
+    await mkdir(logDir, { recursive: true });
+    await appendFile(
+      path.join(logDir, "resume-extractions.ndjson"),
+      `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        counts: {
+          experiences: entry.extraction.experiences.length,
+          education: entry.extraction.education.length,
+          skills: entry.extraction.skills.length,
+          projects: entry.extraction.projects.length,
+        },
+        ...entry,
+      })}\n`,
+      "utf8",
+    );
+  } catch (err) {
+    console.warn("[/api/resume] Could not write extraction log", err);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
     const userId = form.get("userId");
+    const shouldPersist = form.get("persist") !== "false";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing 'file'" }, { status: 400 });
@@ -40,8 +75,22 @@ export async function POST(req: NextRequest) {
     // keep reconstructed text as the stored evidence (source.rawText) regardless
     const rawText = await parseResumeFile(buffer, file.type, file.name);
 
-    // image-first extraction for PDFs (model reads the real layout)
-    const images = isPdf ? await renderPdfToImages(buffer, { scale: 2 }) : [];
+    // image-first extraction for PDFs (model reads the real layout), but keep
+    // text extraction usable if local PDF rendering dependencies disagree.
+    let images: Awaited<
+      ReturnType<typeof import("@/lib/extraction/render").renderPdfToImages>
+    > = [];
+    if (isPdf) {
+      try {
+        const { renderPdfToImages } = await import("@/lib/extraction/render");
+        images = await renderPdfToImages(buffer, { scale: 2 });
+      } catch (err) {
+        console.warn(
+          "[/api/resume] PDF image rendering failed; falling back to text",
+          err,
+        );
+      }
+    }
 
     if (!images.length && rawText.length < 30) {
       return NextResponse.json(
@@ -51,13 +100,38 @@ export async function POST(req: NextRequest) {
     }
 
     // ensure profile up front so the agent run is logged against it
-    const profileId = await ensureProfile(userId);
+    const profileId = shouldPersist ? await ensureProfile(userId) : undefined;
 
-    const { output: extraction } = await runAgent(
+    const { output: extraction, usage } = await runAgent(
       resumeExtractor,
       { rawText, images },
       { userId, profileId },
     );
+
+    await appendExtractionLog({
+      userId,
+      fileName: file.name,
+      fileType: file.type,
+      persisted: shouldPersist,
+      rawTextLength: rawText.length,
+      imageCount: images.length,
+      extraction,
+      usage,
+    });
+
+    if (!shouldPersist) {
+      return NextResponse.json({
+        ok: true,
+        persisted: false,
+        counts: {
+          experiences: extraction.experiences.length,
+          education: extraction.education.length,
+          skills: extraction.skills.length,
+          projects: extraction.projects.length,
+        },
+        extraction,
+      });
+    }
 
     const result = await persistExtraction({
       userId,
