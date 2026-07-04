@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
+import { buildProfileText } from "@/lib/scoring/profileText";
 import { runAgent } from "@/agents/run";
 import { profileScorer } from "@/agents/profile-scorer";
 
@@ -39,40 +40,4 @@ export async function GET(req: NextRequest) {
     scoring,
     scoringError,
   });
-}
-
-function buildProfileText(
-  full: NonNullable<Awaited<ReturnType<typeof getFullProfile>>>,
-  insights: { dimension: string; content: string; confidence: number | null }[],
-): string {
-  const p = full.profile;
-  const exp = full.experiences
-    .map(
-      (e) =>
-        `- ${e.title ?? "role"}${e.org ? ` @ ${e.org}` : ""} (${e.startDate ?? "?"}–${e.endDate ?? "?"})` +
-        (e.bullets?.length ? `\n  ${e.bullets.map((b) => b.text).join("\n  ")}` : ""),
-    )
-    .join("\n");
-  const edu = full.education
-    .map((e) => `- ${e.degree ?? ""} ${e.field ?? ""} @ ${e.institution ?? "?"}`.trim())
-    .join("\n");
-  const skills = full.skills.map((s) => s.name).join(", ");
-  const learned = insights.length
-    ? insights.map((i) => `- [${i.dimension}] ${i.content}`).join("\n")
-    : "(no mentor-call insights yet)";
-
-  return `Name: ${p.fullName ?? "?"}
-Headline: ${p.headline ?? "?"}
-Location: ${p.location ?? "?"}
-
-Experience:
-${exp || "(none)"}
-
-Education:
-${edu || "(none)"}
-
-Skills: ${skills || "(none)"}
-
-What the mentor has learned so far:
-${learned}`;
 }

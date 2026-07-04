@@ -213,6 +213,41 @@ export const resumeVariants = pgTable("resume_variants", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// ------------------------------------------------ opportunities (the role side)
+// A job, vectorized into the candidate's scoring space. Hard facts live in
+// columns (so we can FILTER in SQL); the full role vector + facts blob live in
+// jsonb (for the matcher). Roles are global — matching is computed per user.
+
+export const opportunitySource = pgEnum("opportunity_source", [
+  "greenhouse",
+  "lever",
+  "ashby",
+  "pasted",
+  "other",
+]);
+
+export const opportunities = pgTable("opportunities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  source: opportunitySource("source").default("pasted").notNull(),
+  externalId: text("external_id"), // ATS job id, for dedup
+  url: text("url"),
+  company: text("company"),
+  title: text("title"),
+  location: text("location"),
+  remote: text("remote"), // onsite | hybrid | remote | unknown
+  compMin: integer("comp_min"),
+  compMax: integer("comp_max"),
+  companyStage: text("company_stage"), // startup | growth | enterprise | unknown
+  domain: text("domain"),
+  rawText: text("raw_text"), // the JD
+  vector: jsonb("vector").$type<Record<string, unknown>>().default({}),
+  facts: jsonb("facts").$type<Record<string, unknown>>().default({}),
+  addedByProfileId: uuid("added_by_profile_id").references(() => profiles.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ------------------------------------------- agent_runs (observability layer)
 // One row per agent invocation: what ran, on whom, how much it cost, how long,
 // and whether it failed. This is your debugging + eval + cost surface, and the
