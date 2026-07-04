@@ -42,4 +42,6 @@ export interface LLMProvider {
   extractStructured(req: StructuredRequest): Promise<StructuredResponse>;
   /** yields text deltas as the model generates */
   streamChat(req: ChatRequest): AsyncIterable<string>;
+  /** optional: preload the extraction model into memory (fire-and-forget) */
+  warm?(): Promise<void>;
 }

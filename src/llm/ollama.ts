@@ -8,6 +8,12 @@ const MODEL = process.env.OLLAMA_MODEL ?? "qwen2.5:7b";
 // Live voice turns want low first-token latency over raw quality, so they can run
 // a smaller/faster model than the extraction path. Falls back to MODEL if unset.
 const LIVE_MODEL = process.env.OLLAMA_LIVE_MODEL ?? MODEL;
+
+// VRAM policy. Extraction runs the big model (gemma3:27b, ~17GB) — unload it the
+// moment doc processing finishes so CUDA is free for the voice stack (whisper +
+// TTS + the small live model). The live model stays warm through a call.
+const EXTRACT_KEEP_ALIVE = process.env.OLLAMA_EXTRACT_KEEP_ALIVE ?? 0;
+const LIVE_KEEP_ALIVE = process.env.OLLAMA_LIVE_KEEP_ALIVE ?? "5m";
 const NUM_GPU = process.env.OLLAMA_NUM_GPU;
 const NUM_CTX = Number(process.env.OLLAMA_NUM_CTX ?? 8192);
 const NUM_PREDICT = process.env.OLLAMA_NUM_PREDICT
@@ -69,6 +75,7 @@ export const ollamaProvider: LLMProvider = {
       body: JSON.stringify({
         model: MODEL,
         stream: false,
+        keep_alive: EXTRACT_KEEP_ALIVE, // free the big model's VRAM after this call
         ...(THINK === undefined ? {} : { think: THINK }),
         format: req.jsonSchema, // structured outputs: constrain to the schema
         options: ollamaOptions({
@@ -115,6 +122,7 @@ export const ollamaProvider: LLMProvider = {
       body: JSON.stringify({
         model: req.model ?? LIVE_MODEL,
         stream: true,
+        keep_alive: LIVE_KEEP_ALIVE, // keep the voice model warm across turns
         ...(THINK === undefined ? {} : { think: THINK }),
         options: ollamaOptions({ temperature: 0.7, numCtx: NUM_CTX }),
         messages: [

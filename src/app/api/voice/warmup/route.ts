@@ -1,0 +1,27 @@
+/**
+ * POST /api/voice/warmup — called when the call page loads. Preloads the three
+ * models (Ollama live model, Whisper, kokoro) into VRAM so the first real turn
+ * of the call is fast instead of eating a cold start. Best-effort and idempotent.
+ */
+import { NextResponse } from "next/server";
+import { warmVoice } from "@/lib/voice/voicebox";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const OLLAMA = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+const LIVE_MODEL = process.env.OLLAMA_LIVE_MODEL ?? "qwen3:8b";
+const LIVE_KEEP_ALIVE = process.env.OLLAMA_LIVE_KEEP_ALIVE ?? "5m";
+
+export async function POST() {
+  await Promise.allSettled([
+    // load the live model without generating (Ollama loads on an empty request)
+    fetch(`${OLLAMA}/api/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: LIVE_MODEL, keep_alive: LIVE_KEEP_ALIVE }),
+    }).catch(() => {}),
+    warmVoice(),
+  ]);
+  return NextResponse.json({ ok: true });
+}
