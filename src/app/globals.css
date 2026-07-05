@@ -373,6 +373,38 @@ a { color: var(--accent); }
 .redesign-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .redesign-hint { font-size: 11.5px; color: var(--muted); margin: 6px 0 10px; line-height: 1.4; }
 .rail-ai-link { display: block; text-align: center; text-decoration: none; }
+/* mentor target-role teaser (light → expandable details) */
+.mentor-teaser { border: 1px solid #dbe6ff; background: #f6f9ff; border-radius: 10px; overflow: hidden; }
+.mentor-teaser-head {
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+}
+.mentor-teaser-head strong { color: var(--accent); }
+.mentor-teaser-caret { margin-left: auto; color: var(--muted); font-size: 9px; }
+.mentor-teaser-body { padding: 0 10px 10px; }
+.mentor-teaser-body p { font-size: 12px; color: var(--muted); line-height: 1.45; margin: 0 0 8px; }
+.mentor-teaser-cta {
+  width: 100%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 7px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.mentor-teaser-cta:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* AI overhaul side-by-side diff */
 .diff-overlay {
@@ -645,6 +677,29 @@ a { color: var(--accent); }
 .vb-btn.on { border-color: #d97706; color: #b45309; background: #fffbeb; }
 .vb-btn.primary { border-color: var(--accent); color: var(--accent); background: #f0f5ff; margin-left: auto; }
 .vb-msg { font-size: 12px; color: var(--muted); }
+/* versions as quick-toggle chips (active = amber ★, current-loaded = accent) */
+.vb-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.vb-chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: #fff; overflow: hidden; }
+.vb-chip.current { border-color: var(--accent); }
+.vb-chip.active { border-color: #d97706; background: #fffbeb; }
+.vb-chip-load {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--ink);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vb-chip.current .vb-chip-load { color: var(--accent); font-weight: 600; }
+.vb-chip-load:hover { background: #f0f5ff; }
+.vb-chip-load:disabled { cursor: default; }
+.vb-chip-star { border: none; background: transparent; cursor: pointer; font-size: 12px; padding: 4px 8px 4px 2px; color: var(--muted); }
+.vb-chip.active .vb-chip-star { color: #d97706; }
 
 /* editor shell: persistent left control pane + canvas */
 .editor-shell { display: flex; align-items: flex-start; }

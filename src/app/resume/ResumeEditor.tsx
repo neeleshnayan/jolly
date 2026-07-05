@@ -160,6 +160,20 @@ export default function ResumeEditor({
   const [overhaul, setOverhaul] = useState<Overhaul | null>(null);
   const [redesigning, setRedesigning] = useState(false);
   const [redesignErr, setRedesignErr] = useState("");
+  // the mentor's recommended target role (from the filled TBD theme), if any
+  const [targetRole, setTargetRole] = useState<{ role: string; rationale: string } | null>(null);
+  const [targetOpen, setTargetOpen] = useState(false);
+  useEffect(() => {
+    fetch(`/api/track/version?u=${userId}`)
+      .then((r) => r.json())
+      .then((j) => {
+        const t = (j.themes ?? []).find(
+          (x: { latentAttributes?: { kind?: string; role?: string } }) => x.latentAttributes?.kind === "target_role" && x.latentAttributes?.role,
+        );
+        if (t) setTargetRole({ role: t.latentAttributes.role, rationale: t.latentAttributes.rationale ?? "" });
+      })
+      .catch(() => {});
+  }, [userId]);
   const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
   async function redesign() {
     setRedesigning(true);
@@ -634,7 +648,25 @@ export default function ResumeEditor({
             </button>
             <div className="redesign-hint">Revamps look + wording using your mentor&apos;s insights; review side-by-side.</div>
             {redesignErr && <div className="ai-err">{redesignErr}</div>}
-            <a className="rail-add rail-ai-link" href="/mentor">🎙 Mentor suggestions →</a>
+
+            {targetRole ? (
+              <div className="mentor-teaser">
+                <button className="mentor-teaser-head" onClick={() => setTargetOpen((v) => !v)}>
+                  🎯 Aim for <strong>{targetRole.role}</strong>
+                  <span className="mentor-teaser-caret">{targetOpen ? "▲" : "▼"}</span>
+                </button>
+                {targetOpen && (
+                  <div className="mentor-teaser-body">
+                    <p>{targetRole.rationale}</p>
+                    <button className="mentor-teaser-cta" onClick={() => void redesign()} disabled={redesigning}>
+                      Tighten résumé toward this →
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
+            )}
           </div>
 
           <div className="rail-group">
