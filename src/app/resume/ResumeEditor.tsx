@@ -67,6 +67,20 @@ export default function ResumeEditor({
 }) {
   const [data, setData] = useState<FullProfile>(initial);
   const [status, setStatus] = useState("");
+  const [pages, setPages] = useState(1);
+  const resumeRef = useRef<HTMLDivElement>(null);
+
+  // measure how many A4 pages the content spans
+  useEffect(() => {
+    const el = resumeRef.current;
+    if (!el) return;
+    const PAGE = (297 * 96) / 25.4; // A4 height in px
+    const measure = () => setPages(Math.max(1, Math.ceil(el.scrollHeight / PAGE)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // background probe generation (kicked off by the upload, runs on the server)
   const [probeStatus, setProbeStatus] = useState<"working" | "ready" | null>(null);
   const [probeCount, setProbeCount] = useState(0);
@@ -294,7 +308,10 @@ export default function ResumeEditor({
           anything that&apos;s off</strong> — edits save automatically. Then
           download it as a PDF or talk to your mentor.
         </div>
-        <div className="resume">
+        <div className="page-meta no-print">
+          A4 · {pages} page{pages === 1 ? "" : "s"}
+        </div>
+        <div className="resume" ref={resumeRef}>
           {/* header */}
           <Field
             className="f name"
@@ -326,7 +343,7 @@ export default function ResumeEditor({
           {data.experiences.length > 0 && (
             <section className="section">
               <h2>Experience</h2>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("experience", ev)}>
+              <DndContext id="dnd-exp" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("experience", ev)}>
               <SortableContext items={data.experiences.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               {data.experiences.map((e) => (
                 <SortableItem id={e.id} key={e.id}>
@@ -370,7 +387,7 @@ export default function ResumeEditor({
           {data.education.length > 0 && (
             <section className="section">
               <h2>Education</h2>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("education", ev)}>
+              <DndContext id="dnd-edu" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("education", ev)}>
               <SortableContext items={data.education.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               {data.education.map((ed) => (
                 <SortableItem id={ed.id} key={ed.id}>
@@ -430,7 +447,7 @@ export default function ResumeEditor({
           {data.projects.length > 0 && (
             <section className="section">
               <h2>Projects</h2>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("project", ev)}>
+              <DndContext id="dnd-proj" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("project", ev)}>
               <SortableContext items={data.projects.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               {data.projects.map((pr) => (
                 <SortableItem id={pr.id} key={pr.id}>

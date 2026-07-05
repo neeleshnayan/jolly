@@ -84,12 +84,30 @@ a { color: var(--accent); }
 
 /* ---------- resume paper (A4 WYSIWYG) ---------- */
 .resume-wrap { padding: 32px 20px 80px; }
+.page-meta {
+  width: 210mm;
+  max-width: 100%;
+  margin: 0 auto 6px;
+  text-align: right;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
 .resume {
   width: 210mm; /* A4 */
   min-height: 297mm;
   max-width: 100%;
   margin: 0 auto;
-  background: var(--paper);
+  /* page-break guides: a faint line at every A4 page boundary so content that
+     overflows one page visibly "flows" onto the next */
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(297mm - 2px),
+    rgba(37, 99, 235, 0.28) calc(297mm - 2px),
+    rgba(37, 99, 235, 0.28) 297mm
+  );
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 16mm 16mm; /* matches the print @page margins → WYSIWYG */
@@ -657,6 +675,8 @@ textarea.f { line-height: 1.55; }
     border-radius: 0;
     box-shadow: none;
     padding: 0;
+    min-height: 0;
+    background-image: none; /* no page-guide lines in the PDF */
   }
 
   /* strip editable affordances so fields read as plain text */
