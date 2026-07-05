@@ -1,0 +1,1 @@
+ALTER TABLE "resume_themes" ADD COLUMN "active_version_id" uuid;

@@ -25,6 +25,7 @@ const profilePatch = z
     email: z.string().nullable(),
     phone: z.string().nullable(),
     location: z.string().nullable(),
+    styleConfig: z.record(z.string(), z.union([z.string(), z.number()])),
   })
   .partial()
   .strict();

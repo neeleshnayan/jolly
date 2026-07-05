@@ -6,7 +6,7 @@
  * reply as base64 audio.
  */
 import { NextResponse } from "next/server";
-import { transcribe, synthesize } from "@/lib/voice/voicebox";
+import { transcribe } from "@/lib/voice/voicebox";
 import { mentorTurn } from "@/agents/mentor/turn";
 import type { ChatMessage } from "@/llm";
 
@@ -36,22 +36,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, userText: "", replyText: "", note: "no speech" });
     }
 
-    // 2. text -> mentor reply (collect the streamed turn)
+    // 2. text -> mentor reply (collect the streamed turn). The audio is streamed
+    // separately via /api/voice/stream so playback starts as soon as the reply
+    // is ready, instead of waiting for the whole clip.
     const messages: ChatMessage[] = [...history, { role: "user", content: userText }];
     let replyText = "";
     for await (const delta of mentorTurn({ userId, messages })) replyText += delta;
     replyText = replyText.trim();
 
-    // 3. reply -> speech
-    const { audio, mime } = await synthesize(replyText);
-
-    return NextResponse.json({
-      ok: true,
-      userText,
-      replyText,
-      audioBase64: audio.toString("base64"),
-      mime,
-    });
+    return NextResponse.json({ ok: true, userText, replyText });
   } catch (err) {
     console.error("[/api/voice/turn]", err);
     return NextResponse.json(

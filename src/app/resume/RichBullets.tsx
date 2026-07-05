@@ -63,6 +63,14 @@ export function RichBullets({
     };
   }, [editor]);
 
+  // sync external changes (e.g. an accepted AI rewrite) into the editor, but
+  // never clobber what the user is actively typing
+  useEffect(() => {
+    if (!editor || editor.isFocused) return;
+    const next = value || "<ul><li></li></ul>";
+    if (next !== editor.getHTML()) editor.commands.setContent(next, { emitUpdate: false });
+  }, [value, editor]);
+
   if (!editor) return null;
 
   const setLink = () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import UserChip from "../UserChip";
 
 type Param = { score: number; rationale: string };
 type DebugData = {
@@ -9,6 +10,7 @@ type DebugData = {
   insights: { dimension: string; content: string; confidence: number | null }[];
   probes: { question: string; rationale: string | null; dimension: string | null }[];
   scoring: Record<string, Param> | null;
+  scoringAt?: string | null;
   scoringError?: string | null;
 };
 
@@ -18,12 +20,17 @@ export default function DebugPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function load() {
-    if (!u) return;
+  async function load(recompute = false) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/debug/profile?u=${u}`);
+      // session-first; ?u= still works for dev. Recompute only on demand — the
+      // score is cached, so a normal visit serves the saved vector.
+      const params = new URLSearchParams();
+      if (u) params.set("u", u);
+      if (recompute) params.set("recompute", "1");
+      const qs = params.toString();
+      const res = await fetch(`/api/debug/profile${qs ? `?${qs}` : ""}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "failed");
       setData(json);
@@ -34,22 +41,24 @@ export default function DebugPage() {
     }
   }
   useEffect(() => {
-    void load();
+    void load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [u]);
-
-  if (!u) return <main className="debug"><p>Add ?u=&lt;userId&gt; to the URL.</p></main>;
 
   return (
     <main className="debug">
       <div className="debug-head">
         <div>
-          <h1>Debug · {data?.profile?.fullName ?? u}</h1>
+          <h1>Debug · {data?.profile?.fullName ?? u ?? "you"}</h1>
           {data?.profile?.headline && <p className="sub">{data.profile.headline}</p>}
         </div>
-        <button className="ghost-btn" onClick={load} disabled={loading}>
-          {loading ? "Scoring…" : "Recompute"}
-        </button>
+        <span style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <a className="ghost-btn" href="/dashboard">← Dashboard</a>
+          <button className="ghost-btn" onClick={() => load(true)} disabled={loading}>
+            {loading ? "Scoring…" : "Recompute"}
+          </button>
+          <UserChip />
+        </span>
       </div>
 
       {error && <p className="status-line error">{error}</p>}
@@ -59,6 +68,11 @@ export default function DebugPage() {
         <>
           <section>
             <h2>Scoring vector</h2>
+            {data.scoringAt && (
+              <p className="sub" style={{ fontSize: 12 }}>
+                Cached · computed {new Date(data.scoringAt).toLocaleString()} — hit Recompute to refresh
+              </p>
+            )}
             {data.scoringError && <p className="status-line error">{data.scoringError}</p>}
             {data.scoring &&
               Object.entries(data.scoring).map(([k, p]) => (

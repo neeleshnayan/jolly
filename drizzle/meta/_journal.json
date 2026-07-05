@@ -36,6 +36,41 @@
       "when": 1783197640157,
       "tag": "0004_nosy_ricochet",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783238744697,
+      "tag": "0005_open_skullbuster",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783251226102,
+      "tag": "0006_lowly_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783251856829,
+      "tag": "0007_unusual_sharon_ventura",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783253362692,
+      "tag": "0008_eager_energizer",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783253951663,
+      "tag": "0009_eager_master_mold",
+      "breakpoints": true
     }
   ]
 }

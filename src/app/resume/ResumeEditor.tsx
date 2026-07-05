@@ -1,15 +1,61 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { RichBullets } from "./RichBullets";
 import { SortableItem } from "./SortableItem";
+import VersionBar from "./VersionBar";
+import UserChip from "../UserChip";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
 type Bullet = { text: string; sourceId?: string };
+type EntryKind = "experience" | "education" | "skill" | "project";
+
+// Design tokens applied to the sheet as CSS variables. This is the seam the AI
+// "re-paint" agent will one day write to — for now humans nudge it via the
+// Design panel. Missing keys fall back to DEFAULT_STYLE.
+type StyleConfig = {
+  nameScale: number;
+  headerScale: number;
+  bodyScale: number;
+  density: number;
+  accent: string;
+  fontFamily: string;
+};
+const DEFAULT_STYLE: StyleConfig = {
+  nameScale: 1,
+  headerScale: 1,
+  bodyScale: 1,
+  density: 1,
+  accent: "#2563eb",
+  fontFamily: "",
+};
+const FONT_OPTIONS = [
+  { label: "Default (sans)", value: "" },
+  { label: "Georgia", value: "Georgia, 'Times New Roman', serif" },
+  { label: "Garamond", value: "Garamond, 'EB Garamond', Georgia, serif" },
+  { label: "Cambria", value: "Cambria, Georgia, serif" },
+  { label: "Calibri", value: "Calibri, 'Segoe UI', system-ui, sans-serif" },
+  { label: "Helvetica", value: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
+];
+
+// A live "edit with AI" session, anchored to one bulleted entry. `top` is its
+// vertical offset within the sheet frame, so the compose box (left margin) and
+// the suggestion card (right rail) line up with the entry they act on.
+type AISession = {
+  kind: EntryKind;
+  id: string;
+  top: number;
+  bullets: string[];
+  instruction: string;
+  loading: boolean;
+  proposed: string[] | null;
+  err: string;
+};
 
 interface Profile {
   id: string;
@@ -19,6 +65,7 @@ interface Profile {
   phone: string | null;
   location: string | null;
   links: Link[] | null;
+  styleConfig?: Record<string, string | number> | null;
 }
 interface Experience {
   id: string;
@@ -69,6 +116,115 @@ export default function ResumeEditor({
   const [status, setStatus] = useState("");
   const [pages, setPages] = useState(1);
   const resumeRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  // "edit with AI" session (compose on the left, preview on the right)
+  const [ai, setAi] = useState<AISession | null>(null);
+  const aiRef = useRef<AISession | null>(null);
+  aiRef.current = ai;
+
+  // design tokens (merged over defaults so old profiles just work)
+  const style: StyleConfig = { ...DEFAULT_STYLE, ...(data.profile.styleConfig ?? {}) };
+  function setStyle(patch: Partial<StyleConfig>) {
+    const next = { ...style, ...patch };
+    setData((d) => ({ ...d, profile: { ...d.profile, styleConfig: next } }));
+    save("profile", undefined, { styleConfig: next });
+  }
+
+  // AI whole-sheet re-paint: preview holds the proposed tokens (applied live to
+  // the sheet) until the user accepts or discards
+  const [preview, setPreview] = useState<StyleConfig | null>(null);
+  const [redesigning, setRedesigning] = useState(false);
+  const [redesignNote, setRedesignNote] = useState("");
+  const [redesignErr, setRedesignErr] = useState("");
+  async function redesign() {
+    setRedesigning(true);
+    setRedesignErr("");
+    try {
+      const res = await fetch("/api/resume/redesign", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Redesign failed");
+      setPreview({ ...DEFAULT_STYLE, ...j.styleConfig });
+      setRedesignNote(j.rationale ?? "");
+    } catch (e) {
+      setRedesignErr(e instanceof Error ? e.message : "Redesign failed");
+    } finally {
+      setRedesigning(false);
+    }
+  }
+  function acceptRedesign() {
+    if (preview) setStyle(preview);
+    setPreview(null);
+    setRedesignNote("");
+  }
+  function discardRedesign() {
+    setPreview(null);
+    setRedesignNote("");
+  }
+
+  // save-as-version (snapshot the résumé under a theme with a hypothesis)
+  const [showSave, setShowSave] = useState(false);
+  const [themes, setThemes] = useState<{ id: string; name: string }[]>([]);
+  const [saveForm, setSaveForm] = useState({ themeId: "", newTheme: "", hypothesis: "" });
+  const [saveVerMsg, setSaveVerMsg] = useState("");
+  const [savingVer, setSavingVer] = useState(false);
+  const [versionRefreshKey, setVersionRefreshKey] = useState(0);
+  async function openSaveVersion() {
+    setShowSave(true);
+    setSaveVerMsg("");
+    try {
+      const r = await fetch(`/api/track/theme?u=${userId}`);
+      const j = await r.json();
+      if (r.ok) setThemes(j.themes ?? []);
+    } catch {
+      /* non-fatal */
+    }
+  }
+  async function saveVersion() {
+    setSavingVer(true);
+    setSaveVerMsg("Saving…");
+    try {
+      await flush(); // make sure the latest edits are persisted before snapshotting
+      let themeId = saveForm.themeId || undefined;
+      if (!themeId && saveForm.newTheme.trim()) {
+        const tr = await fetch("/api/track/theme", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userId, name: saveForm.newTheme.trim() }),
+        });
+        const tj = await tr.json();
+        if (!tr.ok) throw new Error(tj.error || "Theme failed");
+        themeId = tj.theme.id;
+      }
+      const res = await fetch("/api/track/version", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, themeId, hypothesis: saveForm.hypothesis || undefined }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Save failed");
+      setSaveVerMsg("Saved ✓ — now in your version dropdown & dashboard");
+      setSaveForm({ themeId: "", newTheme: "", hypothesis: "" });
+      setVersionRefreshKey((k) => k + 1); // refresh the version dropdown
+    } catch (e) {
+      setSaveVerMsg(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingVer(false);
+    }
+  }
+
+  const activeStyle = preview ?? style;
+  const sheetVars = {
+    "--r-name-scale": activeStyle.nameScale,
+    "--r-header-scale": activeStyle.headerScale,
+    "--r-body-scale": activeStyle.bodyScale,
+    "--r-density": activeStyle.density,
+    "--r-accent": activeStyle.accent,
+    "--r-font": activeStyle.fontFamily || "inherit",
+  } as CSSProperties;
 
   // measure how many A4 pages the content spans
   useEffect(() => {
@@ -93,12 +249,17 @@ export default function ResumeEditor({
       try {
         const r = await fetch(`/api/resume/probes?u=${userId}`);
         const j = await r.json();
-        if (j.count > 0 && !j.generating) {
+        if (j.count > 0) {
           setProbeCount(j.count);
           setProbeStatus("ready");
-          return; // done — stop polling
+          return; // already prepped — no more polling
         }
-        setProbeStatus("working");
+        if (!j.generating) {
+          // nothing to prep and nothing running (e.g. no probes for this résumé)
+          setProbeStatus(null);
+          return; // don't imply work that isn't happening
+        }
+        setProbeStatus("working"); // only while a run is actually in flight
       } catch {
         /* keep trying */
       }
@@ -171,8 +332,6 @@ export default function ResumeEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  type EntryKind = "experience" | "education" | "skill" | "project";
 
   async function addEntry(kind: EntryKind) {
     setStatus("Adding…");
@@ -260,7 +419,87 @@ export default function ResumeEditor({
     }).catch(() => setStatus("Delete failed"));
   }
 
+  function entryIds(kind: EntryKind): string[] {
+    if (kind === "experience") return data.experiences.map((x) => x.id);
+    if (kind === "education") return data.education.map((x) => x.id);
+    if (kind === "skill") return data.skills.map((x) => x.id);
+    return data.projects.map((x) => x.id);
+  }
+  function removeSection(kind: EntryKind, label: string) {
+    const ids = entryIds(kind);
+    if (!ids.length) return;
+    if (!window.confirm(`Remove the entire ${label} section? This deletes ${ids.length} item${ids.length === 1 ? "" : "s"}.`)) return;
+    ids.forEach((id) => removeEntry(kind, id));
+  }
+
+  // ---- edit-with-AI: open (measure the entry's position), refine, accept ----
+  function openAI(kind: EntryKind, id: string, bullets: Bullet[], btn: HTMLElement) {
+    const frame = frameRef.current;
+    const entry = btn.closest(".entry") as HTMLElement | null;
+    const top =
+      frame && entry
+        ? entry.getBoundingClientRect().top - frame.getBoundingClientRect().top
+        : 0;
+    setAi({
+      kind,
+      id,
+      top,
+      bullets: bullets.map((b) => stripTags(b.text)).filter(Boolean),
+      instruction: "",
+      loading: false,
+      proposed: null,
+      err: "",
+    });
+  }
+  async function runAI() {
+    const a = aiRef.current;
+    if (!a || !a.instruction.trim() || !a.bullets.length) return;
+    setAi({ ...a, loading: true, err: "" });
+    try {
+      const res = await fetch("/api/resume/refine", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instruction: a.instruction, bullets: a.bullets, userId }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Refine failed");
+      const cur = aiRef.current;
+      if (cur) setAi({ ...cur, loading: false, proposed: j.bullets ?? [] });
+    } catch (e) {
+      const cur = aiRef.current;
+      if (cur) setAi({ ...cur, loading: false, err: e instanceof Error ? e.message : "Refine failed" });
+    }
+  }
+  // refresh the whole editor from the server (after a version restore) without a
+  // full page reload, so the VersionBar keeps its selection
+  async function reloadData() {
+    try {
+      const r = await fetch(`/api/profile/full?u=${userId}`);
+      const j = await r.json();
+      if (r.ok && j.profile) setData(j);
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  function acceptAI() {
+    const a = aiRef.current;
+    if (!a || !a.proposed) return;
+    const bullets = a.proposed.map((text) => ({ text }));
+    setData((d) => {
+      if (a.kind === "experience")
+        return { ...d, experiences: d.experiences.map((e) => (e.id === a.id ? { ...e, bullets } : e)) };
+      if (a.kind === "project")
+        return { ...d, projects: d.projects.map((pr) => (pr.id === a.id ? { ...pr, bullets } : pr)) };
+      return d;
+    });
+    save(a.kind, a.id, { bullets });
+    setAi(null);
+  }
+
   const p = data.profile;
+  const isEmpty =
+    !data.experiences.length && !data.education.length && !data.skills.length && !data.projects.length;
 
   return (
     <>
@@ -268,6 +507,7 @@ export default function ResumeEditor({
         <span className="brand">Career Co-Pilot</span>
         <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <span className="status">{status}</span>
+          <a className="ghost-btn" href="/dashboard">← Dashboard</a>
           <button
             className="ghost-btn"
             onClick={() => window.print()}
@@ -275,11 +515,125 @@ export default function ResumeEditor({
           >
             Download PDF
           </button>
-          <a href={`/mentor?u=${userId}`}>Talk to your mentor →</a>
+          <a href="/mentor">Talk to your mentor →</a>
+          <UserChip />
         </span>
       </div>
 
+      <VersionBar
+        userId={userId}
+        refreshKey={versionRefreshKey}
+        onSaveVersion={openSaveVersion}
+        onAfterRestore={reloadData}
+      />
+
+      <div className="editor-shell">
+        <aside className="editor-rail no-print">
+          <div className="rail-group">
+            <div className="rail-title">Add to résumé</div>
+            <div className="rail-adds">
+              <button className="rail-add" onClick={() => addEntry("experience")}>+ Experience</button>
+              <button className="rail-add" onClick={() => addEntry("education")}>+ Education</button>
+              <button className="rail-add" onClick={() => addEntry("skill")}>+ Skill</button>
+              <button className="rail-add" onClick={() => addEntry("project")}>+ Project</button>
+            </div>
+          </div>
+
+          <div className="rail-group">
+            <div className="rail-title">Design</div>
+            {preview ? (
+              <div className="redesign-preview">
+                <div className="redesign-title">✨ AI redesign — previewing on the sheet</div>
+                {redesignNote && <p className="redesign-note">{redesignNote}</p>}
+                <div className="redesign-actions">
+                  <button className="ai-accept" onClick={acceptRedesign}>Keep it</button>
+                  <button className="ai-discard" onClick={discardRedesign}>Revert</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
+                  {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
+                </button>
+                {redesignErr && <div className="ai-err">{redesignErr}</div>}
+
+                <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
+                <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
+                <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
+                <Stepper label="Spacing" value={style.density} min={0.7} max={1.5} onChange={(v) => setStyle({ density: v })} />
+                <div className="design-row">
+                  <span>Accent</span>
+                  <input
+                    type="color"
+                    className="design-color"
+                    value={style.accent}
+                    onChange={(e) => setStyle({ accent: e.target.value })}
+                  />
+                </div>
+                <div className="design-row">
+                  <span>Font</span>
+                  <select
+                    className="design-font"
+                    value={style.fontFamily}
+                    onChange={(e) => setStyle({ fontFamily: e.target.value })}
+                  >
+                    {FONT_OPTIONS.map((f) => (
+                      <option key={f.label} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <button className="design-reset" onClick={() => setStyle(DEFAULT_STYLE)}>Reset to default</button>
+              </>
+            )}
+          </div>
+        </aside>
+
+        <div className="editor-canvas">
       <main className="resume-wrap">
+        {showSave && (
+          <div className="save-modal-backdrop no-print" onClick={() => setShowSave(false)}>
+            <div className="save-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="design-head">
+                <span>Save this résumé as a version</span>
+                <button className="design-close" onClick={() => setShowSave(false)}>×</button>
+              </div>
+              <label className="save-label">Theme</label>
+              <select
+                className="f-box"
+                value={saveForm.themeId}
+                onChange={(e) => setSaveForm((f) => ({ ...f, themeId: e.target.value }))}
+              >
+                <option value="">— pick a theme —</option>
+                {themes.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              {!saveForm.themeId && (
+                <input
+                  className="f-box"
+                  value={saveForm.newTheme}
+                  placeholder="…or type a new theme (Quant, Founder, PM, AI)"
+                  onChange={(e) => setSaveForm((f) => ({ ...f, newTheme: e.target.value }))}
+                />
+              )}
+              <label className="save-label">Hypothesis — what is this version betting on?</label>
+              <textarea
+                className="f-box"
+                rows={3}
+                value={saveForm.hypothesis}
+                placeholder="e.g. Leading with founder/0-to-1 wins to land early-stage eng roles"
+                onChange={(e) => setSaveForm((f) => ({ ...f, hypothesis: e.target.value }))}
+              />
+              <div className="save-actions">
+                <button className="btn-primary" onClick={saveVersion} disabled={savingVer}>
+                  {savingVer ? "Saving…" : "Save version"}
+                </button>
+                <a className="ghost-btn" href="/dashboard">View dashboard →</a>
+                {saveVerMsg && <span className="dash-hint">{saveVerMsg}</span>}
+              </div>
+            </div>
+          </div>
+        )}
         {probeStatus === "working" && (
           <div className="probe-banner no-print">
             <span>Prepping your mentor with questions from your résumé…</span>
@@ -291,7 +645,7 @@ export default function ResumeEditor({
             <span>
               ✓ Your mentor is prepped with {probeCount} question
               {probeCount === 1 ? "" : "s"} from your résumé —{" "}
-              <a href={`/mentor?u=${userId}`}>start the call →</a>
+              <a href="/mentor">start the call →</a>
             </span>
           </div>
         )}
@@ -304,14 +658,25 @@ export default function ResumeEditor({
             color: "var(--muted)",
           }}
         >
-          Here&apos;s what we pulled from your résumé. <strong>Review and fix
-          anything that&apos;s off</strong> — edits save automatically. Then
-          download it as a PDF or talk to your mentor.
+          {isEmpty ? (
+            <>
+              <strong>Build your résumé.</strong> Fill in your name and headline
+              above, then add sections from the left panel. Everything saves
+              automatically and you can restyle the whole sheet from Design.
+            </>
+          ) : (
+            <>
+              <strong>Edit and refine.</strong> Fix anything that&apos;s off, add
+              sections from the left, restyle from Design — edits save
+              automatically. Then download a PDF or talk to your mentor.
+            </>
+          )}
         </div>
         <div className="page-meta no-print">
           A4 · {pages} page{pages === 1 ? "" : "s"}
         </div>
-        <div className="resume" ref={resumeRef}>
+        <div className="sheet-frame" ref={frameRef}>
+        <div className="resume" ref={resumeRef} style={sheetVars}>
           {/* header */}
           <Field
             className="f name"
@@ -342,6 +707,8 @@ export default function ResumeEditor({
           {/* experience */}
           {data.experiences.length > 0 && (
             <section className="section">
+              <button className="section-x no-print" title="Remove Experience section" onClick={() => removeSection("experience", "Experience")}>×</button>
+              <button className="section-add no-print" title="Add a role" onClick={() => addEntry("experience")}>+</button>
               <h2>Experience</h2>
               <DndContext id="dnd-exp" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("experience", ev)}>
               <SortableContext items={data.experiences.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -349,6 +716,7 @@ export default function ResumeEditor({
                 <SortableItem id={e.id} key={e.id}>
                 <div className="entry">
                   <button className="entry-x no-print" title="Remove role" onClick={() => removeEntry("experience", e.id)}>×</button>
+                  <button className="ai-trigger no-print" title="Edit with AI" onClick={(ev) => openAI("experience", e.id, e.bullets ?? [], ev.currentTarget)}>✨</button>
                   <div className="row">
                     <Field
                       className="f title"
@@ -379,13 +747,14 @@ export default function ResumeEditor({
               ))}
               </SortableContext>
               </DndContext>
-              <button className="add-btn no-print" onClick={() => addEntry("experience")}>+ Add role</button>
             </section>
           )}
 
           {/* education */}
           {data.education.length > 0 && (
             <section className="section">
+              <button className="section-x no-print" title="Remove Education section" onClick={() => removeSection("education", "Education")}>×</button>
+              <button className="section-add no-print" title="Add education" onClick={() => addEntry("education")}>+</button>
               <h2>Education</h2>
               <DndContext id="dnd-edu" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("education", ev)}>
               <SortableContext items={data.education.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -419,13 +788,14 @@ export default function ResumeEditor({
               ))}
               </SortableContext>
               </DndContext>
-              <button className="add-btn no-print" onClick={() => addEntry("education")}>+ Add education</button>
             </section>
           )}
 
           {/* skills */}
           {data.skills.length > 0 && (
             <section className="section">
+              <button className="section-x no-print" title="Remove Skills section" onClick={() => removeSection("skill", "Skills")}>×</button>
+              <button className="section-add no-print" title="Add a skill" onClick={() => addEntry("skill")}>+</button>
               <h2>Skills</h2>
               <div className="skills-list">
                 {data.skills.map((s) => (
@@ -446,6 +816,8 @@ export default function ResumeEditor({
           {/* projects */}
           {data.projects.length > 0 && (
             <section className="section">
+              <button className="section-x no-print" title="Remove Projects section" onClick={() => removeSection("project", "Projects")}>×</button>
+              <button className="section-add no-print" title="Add a project" onClick={() => addEntry("project")}>+</button>
               <h2>Projects</h2>
               <DndContext id="dnd-proj" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("project", ev)}>
               <SortableContext items={data.projects.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -453,6 +825,7 @@ export default function ResumeEditor({
                 <SortableItem id={pr.id} key={pr.id}>
                 <div className="entry">
                   <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("project", pr.id)}>×</button>
+                  <button className="ai-trigger no-print" title="Edit with AI" onClick={(ev) => openAI("project", pr.id, pr.bullets ?? [], ev.currentTarget)}>✨</button>
                   <Field
                     className="f title"
                     value={pr.name}
@@ -469,17 +842,58 @@ export default function ResumeEditor({
               ))}
               </SortableContext>
               </DndContext>
-              <button className="add-btn no-print" onClick={() => addEntry("project")}>+ Add project</button>
             </section>
           )}
+          {/* sections are added from the left control pane's "Add to résumé" */}
+        </div>
 
-          {/* add any empty sections */}
-          <div className="add-sections no-print">
-            {data.experiences.length === 0 && <button onClick={() => addEntry("experience")}>+ Experience</button>}
-            {data.education.length === 0 && <button onClick={() => addEntry("education")}>+ Education</button>}
-            {data.skills.length === 0 && <button onClick={() => addEntry("skill")}>+ Skills</button>}
-            {data.projects.length === 0 && <button onClick={() => addEntry("project")}>+ Projects</button>}
+        {/* left margin: compose an AI edit */}
+        {ai && (
+          <div className="ai-compose no-print" style={{ top: ai.top }}>
+            <div className="ai-compose-label">✨ Edit with AI</div>
+            <textarea
+              className="ai-compose-input"
+              value={ai.instruction}
+              autoFocus
+              rows={3}
+              placeholder="Tell the AI how — e.g. tighten these, make them impact-focused, quantify"
+              onChange={(e) => setAi((a) => (a ? { ...a, instruction: e.target.value } : a))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void runAI();
+                if (e.key === "Escape") setAi(null);
+              }}
+            />
+            <div className="ai-compose-actions">
+              <button className="ai-go" onClick={() => void runAI()} disabled={ai.loading || !ai.instruction.trim()}>
+                {ai.loading ? "Refining…" : "Refine"}
+              </button>
+              <button className="ai-cancel" onClick={() => setAi(null)}>
+                Cancel
+              </button>
+            </div>
+            {ai.err && <div className="ai-err">{ai.err}</div>}
           </div>
+        )}
+
+        {/* right rail: the AI's proposed rewrite, outside the sheet */}
+        {ai?.proposed && (
+          <div className="ai-preview no-print" style={{ top: ai.top }}>
+            <div className="ai-preview-label">Suggested rewrite — review, then accept</div>
+            <ul>
+              {ai.proposed.map((b, i) => (
+                <li key={i}>{b}</li>
+              ))}
+            </ul>
+            <div className="ai-preview-actions">
+              <button className="ai-accept" onClick={acceptAI}>
+                Accept
+              </button>
+              <button className="ai-discard" onClick={() => setAi((a) => (a ? { ...a, proposed: null } : a))}>
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
         </div>
 
         <div
@@ -515,13 +929,45 @@ export default function ResumeEditor({
               padding: "12px 28px",
               textDecoration: "none",
             }}
-            href={`/mentor?u=${userId}`}
+            href="/mentor"
           >
             Looks good — talk to your mentor →
           </a>
         </div>
       </main>
+        </div>
+      </div>
     </>
+  );
+}
+
+// ---------- design controls ----------
+
+function Stepper({
+  label,
+  value,
+  onChange,
+  min = 0.8,
+  max = 1.4,
+  step = 0.05,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+}) {
+  const clamp = (v: number) => Math.round(Math.min(max, Math.max(min, v)) * 100) / 100;
+  return (
+    <div className="design-row">
+      <span>{label}</span>
+      <span className="stepper">
+        <button onClick={() => onChange(clamp(value - step))} disabled={value <= min} aria-label={`Decrease ${label}`}>−</button>
+        <span className="stepper-val">{Math.round(value * 100)}%</span>
+        <button onClick={() => onChange(clamp(value + step))} disabled={value >= max} aria-label={`Increase ${label}`}>+</button>
+      </span>
+    </div>
   );
 }
 
@@ -623,102 +1069,14 @@ function BulletsField({
   bullets: Bullet[];
   onSave: (bullets: Bullet[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [instruction, setInstruction] = useState("");
-  const [proposed, setProposed] = useState<string[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-
-  async function refine() {
-    if (!instruction.trim()) return;
-    setLoading(true);
-    setErr("");
-    try {
-      const plain = bullets.map((b) => stripTags(b.text)).filter(Boolean);
-      const res = await fetch("/api/resume/refine", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instruction, bullets: plain }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Refine failed");
-      setProposed(j.bullets ?? []);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Refine failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-  function accept() {
-    onSave((proposed ?? []).map((text) => ({ text })));
-    setProposed(null);
-    setOpen(false);
-    setInstruction("");
-  }
-  function reset() {
-    setProposed(null);
-    setOpen(false);
-    setInstruction("");
-    setErr("");
-  }
-
   return (
-    <>
-      <RichBullets
-        value={bulletsToHtml(bullets)}
-        onSave={(html) => {
-          const next = htmlToBullets(html);
-          if (next.map((b) => b.text).join("") !== bullets.map((b) => b.text).join("")) onSave(next);
-        }}
-      />
-      <div className="refine no-print">
-        {!open && !proposed && bullets.length > 0 && (
-          <button className="refine-btn" onClick={() => setOpen(true)}>
-            ✨ Refine with AI
-          </button>
-        )}
-        {open && !proposed && (
-          <div className="refine-bar">
-            <input
-              className="refine-input"
-              value={instruction}
-              autoFocus
-              placeholder="Tell the AI how — e.g. make these more impact-focused, tighten, quantify"
-              onChange={(e) => setInstruction(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void refine();
-                if (e.key === "Escape") reset();
-              }}
-            />
-            <button className="refine-go" onClick={() => void refine()} disabled={loading || !instruction.trim()}>
-              {loading ? "Refining…" : "Refine"}
-            </button>
-            <button className="refine-cancel" onClick={reset}>
-              Cancel
-            </button>
-          </div>
-        )}
-        {proposed && (
-          <div className="refine-preview">
-            <div className="refine-label">✨ Suggested rewrite — review, then accept</div>
-            <ul>
-              {proposed.map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
-            <div className="refine-actions">
-              <button className="refine-accept" onClick={accept}>
-                Accept
-              </button>
-              <button className="refine-cancel" onClick={() => setProposed(null)}>
-                Discard
-              </button>
-            </div>
-          </div>
-        )}
-        {err && <div className="refine-err">{err}</div>}
-      </div>
-    </>
+    <RichBullets
+      value={bulletsToHtml(bullets)}
+      onSave={(html) => {
+        const next = htmlToBullets(html);
+        if (next.map((b) => b.text).join("") !== bullets.map((b) => b.text).join("")) onSave(next);
+      }}
+    />
   );
 }
 

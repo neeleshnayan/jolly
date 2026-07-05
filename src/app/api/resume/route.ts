@@ -13,6 +13,7 @@ import { probeGenerator } from "@/agents/probe-generator";
 import { ensureProfile } from "@/lib/profile/ensure";
 import { persistExtraction } from "@/lib/profile/persist";
 import { persistProbes } from "@/lib/probes/persist";
+import { computeAndSaveScoring } from "@/lib/scoring/persist";
 import { getProvider } from "@/llm";
 import type { ResumeExtraction } from "@/lib/extraction/schema";
 
@@ -167,6 +168,16 @@ export async function POST(req: NextRequest) {
         }
       });
     }
+
+    // Cache the initial scoring vector from the résumé, in the background, so the
+    // "understanding" view serves it instantly instead of recomputing on open.
+    after(async () => {
+      try {
+        await computeAndSaveScoring(userId);
+      } catch (err) {
+        console.warn("[/api/resume] scoring failed (background)", err);
+      }
+    });
 
     return NextResponse.json({ ok: true, ...result, probesPending: willProbe, extraction });
   } catch (err) {

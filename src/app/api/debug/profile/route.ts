@@ -1,33 +1,43 @@
 /**
  * GET /api/debug/profile?u=<userId> — a debugging surface. Returns the person's
- * insights, the open probes, and a freshly-computed scoring vector so we can see
- * how the extraction is tying out. Scoring runs on demand (not persisted yet) —
- * this is the iterate-against-live-users view, not a production endpoint.
+ * insights, the open probes, and the scoring vector. Scoring is cached on the
+ * profile and served as-is; pass ?recompute=1 to force a fresh run.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
-import { buildProfileText } from "@/lib/scoring/profileText";
-import { runAgent } from "@/agents/run";
-import { profileScorer } from "@/agents/profile-scorer";
+import { getSessionUserId } from "@/lib/auth/session";
+import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("u");
-  if (!userId) return NextResponse.json({ error: "Missing ?u=<userId>" }, { status: 400 });
+  const userId = (await getSessionUserId()) ?? req.nextUrl.searchParams.get("u");
+  if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const [full, map] = await Promise.all([getFullProfile(userId), getMentorMap(userId)]);
-  if (!full) return NextResponse.json({ error: "No profile for this user" }, { status: 404 });
+  const map = await getMentorMap(userId);
+  if (!map.profile) return NextResponse.json({ error: "No profile for this user" }, { status: 404 });
 
-  const profileText = buildProfileText(full, map.insights);
-
+  // Serve the cached scoring vector; compute only when asked, or the first time
+  // there's nothing cached yet.
+  const recompute = req.nextUrl.searchParams.get("recompute") === "1";
   let scoring: unknown = null;
+  let scoringAt: string | null = null;
   let scoringError: string | null = null;
   try {
-    const { output } = await runAgent(profileScorer, { profileText }, { userId });
-    scoring = output;
+    if (recompute) {
+      scoring = await computeAndSaveScoring(userId);
+      scoringAt = new Date().toISOString();
+    } else {
+      const saved = await getSavedScoring(userId);
+      if (saved.scoring) {
+        scoring = saved.scoring;
+        scoringAt = saved.scoringAt?.toISOString() ?? null;
+      } else {
+        scoring = await computeAndSaveScoring(userId);
+        scoringAt = new Date().toISOString();
+      }
+    }
   } catch (err) {
     scoringError = err instanceof Error ? err.message : "scoring failed";
   }
@@ -38,6 +48,7 @@ export async function GET(req: NextRequest) {
     insights: map.insights,
     probes: map.probes,
     scoring,
+    scoringAt,
     scoringError,
   });
 }

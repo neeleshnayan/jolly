@@ -1,0 +1,1 @@
+ALTER TABLE "profiles" ADD COLUMN "style_config" jsonb DEFAULT '{}'::jsonb;
