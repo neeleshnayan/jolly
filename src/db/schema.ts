@@ -99,6 +99,7 @@ export const experiences = pgTable("experiences", {
   startDate: text("start_date"),
   endDate: text("end_date"),
   isCurrent: boolean("is_current").default(false),
+  position: integer("position").default(0).notNull(),
   bullets: jsonb("bullets")
     .$type<{ text: string; sourceId?: string }[]>()
     .default([]),
@@ -119,6 +120,7 @@ export const education = pgTable("education", {
   startDate: text("start_date"),
   endDate: text("end_date"),
   details: text("details"),
+  position: integer("position").default(0).notNull(),
   sourceId: uuid("source_id").references(() => sources.id),
   confidence: real("confidence").default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -133,6 +135,7 @@ export const skills = pgTable("skills", {
   name: text("name").notNull(),
   category: text("category"),
   level: text("level"),
+  position: integer("position").default(0).notNull(),
   sourceId: uuid("source_id").references(() => sources.id),
   confidence: real("confidence").default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -145,6 +148,7 @@ export const projects = pgTable("projects", {
     .references(() => profiles.id, { onDelete: "cascade" }),
   name: text("name"),
   description: text("description"),
+  position: integer("position").default(0).notNull(),
   links: jsonb("links").$type<{ label: string; url: string }[]>().default([]),
   bullets: jsonb("bullets").$type<{ text: string; sourceId?: string }[]>().default([]),
   sourceId: uuid("source_id").references(() => sources.id),

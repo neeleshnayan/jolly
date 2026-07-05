@@ -29,6 +29,13 @@
       "when": 1783194572947,
       "tag": "0003_flowery_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783197640157,
+      "tag": "0004_nosy_ricochet",
+      "breakpoints": true
     }
   ]
 }

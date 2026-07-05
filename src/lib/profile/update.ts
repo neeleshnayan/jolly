@@ -123,6 +123,18 @@ export async function createEntry(userId: string, kind: EntryKind) {
   });
 }
 
+/** Set the order of a section's entries (position = index in `ids`). */
+export async function reorderEntries(userId: string, kind: EntryKind, ids: string[]) {
+  return db.transaction(async (tx) => {
+    const pid = await profileIdFor(tx, userId);
+    const table = { experience: experiences, education, skill: skills, project: projects }[kind];
+    for (let i = 0; i < ids.length; i++) {
+      await tx.update(table).set({ position: i }).where(and(eq(table.id, ids[i]), eq(table.profileId, pid)));
+    }
+    return { ok: true as const };
+  });
+}
+
 /** Remove an entry. */
 export async function deleteEntry(userId: string, kind: EntryKind, id: string) {
   return db.transaction(async (tx) => {

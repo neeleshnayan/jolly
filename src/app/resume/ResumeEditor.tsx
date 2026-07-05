@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { RichBullets } from "./RichBullets";
+import { SortableItem } from "./SortableItem";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
@@ -181,6 +185,52 @@ export default function ResumeEditor({
     }
   }
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function persistOrder(kind: EntryKind, ids: string[]) {
+    void fetch("/api/profile/reorder", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, kind, ids }),
+    }).catch(() => setStatus("Reorder failed"));
+  }
+  function moveById<T extends { id: string }>(list: T[], from: string, to: string): T[] | null {
+    const oi = list.findIndex((x) => x.id === from);
+    const ni = list.findIndex((x) => x.id === to);
+    return oi < 0 || ni < 0 ? null : arrayMove(list, oi, ni);
+  }
+
+  function reorder(kind: EntryKind, event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const from = String(active.id);
+    const to = String(over.id);
+    setData((d) => {
+      if (kind === "experience") {
+        const m = moveById(d.experiences, from, to);
+        if (!m) return d;
+        persistOrder(kind, m.map((x) => x.id));
+        return { ...d, experiences: m };
+      }
+      if (kind === "education") {
+        const m = moveById(d.education, from, to);
+        if (!m) return d;
+        persistOrder(kind, m.map((x) => x.id));
+        return { ...d, education: m };
+      }
+      if (kind === "project") {
+        const m = moveById(d.projects, from, to);
+        if (!m) return d;
+        persistOrder(kind, m.map((x) => x.id));
+        return { ...d, projects: m };
+      }
+      const m = moveById(d.skills, from, to);
+      if (!m) return d;
+      persistOrder(kind, m.map((x) => x.id));
+      return { ...d, skills: m };
+    });
+  }
+
   function removeEntry(kind: EntryKind, id: string) {
     setData((d) => ({
       ...d,
@@ -276,8 +326,11 @@ export default function ResumeEditor({
           {data.experiences.length > 0 && (
             <section className="section">
               <h2>Experience</h2>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("experience", ev)}>
+              <SortableContext items={data.experiences.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               {data.experiences.map((e) => (
-                <div className="entry" key={e.id}>
+                <SortableItem id={e.id} key={e.id}>
+                <div className="entry">
                   <button className="entry-x no-print" title="Remove role" onClick={() => removeEntry("experience", e.id)}>×</button>
                   <div className="row">
                     <Field
@@ -305,7 +358,10 @@ export default function ResumeEditor({
                     onSave={(bullets) => save("experience", e.id, { bullets })}
                   />
                 </div>
+                </SortableItem>
               ))}
+              </SortableContext>
+              </DndContext>
               <button className="add-btn no-print" onClick={() => addEntry("experience")}>+ Add role</button>
             </section>
           )}
@@ -314,8 +370,11 @@ export default function ResumeEditor({
           {data.education.length > 0 && (
             <section className="section">
               <h2>Education</h2>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("education", ev)}>
+              <SortableContext items={data.education.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               {data.education.map((ed) => (
-                <div className="entry" key={ed.id}>
+                <SortableItem id={ed.id} key={ed.id}>
+                <div className="entry">
                   <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("education", ed.id)}>×</button>
                   <div className="row">
                     <Field
@@ -339,7 +398,10 @@ export default function ResumeEditor({
                     wrapClass="org"
                   />
                 </div>
+                </SortableItem>
               ))}
+              </SortableContext>
+              </DndContext>
               <button className="add-btn no-print" onClick={() => addEntry("education")}>+ Add education</button>
             </section>
           )}
@@ -368,8 +430,11 @@ export default function ResumeEditor({
           {data.projects.length > 0 && (
             <section className="section">
               <h2>Projects</h2>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("project", ev)}>
+              <SortableContext items={data.projects.map((x) => x.id)} strategy={verticalListSortingStrategy}>
               {data.projects.map((pr) => (
-                <div className="entry" key={pr.id}>
+                <SortableItem id={pr.id} key={pr.id}>
+                <div className="entry">
                   <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("project", pr.id)}>×</button>
                   <Field
                     className="f title"
@@ -383,7 +448,10 @@ export default function ResumeEditor({
                     onSave={(bullets) => save("project", pr.id, { bullets })}
                   />
                 </div>
+                </SortableItem>
               ))}
+              </SortableContext>
+              </DndContext>
               <button className="add-btn no-print" onClick={() => addEntry("project")}>+ Add project</button>
             </section>
           )}
