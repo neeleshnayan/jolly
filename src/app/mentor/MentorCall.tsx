@@ -29,11 +29,15 @@ const DIMENSIONS = [
 ];
 
 // --- voice-activity tuning (all in one place; adjust to taste) ---
-const SPEECH_RMS = 0.018; // mic energy above this counts as speech
-const BARGE_RMS = 0.05; // louder threshold to interrupt the mentor mid-sentence
+const SPEECH_RMS = 0.018; // floor for "counts as speech" (raised by calibration)
+const BARGE_RMS = 0.05; // floor to interrupt the mentor mid-sentence
 const SILENCE_HANG_MS = 1000; // this much quiet ends your turn
 const MIN_SPEECH_MS = 350; // ignore blips shorter than this
 const POLL_MS = 60;
+const CALIBRATION_MS = 700; // sample the room's noise floor at call start
+const BARGE_FRAMES = 4; // ~240ms of sustained speech-shaped sound to interrupt
+const SPEECH_BAND = [300, 3400]; // Hz — energy here is speech, not fan hum
+const SPEECH_BAND_MIN = 0.32; // fraction of energy that must sit in the speech band
 
 export default function MentorCall({ userId }: { userId: string }) {
   // media + analysis
@@ -44,7 +48,12 @@ export default function MentorCall({ userId }: { userId: string }) {
   const ctxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
+  const freqRef = useRef<Uint8Array<ArrayBuffer>>(new Uint8Array(0));
   const vadTimerRef = useRef<number | null>(null);
+  // adaptive thresholds — calibrated to the room's noise floor at call start
+  const speechThreshRef = useRef(SPEECH_RMS);
+  const bargeThreshRef = useRef(BARGE_RMS);
+  const bargeCountRef = useRef(0);
   // refs the VAD loop reads without stale closures
   const liveRef = useRef(false);
   const recordingRef = useRef(false);
@@ -138,22 +147,68 @@ export default function MentorCall({ userId }: { userId: string }) {
     void audio.play().catch(done);
   }
 
+  // ---- signal helpers ----
+  function computeRms(): number {
+    const analyser = analyserRef.current;
+    if (!analyser) return 0;
+    analyser.getFloatTimeDomainData(dataRef.current);
+    let sum = 0;
+    for (let i = 0; i < dataRef.current.length; i++) sum += dataRef.current[i] * dataRef.current[i];
+    return Math.sqrt(sum / dataRef.current.length);
+  }
+  // fraction of spectral energy in the speech band. High for speech; low for
+  // fan/AC hum (which lives mostly below 300 Hz).
+  function speechBandFraction(): number {
+    const analyser = analyserRef.current;
+    const ctx = ctxRef.current;
+    if (!analyser || !ctx) return 1;
+    analyser.getByteFrequencyData(freqRef.current);
+    const binHz = ctx.sampleRate / analyser.fftSize;
+    const lo = Math.floor(SPEECH_BAND[0] / binHz);
+    const hi = Math.min(freqRef.current.length - 1, Math.ceil(SPEECH_BAND[1] / binHz));
+    let band = 0;
+    let total = 0;
+    for (let i = 0; i < freqRef.current.length; i++) {
+      total += freqRef.current[i];
+      if (i >= lo && i <= hi) band += freqRef.current[i];
+    }
+    return total > 0 ? band / total : 0;
+  }
+  // sample the room for ~700ms and set thresholds relative to its noise floor
+  function calibrateNoiseFloor() {
+    const samples: number[] = [];
+    const t0 = performance.now();
+    const id = window.setInterval(() => {
+      samples.push(computeRms());
+      if (performance.now() - t0 >= CALIBRATION_MS) {
+        window.clearInterval(id);
+        samples.sort((a, b) => a - b);
+        const floor = samples[Math.floor(samples.length * 0.75)] ?? 0;
+        speechThreshRef.current = Math.max(SPEECH_RMS, floor * 3);
+        bargeThreshRef.current = Math.max(BARGE_RMS, floor * 5);
+      }
+    }, 50);
+  }
+
   // ---- the voice-activity loop: decides when you start and stop talking ----
   function vadTick() {
     const analyser = analyserRef.current;
     if (!analyser || !liveRef.current || busyRef.current) return;
-    analyser.getFloatTimeDomainData(dataRef.current);
-    let sum = 0;
-    for (let i = 0; i < dataRef.current.length; i++) sum += dataRef.current[i] * dataRef.current[i];
-    const rms = Math.sqrt(sum / dataRef.current.length);
+    const rms = computeRms();
     const now = performance.now();
-    const voiced = rms > SPEECH_RMS;
+    const voiced = rms > speechThreshRef.current;
 
     if (speakingRef.current) {
-      // mentor is talking — only a clear, loud interruption takes the floor
-      if (rms > BARGE_RMS) {
-        audioRef.current?.pause();
-        beginRecording(now);
+      // interrupt the mentor only on sustained, speech-SHAPED, loud sound — a
+      // brief fan spike (low-frequency, not sustained) no longer takes the floor
+      if (rms > bargeThreshRef.current && speechBandFraction() > SPEECH_BAND_MIN) {
+        if (++bargeCountRef.current >= BARGE_FRAMES) {
+          bargeCountRef.current = 0;
+          audioRef.current?.pause();
+          beginRecording(now);
+        }
+      } else {
+        bargeCountRef.current = 0;
       }
       return;
     }
@@ -252,7 +307,9 @@ export default function MentorCall({ userId }: { userId: string }) {
     setError(null);
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        // autoGainControl OFF: it boosts steady background (fan hum) in quiet
+        // moments, which is exactly what causes false interruptions.
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
       });
     } catch {
       setError("Microphone access is needed for the call. Allow it and try again.");
@@ -266,6 +323,8 @@ export default function MentorCall({ userId }: { userId: string }) {
     ctx.createMediaStreamSource(streamRef.current).connect(analyser);
     analyserRef.current = analyser;
     dataRef.current = new Float32Array(analyser.fftSize);
+    freqRef.current = new Uint8Array(analyser.frequencyBinCount);
+    calibrateNoiseFloor(); // measure the room over the next ~700ms
 
     turnsRef.current = [];
     setTurns([]);
