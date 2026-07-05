@@ -14,6 +14,7 @@ import { ensureProfile } from "@/lib/profile/ensure";
 import { persistExtraction } from "@/lib/profile/persist";
 import { persistProbes } from "@/lib/probes/persist";
 import { computeAndSaveScoring } from "@/lib/scoring/persist";
+import { ensureStarterThemes } from "@/lib/track/persist";
 import { getProvider } from "@/llm";
 import type { ResumeExtraction } from "@/lib/extraction/schema";
 
@@ -148,6 +149,11 @@ export async function POST(req: NextRequest) {
       rawText,
       storagePath,
     });
+
+    // seed the two starter themes (Default + a TBD target-role the call fills in)
+    await ensureStarterThemes(userId).catch((e) =>
+      console.warn("[/api/resume] ensureStarterThemes failed", e),
+    );
 
     // Generate the mentor's probes AFTER the response is sent — the user goes
     // straight to the editor while gemma3 (still warm from extraction) works in
