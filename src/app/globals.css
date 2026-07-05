@@ -831,6 +831,20 @@ a.start-tile:hover { border-color: var(--accent); }
 .ro-bullets li { line-height: 1.5; margin: 2px 0; font-size: calc(14px * var(--r-body-scale, 1)); }
 .ro-bullets li::marker { color: var(--muted); }
 .resume.ro { box-shadow: none; }
+/* the puppeteer print target: full-bleed sheet, no chrome, no page guides */
+.print-page { background: #fff; }
+.print-page .resume,
+.print-page .resume.ro {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background-image: none;
+  max-width: none;
+}
 .ProseMirror li::marker { color: var(--muted); }
 .ProseMirror a { color: var(--accent); text-decoration: underline; }
 .ProseMirror-focused { outline: none; }
