@@ -18,7 +18,7 @@ export async function mentorOpener(userId: string): Promise<string> {
     content:
       "[The voice call just connected — this is your very first line. Greet them warmly" +
       (first ? ` by first name (${first})` : "") +
-      ", reference one specific, concrete detail from their résumé so they know you've actually read it, then ask one open question about where they are in their search right now. Two sentences, spoken naturally — no lists.]",
+      ", name one specific, concrete detail that is ACTUALLY in their résumé (never invent an event, message, or anecdote), and open naturally — either a genuine question OR a light observation about their path that they can react to (don't default to 'where are you in your search'). Two spoken sentences, warm and unhurried, no lists.]",
   };
 
   const provider = getProvider();

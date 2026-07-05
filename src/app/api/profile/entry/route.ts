@@ -7,7 +7,7 @@ import { createEntry, deleteEntry, type EntryKind } from "@/lib/profile/update";
 
 export const runtime = "nodejs";
 
-const KINDS: EntryKind[] = ["experience", "education", "skill", "project"];
+const KINDS: EntryKind[] = ["experience", "education", "skill", "project", "certification"];
 
 export async function POST(req: NextRequest) {
   try {

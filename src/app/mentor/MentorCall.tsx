@@ -7,6 +7,15 @@ type Phase = "idle" | "recording" | "thinking" | "speaking";
 type Turn = { role: "user" | "assistant"; text: string };
 type Insight = { dimension: string; content: string; confidence: number };
 type Review = { loading: boolean; summary: string; insights: Insight[]; error?: string };
+type Suggestion = {
+  kind: "bullet" | "skill";
+  text: string;
+  rationale: string;
+  entryKind: "experience" | "project" | null;
+  entryId: string | null;
+  entryLabel: string | null;
+  status?: "added" | "dismissed";
+};
 
 const DIMENSIONS = [
   "aspiration",
@@ -59,6 +68,8 @@ export default function MentorCall({ userId }: { userId: string }) {
   const [review, setReview] = useState<Review | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMsg, setSaveMsg] = useState("");
+  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
 
   function enter(p: Phase) {
     setPhase(p);
@@ -325,6 +336,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not summarize");
       setReview({ loading: false, summary: json.summary ?? "", insights: json.insights ?? [] });
+      void generateSuggestions(transcript);
     } catch (err) {
       setReview({
         loading: false,
@@ -333,6 +345,47 @@ export default function MentorCall({ userId }: { userId: string }) {
         error: err instanceof Error ? err.message : "Summary failed",
       });
     }
+  }
+
+  // the mentor→résumé feedback loop: things worth adding, one-tap to accept
+  async function generateSuggestions(transcript: string) {
+    setSuggestLoading(true);
+    try {
+      const res = await fetch("/api/resume/suggest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, transcript }),
+      });
+      const json = await res.json();
+      if (res.ok) setSuggestions(json.suggestions ?? []);
+    } catch {
+      /* non-fatal — suggestions are a bonus */
+    } finally {
+      setSuggestLoading(false);
+    }
+  }
+  async function addSuggestion(i: number) {
+    const s = suggestions?.[i];
+    if (!s) return;
+    setSuggestions((list) => list?.map((x, idx) => (idx === i ? { ...x, status: "added" } : x)) ?? null);
+    try {
+      await fetch("/api/resume/suggest/apply", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          kind: s.kind,
+          entryKind: s.entryKind,
+          entryId: s.entryId,
+          text: s.text,
+        }),
+      });
+    } catch {
+      /* leave marked; the résumé is source of truth */
+    }
+  }
+  function dismissSuggestion(i: number) {
+    setSuggestions((list) => list?.map((x, idx) => (idx === i ? { ...x, status: "dismissed" } : x)) ?? null);
   }
 
   // ---- review editing ----
@@ -520,6 +573,50 @@ export default function MentorCall({ userId }: { userId: string }) {
               <button className="ghost-btn" onClick={addInsight}>
                 + Add something
               </button>
+
+              {(suggestLoading || (suggestions && suggestions.length > 0)) && (
+                <div className="suggest-block">
+                  <h2>Add to your résumé</h2>
+                  <p className="sub">
+                    Things you mentioned on the call that aren&apos;t on your résumé yet — one tap to add.
+                  </p>
+                  {suggestLoading && !suggestions && (
+                    <p className="sub">Finding résumé-worthy moments from the call…</p>
+                  )}
+                  <div className="suggest-list">
+                    {suggestions?.map((s, i) => (
+                      <div className={`suggest-row ${s.status ?? ""}`} key={i}>
+                        <div className="suggest-main">
+                          <span className="suggest-kind">
+                            {s.kind === "skill" ? "Skill" : s.entryLabel ?? "Bullet"}
+                          </span>
+                          <div className="suggest-text">{s.text}</div>
+                          {s.rationale && <div className="suggest-why">{s.rationale}</div>}
+                        </div>
+                        {s.status === "added" ? (
+                          <span className="suggest-added">Added ✓</span>
+                        ) : s.status === "dismissed" ? (
+                          <span className="suggest-dismissed">Dismissed</span>
+                        ) : (
+                          <div className="suggest-actions">
+                            <button
+                              className="suggest-add"
+                              disabled={s.kind === "bullet" && !s.entryId}
+                              title={s.kind === "bullet" && !s.entryId ? "Couldn't match a role — add it manually" : "Add to résumé"}
+                              onClick={() => void addSuggestion(i)}
+                            >
+                              {s.kind === "bullet" && !s.entryId ? "No match" : "Add"}
+                            </button>
+                            <button className="suggest-dismiss" onClick={() => dismissSuggestion(i)}>
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="review-actions">
                 <button

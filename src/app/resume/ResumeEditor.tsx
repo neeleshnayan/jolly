@@ -8,12 +8,13 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-ki
 import { RichBullets } from "./RichBullets";
 import { SortableItem } from "./SortableItem";
 import VersionBar from "./VersionBar";
+import ResumeSheet from "./ResumeSheet";
 import UserChip from "../UserChip";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
 type Bullet = { text: string; sourceId?: string };
-type EntryKind = "experience" | "education" | "skill" | "project";
+type EntryKind = "experience" | "education" | "skill" | "project" | "certification";
 
 // Design tokens applied to the sheet as CSS variables. This is the seam the AI
 // "re-paint" agent will one day write to — for now humans nudge it via the
@@ -97,12 +98,19 @@ interface Project {
   description: string | null;
   bullets: Bullet[] | null;
 }
+interface Certification {
+  id: string;
+  name: string | null;
+  issuer: string | null;
+  date: string | null;
+}
 interface FullProfile {
   profile: Profile;
   experiences: Experience[];
   education: Education[];
   skills: Skill[];
   projects: Project[];
+  certifications: Certification[];
 }
 
 export default function ResumeEditor({
@@ -123,6 +131,16 @@ export default function ResumeEditor({
   const aiRef = useRef<AISession | null>(null);
   aiRef.current = ai;
 
+  // the printed PDF's header (and saved filename) use the document title — set it
+  // to the person's name so it isn't "Career Co-Pilot"
+  useEffect(() => {
+    const prev = document.title;
+    document.title = (data.profile.fullName || "Resume").trim();
+    return () => {
+      document.title = prev;
+    };
+  }, [data.profile.fullName]);
+
   // design tokens (merged over defaults so old profiles just work)
   const style: StyleConfig = { ...DEFAULT_STYLE, ...(data.profile.styleConfig ?? {}) };
   function setStyle(patch: Partial<StyleConfig>) {
@@ -131,12 +149,18 @@ export default function ResumeEditor({
     save("profile", undefined, { styleConfig: next });
   }
 
-  // AI whole-sheet re-paint: preview holds the proposed tokens (applied live to
-  // the sheet) until the user accepts or discards
-  const [preview, setPreview] = useState<StyleConfig | null>(null);
+  // AI overhaul: redesigns BOTH look (styleConfig) and content (bullets), then
+  // shows a side-by-side diff (current vs proposed) to accept or discard.
+  type Overhaul = {
+    style: StyleConfig;
+    rationale: string;
+    content: { experiences: { id: string; bullets: string[] }[]; projects: { id: string; bullets: string[] }[] };
+    proposed: FullProfile;
+  };
+  const [overhaul, setOverhaul] = useState<Overhaul | null>(null);
   const [redesigning, setRedesigning] = useState(false);
-  const [redesignNote, setRedesignNote] = useState("");
   const [redesignErr, setRedesignErr] = useState("");
+  const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
   async function redesign() {
     setRedesigning(true);
     setRedesignErr("");
@@ -148,22 +172,39 @@ export default function ResumeEditor({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Redesign failed");
-      setPreview({ ...DEFAULT_STYLE, ...j.styleConfig });
-      setRedesignNote(j.rationale ?? "");
+      const style = { ...DEFAULT_STYLE, ...j.styleConfig };
+      const content = j.content ?? { experiences: [], projects: [] };
+      const em = new Map<string, string[]>(content.experiences.map((c: { id: string; bullets: string[] }) => [c.id, c.bullets]));
+      const pm = new Map<string, string[]>(content.projects.map((c: { id: string; bullets: string[] }) => [c.id, c.bullets]));
+      const proposed: FullProfile = {
+        ...data,
+        profile: { ...data.profile, styleConfig: style },
+        experiences: data.experiences.map((e) => (em.has(e.id) ? { ...e, bullets: wrapBullets(em.get(e.id)!) } : e)),
+        projects: data.projects.map((p) => (pm.has(p.id) ? { ...p, bullets: wrapBullets(pm.get(p.id)!) } : p)),
+      };
+      setOverhaul({ style, rationale: j.rationale ?? "", content, proposed });
     } catch (e) {
       setRedesignErr(e instanceof Error ? e.message : "Redesign failed");
     } finally {
       setRedesigning(false);
     }
   }
-  function acceptRedesign() {
-    if (preview) setStyle(preview);
-    setPreview(null);
-    setRedesignNote("");
+  function applyOverhaul() {
+    const o = overhaul;
+    if (!o) return;
+    setData(o.proposed);
+    save("profile", undefined, { styleConfig: o.style });
+    o.content.experiences.forEach((c) => save("experience", c.id, { bullets: wrapBullets(c.bullets) }));
+    o.content.projects.forEach((c) => save("project", c.id, { bullets: wrapBullets(c.bullets) }));
   }
-  function discardRedesign() {
-    setPreview(null);
-    setRedesignNote("");
+  function overwriteOverhaul() {
+    applyOverhaul();
+    setOverhaul(null);
+  }
+  function saveOverhaulAsNew() {
+    applyOverhaul();
+    setOverhaul(null);
+    void openSaveVersion();
   }
 
   // save-as-version (snapshot the résumé under a theme with a hypothesis)
@@ -216,14 +257,13 @@ export default function ResumeEditor({
     }
   }
 
-  const activeStyle = preview ?? style;
   const sheetVars = {
-    "--r-name-scale": activeStyle.nameScale,
-    "--r-header-scale": activeStyle.headerScale,
-    "--r-body-scale": activeStyle.bodyScale,
-    "--r-density": activeStyle.density,
-    "--r-accent": activeStyle.accent,
-    "--r-font": activeStyle.fontFamily || "inherit",
+    "--r-name-scale": style.nameScale,
+    "--r-header-scale": style.headerScale,
+    "--r-body-scale": style.bodyScale,
+    "--r-density": style.density,
+    "--r-accent": style.accent,
+    "--r-font": style.fontFamily || "inherit",
   } as CSSProperties;
 
   // measure how many A4 pages the content spans
@@ -350,6 +390,8 @@ export default function ResumeEditor({
         if (kind === "education")
           return { ...d, education: [...d.education, { id, institution: null, degree: null, field: null, startDate: null, endDate: null, details: null }] };
         if (kind === "skill") return { ...d, skills: [...d.skills, { id, name: "New skill", category: null }] };
+        if (kind === "certification")
+          return { ...d, certifications: [...d.certifications, { id, name: null, issuer: null, date: null }] };
         return { ...d, projects: [...d.projects, { id, name: null, description: null, bullets: [] }] };
       });
       setStatus("");
@@ -397,6 +439,12 @@ export default function ResumeEditor({
         persistOrder(kind, m.map((x) => x.id));
         return { ...d, projects: m };
       }
+      if (kind === "certification") {
+        const m = moveById(d.certifications, from, to);
+        if (!m) return d;
+        persistOrder(kind, m.map((x) => x.id));
+        return { ...d, certifications: m };
+      }
       const m = moveById(d.skills, from, to);
       if (!m) return d;
       persistOrder(kind, m.map((x) => x.id));
@@ -411,6 +459,7 @@ export default function ResumeEditor({
       education: kind === "education" ? d.education.filter((x) => x.id !== id) : d.education,
       skills: kind === "skill" ? d.skills.filter((x) => x.id !== id) : d.skills,
       projects: kind === "project" ? d.projects.filter((x) => x.id !== id) : d.projects,
+      certifications: kind === "certification" ? d.certifications.filter((x) => x.id !== id) : d.certifications,
     }));
     void fetch("/api/profile/entry", {
       method: "POST",
@@ -423,6 +472,7 @@ export default function ResumeEditor({
     if (kind === "experience") return data.experiences.map((x) => x.id);
     if (kind === "education") return data.education.map((x) => x.id);
     if (kind === "skill") return data.skills.map((x) => x.id);
+    if (kind === "certification") return data.certifications.map((x) => x.id);
     return data.projects.map((x) => x.id);
   }
   function removeSection(kind: EntryKind, label: string) {
@@ -499,7 +549,11 @@ export default function ResumeEditor({
 
   const p = data.profile;
   const isEmpty =
-    !data.experiences.length && !data.education.length && !data.skills.length && !data.projects.length;
+    !data.experiences.length &&
+    !data.education.length &&
+    !data.skills.length &&
+    !data.projects.length &&
+    !data.certifications.length;
 
   return (
     <>
@@ -527,6 +581,39 @@ export default function ResumeEditor({
         onAfterRestore={reloadData}
       />
 
+      {redesigning && (
+        <div className="diff-overlay no-print">
+          <div className="diff-loading">
+            ✨ Redesigning your résumé — revamping the look and sharpening the wording. This takes a minute…
+          </div>
+        </div>
+      )}
+      {overhaul && (
+        <div className="diff-overlay no-print">
+          <div className="diff-head">
+            <div>
+              <div className="diff-title">✨ AI redesign — review side by side</div>
+              {overhaul.rationale && <div className="diff-rationale">{overhaul.rationale}</div>}
+            </div>
+            <div className="diff-actions">
+              <button className="ghost-btn" onClick={() => setOverhaul(null)}>Keep original</button>
+              <button className="btn-primary" onClick={overwriteOverhaul}>Overwrite my résumé</button>
+              <button className="vb-btn primary" onClick={saveOverhaulAsNew}>Save as new version</button>
+            </div>
+          </div>
+          <div className="diff-sheets">
+            <div className="diff-col">
+              <div className="diff-label">Current</div>
+              <ResumeSheet data={data} />
+            </div>
+            <div className="diff-col">
+              <div className="diff-label proposed">Proposed</div>
+              <ResumeSheet data={overhaul.proposed} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="editor-shell">
         <aside className="editor-rail no-print">
           <div className="rail-group">
@@ -536,55 +623,48 @@ export default function ResumeEditor({
               <button className="rail-add" onClick={() => addEntry("education")}>+ Education</button>
               <button className="rail-add" onClick={() => addEntry("skill")}>+ Skill</button>
               <button className="rail-add" onClick={() => addEntry("project")}>+ Project</button>
+              <button className="rail-add" onClick={() => addEntry("certification")}>+ Cert</button>
             </div>
           </div>
 
           <div className="rail-group">
-            <div className="rail-title">Design</div>
-            {preview ? (
-              <div className="redesign-preview">
-                <div className="redesign-title">✨ AI redesign — previewing on the sheet</div>
-                {redesignNote && <p className="redesign-note">{redesignNote}</p>}
-                <div className="redesign-actions">
-                  <button className="ai-accept" onClick={acceptRedesign}>Keep it</button>
-                  <button className="ai-discard" onClick={discardRedesign}>Revert</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
-                  {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
-                </button>
-                {redesignErr && <div className="ai-err">{redesignErr}</div>}
+            <div className="rail-title">AI</div>
+            <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
+              {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
+            </button>
+            <div className="redesign-hint">Revamps look + wording using your mentor&apos;s insights; review side-by-side.</div>
+            {redesignErr && <div className="ai-err">{redesignErr}</div>}
+            <a className="rail-add rail-ai-link" href="/mentor">🎙 Mentor suggestions →</a>
+          </div>
 
-                <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
-                <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
-                <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
-                <Stepper label="Spacing" value={style.density} min={0.7} max={1.5} onChange={(v) => setStyle({ density: v })} />
-                <div className="design-row">
-                  <span>Accent</span>
-                  <input
-                    type="color"
-                    className="design-color"
-                    value={style.accent}
-                    onChange={(e) => setStyle({ accent: e.target.value })}
-                  />
-                </div>
-                <div className="design-row">
-                  <span>Font</span>
-                  <select
-                    className="design-font"
-                    value={style.fontFamily}
-                    onChange={(e) => setStyle({ fontFamily: e.target.value })}
-                  >
-                    {FONT_OPTIONS.map((f) => (
-                      <option key={f.label} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <button className="design-reset" onClick={() => setStyle(DEFAULT_STYLE)}>Reset to default</button>
-              </>
-            )}
+          <div className="rail-group">
+            <div className="rail-title">Design</div>
+            <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
+            <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
+            <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
+            <Stepper label="Spacing" value={style.density} min={0.7} max={1.5} onChange={(v) => setStyle({ density: v })} />
+            <div className="design-row">
+              <span>Accent</span>
+              <input
+                type="color"
+                className="design-color"
+                value={style.accent}
+                onChange={(e) => setStyle({ accent: e.target.value })}
+              />
+            </div>
+            <div className="design-row">
+              <span>Font</span>
+              <select
+                className="design-font"
+                value={style.fontFamily}
+                onChange={(e) => setStyle({ fontFamily: e.target.value })}
+              >
+                {FONT_OPTIONS.map((f) => (
+                  <option key={f.label} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+            <button className="design-reset" onClick={() => setStyle(DEFAULT_STYLE)}>Reset to default</button>
           </div>
         </aside>
 
@@ -708,7 +788,6 @@ export default function ResumeEditor({
           {data.experiences.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Experience section" onClick={() => removeSection("experience", "Experience")}>×</button>
-              <button className="section-add no-print" title="Add a role" onClick={() => addEntry("experience")}>+</button>
               <h2>Experience</h2>
               <DndContext id="dnd-exp" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("experience", ev)}>
               <SortableContext items={data.experiences.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -731,13 +810,22 @@ export default function ResumeEditor({
                       onSave={(patch) => save("experience", e.id, patch)}
                     />
                   </div>
-                  <Field
-                    className="f org"
-                    value={e.org}
-                    placeholder="Organization"
-                    onSave={(v) => save("experience", e.id, { org: v })}
-                    wrapClass="org"
-                  />
+                  <div className="org-line">
+                    <Field
+                      className="f org"
+                      value={e.org}
+                      placeholder="Organization"
+                      onSave={(v) => save("experience", e.id, { org: v })}
+                      wrapClass="org"
+                    />
+                    <span className="loc">
+                      <InlineField
+                        value={e.location}
+                        placeholder="+ location"
+                        onSave={(v) => save("experience", e.id, { location: v })}
+                      />
+                    </span>
+                  </div>
                   <BulletsField
                     bullets={e.bullets ?? []}
                     onSave={(bullets) => save("experience", e.id, { bullets })}
@@ -754,7 +842,6 @@ export default function ResumeEditor({
           {data.education.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Education section" onClick={() => removeSection("education", "Education")}>×</button>
-              <button className="section-add no-print" title="Add education" onClick={() => addEntry("education")}>+</button>
               <h2>Education</h2>
               <DndContext id="dnd-edu" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("education", ev)}>
               <SortableContext items={data.education.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -795,7 +882,6 @@ export default function ResumeEditor({
           {data.skills.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Skills section" onClick={() => removeSection("skill", "Skills")}>×</button>
-              <button className="section-add no-print" title="Add a skill" onClick={() => addEntry("skill")}>+</button>
               <h2>Skills</h2>
               <div className="skills-list">
                 {data.skills.map((s) => (
@@ -817,7 +903,6 @@ export default function ResumeEditor({
           {data.projects.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Projects section" onClick={() => removeSection("project", "Projects")}>×</button>
-              <button className="section-add no-print" title="Add a project" onClick={() => addEntry("project")}>+</button>
               <h2>Projects</h2>
               <DndContext id="dnd-proj" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("project", ev)}>
               <SortableContext items={data.projects.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -836,6 +921,48 @@ export default function ResumeEditor({
                   <BulletsField
                     bullets={pr.bullets ?? []}
                     onSave={(bullets) => save("project", pr.id, { bullets })}
+                  />
+                </div>
+                </SortableItem>
+              ))}
+              </SortableContext>
+              </DndContext>
+            </section>
+          )}
+
+          {/* certifications */}
+          {data.certifications.length > 0 && (
+            <section className="section">
+              <button className="section-x no-print" title="Remove Certifications section" onClick={() => removeSection("certification", "Certifications")}>×</button>
+              <h2>Certifications</h2>
+              <DndContext id="dnd-cert" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("certification", ev)}>
+              <SortableContext items={data.certifications.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+              {data.certifications.map((c) => (
+                <SortableItem id={c.id} key={c.id}>
+                <div className="entry">
+                  <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("certification", c.id)}>×</button>
+                  <div className="row">
+                    <Field
+                      className="f title"
+                      value={c.name}
+                      placeholder="Certification"
+                      onSave={(v) => save("certification", c.id, { name: v })}
+                      wrapClass="title"
+                    />
+                    <span className="dates">
+                      <InlineField
+                        value={c.date}
+                        placeholder="date"
+                        onSave={(v) => save("certification", c.id, { date: v })}
+                      />
+                    </span>
+                  </div>
+                  <Field
+                    className="f org"
+                    value={c.issuer}
+                    placeholder="Issuer"
+                    onSave={(v) => save("certification", c.id, { issuer: v })}
+                    wrapClass="org"
                   />
                 </div>
                 </SortableItem>
@@ -1039,6 +1166,9 @@ function DatesField({
 }) {
   const [s, setS] = useState(start ?? "");
   const [e, setE] = useState(end ?? "");
+  // auto-size each input to its content so "July 2025 – Present" reads tight
+  // (no trailing gap from a fixed width), right-aligned as a clean meta line
+  const w = (v: string, ph: string) => `${Math.max((v || ph).length + 1, 5)}ch`;
   return (
     <span className="dates">
       <input
@@ -1047,16 +1177,16 @@ function DatesField({
         placeholder="start"
         onChange={(ev) => setS(ev.target.value)}
         onBlur={() => s !== (start ?? "") && onSave({ startDate: s })}
-        style={{ width: "72px" }}
+        style={{ width: w(s, "start"), textAlign: "right" }}
       />
-      {" – "}
+      <span className="dates-dash">–</span>
       <input
         className="f dates-input"
         value={e}
         placeholder="end"
         onChange={(ev) => setE(ev.target.value)}
         onBlur={() => e !== (end ?? "") && onSave({ endDate: e })}
-        style={{ width: "72px" }}
+        style={{ width: w(e, "end") }}
       />
     </span>
   );

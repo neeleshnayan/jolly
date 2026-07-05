@@ -63,10 +63,16 @@ export function RichBullets({
     };
   }, [editor]);
 
-  // sync external changes (e.g. an accepted AI rewrite) into the editor, but
-  // never clobber what the user is actively typing
+  // sync ONLY genuine external changes (e.g. an accepted AI rewrite) into the
+  // editor. Guard on the previous prop value so this never fires on mount (which
+  // would fight TipTap's initial content and blank the bullets) and never
+  // clobbers what the user is actively typing.
+  const lastValueRef = useRef(value);
   useEffect(() => {
-    if (!editor || editor.isFocused) return;
+    if (!editor) return;
+    if (value === lastValueRef.current) return; // prop didn't actually change
+    lastValueRef.current = value;
+    if (editor.isFocused) return;
     const next = value || "<ul><li></li></ul>";
     if (next !== editor.getHTML()) editor.commands.setContent(next, { emitUpdate: false });
   }, [value, editor]);

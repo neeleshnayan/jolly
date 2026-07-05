@@ -292,25 +292,6 @@ a { color: var(--accent); }
 }
 .section:hover .section-x { opacity: 0.5; }
 .section-x:hover { opacity: 1 !important; background: #fee2e2; color: #dc2626; }
-/* add-an-entry, in the right margin just below the section's delete control */
-.section-add {
-  position: absolute;
-  top: 22px;
-  right: -40px;
-  z-index: 3;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 7px;
-  border-radius: 6px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.section:hover .section-add { opacity: 0.55; }
-.section-add:hover { opacity: 1 !important; background: #eef4ff; color: var(--accent); }
 
 /* design controls (in the left rail) + the save-version modal head */
 .design-head {
@@ -390,6 +371,48 @@ a { color: var(--accent); }
   cursor: pointer;
 }
 .redesign-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.redesign-hint { font-size: 11.5px; color: var(--muted); margin: 6px 0 10px; line-height: 1.4; }
+.rail-ai-link { display: block; text-align: center; text-decoration: none; }
+
+/* AI overhaul side-by-side diff */
+.diff-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 42, 0.62);
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  overflow: auto;
+}
+.diff-loading { margin: auto; color: #fff; font-size: 16px; max-width: 460px; text-align: center; line-height: 1.5; }
+.diff-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  position: sticky;
+  top: 0;
+}
+.diff-title { font-weight: 700; font-size: 15px; }
+.diff-rationale { color: var(--muted); font-size: 13px; margin-top: 4px; max-width: 620px; line-height: 1.45; }
+.diff-actions { display: flex; gap: 10px; flex: 0 0 auto; align-items: center; }
+.diff-sheets { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.diff-col { background: #e9edf2; border-radius: 12px; padding: 12px; }
+.diff-label { text-align: center; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; }
+.diff-label.proposed { color: var(--accent); }
+/* fit each sheet to its column instead of the fixed 210mm A4 width */
+.diff-col .resume.ro {
+  width: 100%;
+  min-height: 0;
+  padding: 22px 26px;
+  border-radius: 8px;
+  border-color: var(--line);
+}
 .redesign-preview {
   background: #f6f9ff;
   border: 1px solid #dbe6ff;
@@ -400,6 +423,59 @@ a { color: var(--accent); }
 .redesign-title { font-size: 12.5px; font-weight: 600; color: var(--accent); }
 .redesign-note { font-size: 12.5px; color: var(--ink); line-height: 1.45; margin: 6px 0 10px; }
 .redesign-actions { display: flex; gap: 8px; }
+
+/* mentor → résumé suggestions (post-call approval queue) */
+.suggest-block { margin-top: 26px; }
+.suggest-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.suggest-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.suggest-row.added { border-color: #16a34a; background: #f0fdf4; }
+.suggest-row.dismissed { opacity: 0.5; }
+.suggest-main { min-width: 0; }
+.suggest-kind {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: #f0f5ff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+}
+.suggest-text { font-size: 14px; line-height: 1.5; color: var(--ink); }
+.suggest-why { font-size: 12.5px; color: var(--muted); margin-top: 4px; font-style: italic; }
+.suggest-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.suggest-add {
+  border: none;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.suggest-add:disabled { background: #e5e7eb; color: var(--muted); cursor: not-allowed; }
+.suggest-dismiss {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.suggest-added { color: #15803d; font-weight: 600; font-size: 13px; white-space: nowrap; }
+.suggest-dismissed { color: var(--muted); font-size: 13px; white-space: nowrap; }
 
 /* sign-in */
 .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
@@ -542,6 +618,7 @@ a { color: var(--accent); }
   border-bottom: 1px solid var(--line);
 }
 .vb-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.vb-sep { color: var(--line); font-size: 15px; }
 .vb-select {
   font: inherit;
   font-size: 13px;
@@ -669,7 +746,15 @@ a.start-tile:hover { border-color: var(--accent); }
 .entry .row > .title { flex: 1 1 auto; min-width: 0; }
 .entry .title { font-weight: 600; font-size: calc(15px * var(--r-body-scale, 1)); }
 .entry .org { color: var(--ink); font-size: calc(14px * var(--r-body-scale, 1)); }
-.entry .dates { color: var(--muted); font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
+.entry .org-line { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; }
+.entry .org-line > .org { flex: 1 1 auto; min-width: 0; }
+.entry .org-line .loc { color: var(--muted); font-size: calc(13px * var(--r-body-scale, 1)); white-space: nowrap; flex: 0 0 auto; }
+/* right-align dates + location so they line up on the sheet's right edge */
+.entry .dates .dates-input,
+.entry .org-line .loc .f { text-align: right; }
+.entry .dates { color: var(--muted); font-size: calc(13px * var(--r-body-scale, 1)); white-space: nowrap; flex: 0 0 auto; display: inline-flex; align-items: baseline; justify-content: flex-end; }
+.entry .dates .dates-input { color: var(--muted); }
+.entry .dates-dash { margin: 0 2px; }
 .bullets { margin: 8px 0 0; }
 
 /* rich-text bullets (TipTap) */
@@ -741,6 +826,11 @@ a.start-tile:hover { border-color: var(--accent); }
 .ProseMirror { outline: none; }
 .ProseMirror ul { margin: 0; padding-left: 20px; }
 .ProseMirror li { line-height: 1.5; margin: 2px 0; font-size: calc(14px * var(--r-body-scale, 1)); }
+/* read-only bullets (redesign diff sheet) mirror the editor's list styling */
+.ro-bullets ul { margin: 6px 0 0; padding-left: 20px; }
+.ro-bullets li { line-height: 1.5; margin: 2px 0; font-size: calc(14px * var(--r-body-scale, 1)); }
+.ro-bullets li::marker { color: var(--muted); }
+.resume.ro { box-shadow: none; }
 .ProseMirror li::marker { color: var(--muted); }
 .ProseMirror a { color: var(--accent); text-decoration: underline; }
 .ProseMirror-focused { outline: none; }
@@ -1122,6 +1212,9 @@ textarea.f { line-height: 1.55; }
   /* drop everything that isn't the résumé itself */
   .no-print { display: none !important; }
 
+  /* collapse the editor shell so the sheet fills the printable page */
+  .editor-shell, .editor-canvas { display: block; }
+  .sheet-frame { width: auto; margin: 0; }
   .resume-wrap { padding: 0; }
   .resume {
     max-width: none;

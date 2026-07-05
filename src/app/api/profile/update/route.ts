@@ -3,7 +3,7 @@ import { applyEdit, type EditKind } from "@/lib/profile/update";
 
 export const runtime = "nodejs";
 
-const KINDS: EditKind[] = ["profile", "experience", "education", "skill", "project"];
+const KINDS: EditKind[] = ["profile", "experience", "education", "skill", "project", "certification"];
 
 export async function POST(req: NextRequest) {
   try {
