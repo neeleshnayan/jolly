@@ -15,7 +15,7 @@ export async function* mentorTurn(input: {
 }): AsyncIterable<string> {
   const map = await getMentorMap(input.userId);
   const system = buildMentorSystemPrompt(map);
-  const provider = getProvider();
+  const provider = getProvider("mentor");
   yield* provider.streamChat({
     system,
     messages: input.messages,

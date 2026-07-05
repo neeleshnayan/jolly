@@ -21,7 +21,7 @@ export async function mentorOpener(userId: string): Promise<string> {
       ", name one specific, concrete detail that is ACTUALLY in their résumé (never invent an event, message, or anecdote), and open naturally — either a genuine question OR a light observation about their path that they can react to (don't default to 'where are you in your search'). Two spoken sentences, warm and unhurried, no lists.]",
   };
 
-  const provider = getProvider();
+  const provider = getProvider("mentor");
   let text = "";
   try {
     for await (const d of provider.streamChat({ system, messages: [direction], maxTokens: 120 })) {

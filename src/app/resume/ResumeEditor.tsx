@@ -642,7 +642,7 @@ export default function ResumeEditor({
             <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
             <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
             <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
-            <Stepper label="Spacing" value={style.density} min={0.7} max={1.5} onChange={(v) => setStyle({ density: v })} />
+            <Stepper label="Spacing" value={style.density} min={0.5} max={1.5} onChange={(v) => setStyle({ density: v })} />
             <div className="design-row">
               <span>Accent</span>
               <input

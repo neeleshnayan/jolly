@@ -22,13 +22,21 @@ export async function POST(req: Request) {
       );
     }
 
-    // recap (fast live model) and insights (structured extractor) in parallel
-    const [summary, extraction] = await Promise.all([
-      summarizeCall(transcript),
-      runAgent(insightExtractor, { transcript }, { userId: userId ?? "anon" }).then(
-        (r) => r.output,
-      ),
-    ]);
+    // Cap very long transcripts so the KV cache can't blow VRAM. Keep the most
+    // recent turns (where conclusions land) plus a marker.
+    const MAX = 10000;
+    const capped =
+      transcript.length > MAX
+        ? `…(earlier part of the conversation omitted)…\n${transcript.slice(-MAX)}`
+        : transcript;
+
+    // SEQUENTIAL, not parallel: summarize (qwen3:8b) and insight-extract
+    // (gemma3:27b) use different models — loading both at once OOMs the GPU on a
+    // long call. One at a time keeps VRAM in budget.
+    const summary = await summarizeCall(capped);
+    const extraction = (
+      await runAgent(insightExtractor, { transcript: capped }, { userId: userId ?? "anon" })
+    ).output;
 
     return NextResponse.json({ ok: true, summary, insights: extraction.insights });
   } catch (err) {
