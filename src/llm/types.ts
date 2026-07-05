@@ -20,6 +20,8 @@ export interface StructuredRequest {
   images?: ImagePart[];
   /** override how long the model stays resident after this call (Ollama) */
   keepAlive?: string | number;
+  /** override which model runs this call (e.g. a faster one for interactive edits) */
+  model?: string;
 }
 
 export interface StructuredResponse {

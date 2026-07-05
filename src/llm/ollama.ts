@@ -87,7 +87,7 @@ export const ollamaProvider: LLMProvider = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        model: MODEL,
+        model: req.model ?? MODEL,
         stream: false,
         keep_alive: req.keepAlive ?? EXTRACT_KEEP_ALIVE, // default: free VRAM after this call
         ...(THINK === undefined ? {} : { think: THINK }),

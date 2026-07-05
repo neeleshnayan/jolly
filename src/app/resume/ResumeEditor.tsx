@@ -623,17 +623,107 @@ function BulletsField({
   bullets: Bullet[];
   onSave: (bullets: Bullet[]) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [instruction, setInstruction] = useState("");
+  const [proposed, setProposed] = useState<string[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function refine() {
+    if (!instruction.trim()) return;
+    setLoading(true);
+    setErr("");
+    try {
+      const plain = bullets.map((b) => stripTags(b.text)).filter(Boolean);
+      const res = await fetch("/api/resume/refine", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instruction, bullets: plain }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Refine failed");
+      setProposed(j.bullets ?? []);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Refine failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+  function accept() {
+    onSave((proposed ?? []).map((text) => ({ text })));
+    setProposed(null);
+    setOpen(false);
+    setInstruction("");
+  }
+  function reset() {
+    setProposed(null);
+    setOpen(false);
+    setInstruction("");
+    setErr("");
+  }
+
   return (
-    <RichBullets
-      value={bulletsToHtml(bullets)}
-      onSave={(html) => {
-        const next = htmlToBullets(html);
-        const before = bullets.map((b) => b.text).join("");
-        const after = next.map((b) => b.text).join("");
-        if (after !== before) onSave(next);
-      }}
-    />
+    <>
+      <RichBullets
+        value={bulletsToHtml(bullets)}
+        onSave={(html) => {
+          const next = htmlToBullets(html);
+          if (next.map((b) => b.text).join("") !== bullets.map((b) => b.text).join("")) onSave(next);
+        }}
+      />
+      <div className="refine no-print">
+        {!open && !proposed && bullets.length > 0 && (
+          <button className="refine-btn" onClick={() => setOpen(true)}>
+            ✨ Refine with AI
+          </button>
+        )}
+        {open && !proposed && (
+          <div className="refine-bar">
+            <input
+              className="refine-input"
+              value={instruction}
+              autoFocus
+              placeholder="Tell the AI how — e.g. make these more impact-focused, tighten, quantify"
+              onChange={(e) => setInstruction(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void refine();
+                if (e.key === "Escape") reset();
+              }}
+            />
+            <button className="refine-go" onClick={() => void refine()} disabled={loading || !instruction.trim()}>
+              {loading ? "Refining…" : "Refine"}
+            </button>
+            <button className="refine-cancel" onClick={reset}>
+              Cancel
+            </button>
+          </div>
+        )}
+        {proposed && (
+          <div className="refine-preview">
+            <div className="refine-label">✨ Suggested rewrite — review, then accept</div>
+            <ul>
+              {proposed.map((b, i) => (
+                <li key={i}>{b}</li>
+              ))}
+            </ul>
+            <div className="refine-actions">
+              <button className="refine-accept" onClick={accept}>
+                Accept
+              </button>
+              <button className="refine-cancel" onClick={() => setProposed(null)}>
+                Discard
+              </button>
+            </div>
+          </div>
+        )}
+        {err && <div className="refine-err">{err}</div>}
+      </div>
+    </>
   );
+}
+
+function stripTags(s: string): string {
+  return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function bulletsToHtml(bullets: Bullet[]): string {

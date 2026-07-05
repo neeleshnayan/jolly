@@ -211,6 +211,76 @@ a { color: var(--accent); }
   cursor: pointer;
 }
 .add-sections button:hover { border-color: var(--accent); color: var(--accent); background: #f8faff; }
+
+/* AI refine (point-and-ask) */
+.refine { margin-top: 4px; }
+.refine-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.entry:hover .refine-btn { opacity: 0.8; }
+.refine-btn:hover { opacity: 1; background: #f0f5ff; }
+.refine-bar { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.refine-input {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 11px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  outline: none;
+  background: #fbfcff;
+}
+.refine-go {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.refine-go:disabled { opacity: 0.5; cursor: not-allowed; }
+.refine-cancel {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+.refine-preview {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid #dbe6ff;
+  background: #f6f9ff;
+  border-radius: 10px;
+}
+.refine-label { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+.refine-preview ul { margin: 0 0 10px; padding-left: 20px; }
+.refine-preview li { font-size: 14px; line-height: 1.5; margin: 3px 0; }
+.refine-actions { display: flex; gap: 8px; }
+.refine-accept {
+  border: none;
+  background: #16a34a;
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.refine-accept:hover { background: #15803d; }
+.refine-err { color: #dc2626; font-size: 12.5px; margin-top: 4px; }
 .entry .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
 .entry .title { font-weight: 600; font-size: 15px; }
 .entry .org { color: var(--ink); font-size: 14px; }
