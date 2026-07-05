@@ -101,6 +101,40 @@ async function waitForGeneration(id: string): Promise<string> {
   return last;
 }
 
+// Kokoro reads markdown literally ("asterisk asterisk"), so strip the symbols
+// the mentor might emit before handing text to TTS. Keeps the words, drops the
+// punctuation-as-formatting.
+function toSpeakable(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " ") // code fences
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // links/images -> label
+    .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1") // bold/italic
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // headings
+    .replace(/^\s{0,3}[-*+]\s+/gm, "") // bullet markers
+    .replace(/[*_~`#>]/g, "") // any stray markdown chars
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// Streaming TTS: voicebox's /generate/stream returns chunked audio/wav so the
+// browser can start playing before the whole clip exists. Returns the raw fetch
+// Response; the route pipes its body straight to the client.
+export async function synthesizeStream(text: string): Promise<Response> {
+  const profileId = await resolveProfileId();
+  return fetch(`${BASE}/generate/stream`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      profile_id: profileId,
+      text: toSpeakable(text),
+      engine: TTS_ENGINE,
+      model_size: TTS_MODEL_SIZE,
+      language: "en",
+    }),
+  });
+}
+
 export async function synthesize(
   text: string,
 ): Promise<{ audio: Buffer; mime: string }> {
@@ -111,7 +145,7 @@ export async function synthesize(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       profile_id: profileId,
-      text,
+      text: toSpeakable(text),
       engine: TTS_ENGINE,
       model_size: TTS_MODEL_SIZE, // ignored by non-qwen engines
       language: "en",

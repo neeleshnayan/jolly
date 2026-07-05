@@ -1,33 +1,43 @@
+import { redirect } from "next/navigation";
 import { getFullProfile } from "@/lib/profile/read";
+import { getSessionUserId } from "@/lib/auth/session";
 import ResumeEditor from "./ResumeEditor";
+import UploadResume from "../UploadResume";
+import StartOptions from "./StartOptions";
 
 export default async function ResumePage({
   searchParams,
 }: {
-  searchParams: Promise<{ u?: string }>;
+  searchParams: Promise<{ u?: string; scratch?: string }>;
 }) {
-  const { u } = await searchParams;
+  // session-first; ?u= still works for dev/share links
+  const { u, scratch } = await searchParams;
+  const userId = (await getSessionUserId()) ?? u;
+  if (!userId) redirect("/login");
 
-  if (!u) {
-    return (
-      <main className="resume-wrap">
-        <div className="resume">
-          Missing user. <a href="/">Upload a résumé →</a>
-        </div>
-      </main>
-    );
-  }
+  const data = await getFullProfile(userId);
+  const hasResume = Boolean(
+    data && (data.experiences.length || data.education.length || data.projects.length || data.skills.length),
+  );
 
-  const data = await getFullProfile(u);
+  // no profile row at all (dev ?u= with a fresh id) → just upload
   if (!data) {
     return (
-      <main className="resume-wrap">
-        <div className="resume">
-          No résumé found for this user. <a href="/">Upload one →</a>
-        </div>
+      <main className="upload-wrap">
+        <UploadResume userId={userId} />
       </main>
     );
   }
 
-  return <ResumeEditor userId={u} initial={data} />;
+  // empty résumé → import a file, start blank, or fork an existing version
+  if (!hasResume && scratch !== "1") {
+    return (
+      <main className="upload-wrap">
+        <UploadResume userId={userId} />
+        <StartOptions userId={userId} />
+      </main>
+    );
+  }
+
+  return <ResumeEditor userId={userId} initial={data} />;
 }

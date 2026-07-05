@@ -4,10 +4,11 @@
  * recap, corrected what was wrong, and tapped save. Insights are validated
  * (dimension enum, confidence range) before they touch Layer 3.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { persistInsights } from "@/lib/insights/persist";
 import { extractedInsight } from "@/lib/insights/schema";
+import { computeAndSaveScoring } from "@/lib/scoring/persist";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
       userId,
       extraction: { insights },
       transcript,
+    });
+    // new insights change the picture — refresh the cached scoring in the
+    // background so the "understanding" view reflects the call.
+    after(async () => {
+      try {
+        await computeAndSaveScoring(userId);
+      } catch (err) {
+        console.warn("[/api/mentor/review] scoring refresh failed", err);
+      }
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

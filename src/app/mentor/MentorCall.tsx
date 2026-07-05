@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import UserChip from "../UserChip";
 
 type Phase = "idle" | "recording" | "thinking" | "speaking";
 type Turn = { role: "user" | "assistant"; text: string };
@@ -90,15 +91,29 @@ export default function MentorCall({ userId }: { userId: string }) {
     return list.map((t) => `${t.role === "user" ? "You" : "Mentor"}: ${t.text}`).join("\n");
   }
 
-  function playAudio(b64: string, mime = "audio/wav", text = "") {
+  // Stream the mentor's reply as it's synthesized: /api/voice/stream pipes
+  // voicebox's chunked audio/wav, so playback starts in ~1s instead of waiting
+  // for the whole clip. A streaming source often reports duration=Infinity, so
+  // the caption reveal falls back to a words-per-second estimate.
+  function playText(text: string) {
     audioRef.current?.pause();
-    const audio = new Audio(`data:${mime};base64,${b64}`);
+    if (!text.trim()) {
+      if (liveRef.current) {
+        enter("idle");
+        setStatus("Listening — just start talking.");
+      }
+      return;
+    }
+    const audio = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}`);
     audioRef.current = audio;
     setSpokenText(text);
-    setRevealFrac(text ? 0 : 1);
+    setRevealFrac(0);
     enter("speaking");
+    const words = text.split(/\s+/).filter(Boolean).length;
+    const estDur = Math.max(1.5, words / 2.7); // ~2.7 words/sec TTS pace
     audio.ontimeupdate = () => {
-      if (audio.duration) setRevealFrac(Math.min(1, audio.currentTime / audio.duration));
+      const d = audio.duration && isFinite(audio.duration) ? audio.duration : estDur;
+      setRevealFrac(Math.min(1, audio.currentTime / d));
     };
     const done = () => {
       setRevealFrac(1);
@@ -209,9 +224,10 @@ export default function MentorCall({ userId }: { userId: string }) {
         return;
       }
       pushTurn({ role: "user", text: json.userText });
-      if (json.replyText) pushTurn({ role: "assistant", text: json.replyText });
-      if (json.audioBase64) playAudio(json.audioBase64, json.mime, json.replyText ?? "");
-      else {
+      if (json.replyText) {
+        pushTurn({ role: "assistant", text: json.replyText });
+        playText(json.replyText);
+      } else {
         enter("idle");
         setStatus("Listening — just start talking.");
       }
@@ -262,8 +278,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       const json = await res.json();
       if (res.ok && json.text) {
         pushTurn({ role: "assistant", text: json.text });
-        if (json.audioBase64) playAudio(json.audioBase64, json.mime, json.text);
-        else enter("idle");
+        playText(json.text);
       } else throw new Error(json.error || "greeting failed");
     } catch {
       pushTurn({
@@ -396,11 +411,16 @@ export default function MentorCall({ userId }: { userId: string }) {
     <div className="call">
       <div className="call-topbar">
         <span className="brand">Career Co-Pilot</span>
-        {live && (
-          <button className="hangup" onClick={endSession}>
-            End call
-          </button>
-        )}
+        <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          {live ? (
+            <button className="hangup" onClick={endSession}>
+              End call
+            </button>
+          ) : (
+            <a className="ghost-btn" href="/dashboard">← Dashboard</a>
+          )}
+          <UserChip />
+        </span>
       </div>
 
       {!live && !review && (
@@ -510,10 +530,10 @@ export default function MentorCall({ userId }: { userId: string }) {
                 >
                   {saveState === "saving" ? "Saving…" : "Save to my map"}
                 </button>
-                <a className="ghost-btn" href={`/resume?u=${userId}`}>
+                <a className="ghost-btn" href="/resume">
                   Back to résumé →
                 </a>
-                <a className="ghost-btn" href={`/debug?u=${userId}`} target="_blank" rel="noreferrer">
+                <a className="ghost-btn" href="/debug" target="_blank" rel="noreferrer">
                   Debug: scores & insights ↗
                 </a>
                 <span className={`status-line ${saveState === "error" ? "error" : ""}`}>

@@ -1,10 +1,9 @@
 /**
  * POST /api/voice/greeting — the mentor's opening line, personalized from the
- * user's map, plus its audio. Called once when a session starts.
+ * user's map. Text only; audio is streamed separately via /api/voice/stream.
  */
 import { NextResponse } from "next/server";
 import { mentorOpener } from "@/agents/mentor/opener";
-import { synthesize } from "@/lib/voice/voicebox";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -16,8 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 });
     }
     const text = await mentorOpener(userId);
-    const { audio, mime } = await synthesize(text);
-    return NextResponse.json({ ok: true, text, audioBase64: audio.toString("base64"), mime });
+    return NextResponse.json({ ok: true, text });
   } catch (err) {
     console.error("[/api/voice/greeting]", err);
     return NextResponse.json(

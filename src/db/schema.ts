@@ -57,12 +57,26 @@ export const insightStatus = pgEnum("insight_status", [
 export const profiles = pgTable("profiles", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
+  // auth identity — set when the user signs in with LinkedIn (OIDC `sub`). The
+  // `userId` above stays the app's stable key; linkedinSub just maps a LinkedIn
+  // login back to it.
+  linkedinSub: text("linkedin_sub").unique(),
+  avatarUrl: text("avatar_url"),
   fullName: text("full_name"),
   headline: text("headline"),
   email: text("email"),
   phone: text("phone"),
   location: text("location"),
   links: jsonb("links").$type<{ label: string; url: string }[]>().default([]),
+  // design tokens for the sheet (type scale, accent, font, density). Separate
+  // from content so a human — or later an AI "re-paint" agent — can restyle the
+  // résumé without touching the underlying facts. Missing keys fall back to
+  // defaults in the editor.
+  styleConfig: jsonb("style_config").$type<Record<string, string | number>>().default({}),
+  // cached scoring vector — expensive to compute (big model), so we persist it
+  // and only recompute after uploads / mentor calls or an explicit request.
+  scoring: jsonb("scoring").$type<Record<string, unknown>>(),
+  scoringAt: timestamp("scoring_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -214,6 +228,70 @@ export const resumeVariants = pgTable("resume_variants", {
   aspirationInsightId: uuid("aspiration_insight_id").references(() => insights.id),
   templateKey: text("template_key").default("default"),
   content: jsonb("content").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ---------------------------------------- résumé versioning (themes → versions)
+// A THEME is a strategic angle on the same person ("Quant", "Founder", "PM",
+// "AI"). A VERSION is a frozen snapshot of the résumé under a theme + the
+// hypothesis it tests. APPLICATIONS record where a version was sent; EVENTS
+// track the outcome funnel (later auto-updated by a Gmail connector).
+
+export const resumeThemes = pgTable("resume_themes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // what this angle emphasizes — free-form now; can become a vector later
+  latentAttributes: jsonb("latent_attributes").$type<Record<string, unknown>>().default({}),
+  // which version of this theme to use for applications (not always the latest)
+  activeVersionId: uuid("active_version_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const resumeVersions = pgTable("resume_versions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  themeId: uuid("theme_id").references(() => resumeThemes.id, { onDelete: "set null" }),
+  label: text("label"),
+  hypothesis: text("hypothesis"), // the bet this version makes
+  // frozen snapshot of the full profile + styleConfig at save time
+  content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const applications = pgTable("applications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  company: text("company"),
+  role: text("role"),
+  resumeVersionId: uuid("resume_version_id").references(() => resumeVersions.id, {
+    onDelete: "set null",
+  }),
+  opportunityId: uuid("opportunity_id").references(() => opportunities.id, {
+    onDelete: "set null",
+  }),
+  coverLetterId: uuid("cover_letter_id"), // future
+  status: text("status").default("applied").notNull(), // latest stage (denormalized)
+  appliedAt: timestamp("applied_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// the Outcome timeline — one row per stage change (applied → screen → interview
+// → offer → rejected/ghosted). `source` records manual vs. a future gmail sync.
+export const applicationEvents = pgTable("application_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  applicationId: uuid("application_id")
+    .notNull()
+    .references(() => applications.id, { onDelete: "cascade" }),
+  stage: text("stage").notNull(),
+  result: text("result"),
+  source: text("source").default("manual").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
