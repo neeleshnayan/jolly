@@ -8,6 +8,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-ki
 import { RichBullets } from "./RichBullets";
 import { SortableItem } from "./SortableItem";
 import VersionBar from "./VersionBar";
+import ResumeSheet from "./ResumeSheet";
 import UserChip from "../UserChip";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
@@ -148,12 +149,18 @@ export default function ResumeEditor({
     save("profile", undefined, { styleConfig: next });
   }
 
-  // AI whole-sheet re-paint: preview holds the proposed tokens (applied live to
-  // the sheet) until the user accepts or discards
-  const [preview, setPreview] = useState<StyleConfig | null>(null);
+  // AI overhaul: redesigns BOTH look (styleConfig) and content (bullets), then
+  // shows a side-by-side diff (current vs proposed) to accept or discard.
+  type Overhaul = {
+    style: StyleConfig;
+    rationale: string;
+    content: { experiences: { id: string; bullets: string[] }[]; projects: { id: string; bullets: string[] }[] };
+    proposed: FullProfile;
+  };
+  const [overhaul, setOverhaul] = useState<Overhaul | null>(null);
   const [redesigning, setRedesigning] = useState(false);
-  const [redesignNote, setRedesignNote] = useState("");
   const [redesignErr, setRedesignErr] = useState("");
+  const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
   async function redesign() {
     setRedesigning(true);
     setRedesignErr("");
@@ -165,22 +172,39 @@ export default function ResumeEditor({
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Redesign failed");
-      setPreview({ ...DEFAULT_STYLE, ...j.styleConfig });
-      setRedesignNote(j.rationale ?? "");
+      const style = { ...DEFAULT_STYLE, ...j.styleConfig };
+      const content = j.content ?? { experiences: [], projects: [] };
+      const em = new Map<string, string[]>(content.experiences.map((c: { id: string; bullets: string[] }) => [c.id, c.bullets]));
+      const pm = new Map<string, string[]>(content.projects.map((c: { id: string; bullets: string[] }) => [c.id, c.bullets]));
+      const proposed: FullProfile = {
+        ...data,
+        profile: { ...data.profile, styleConfig: style },
+        experiences: data.experiences.map((e) => (em.has(e.id) ? { ...e, bullets: wrapBullets(em.get(e.id)!) } : e)),
+        projects: data.projects.map((p) => (pm.has(p.id) ? { ...p, bullets: wrapBullets(pm.get(p.id)!) } : p)),
+      };
+      setOverhaul({ style, rationale: j.rationale ?? "", content, proposed });
     } catch (e) {
       setRedesignErr(e instanceof Error ? e.message : "Redesign failed");
     } finally {
       setRedesigning(false);
     }
   }
-  function acceptRedesign() {
-    if (preview) setStyle(preview);
-    setPreview(null);
-    setRedesignNote("");
+  function applyOverhaul() {
+    const o = overhaul;
+    if (!o) return;
+    setData(o.proposed);
+    save("profile", undefined, { styleConfig: o.style });
+    o.content.experiences.forEach((c) => save("experience", c.id, { bullets: wrapBullets(c.bullets) }));
+    o.content.projects.forEach((c) => save("project", c.id, { bullets: wrapBullets(c.bullets) }));
   }
-  function discardRedesign() {
-    setPreview(null);
-    setRedesignNote("");
+  function overwriteOverhaul() {
+    applyOverhaul();
+    setOverhaul(null);
+  }
+  function saveOverhaulAsNew() {
+    applyOverhaul();
+    setOverhaul(null);
+    void openSaveVersion();
   }
 
   // save-as-version (snapshot the résumé under a theme with a hypothesis)
@@ -233,14 +257,13 @@ export default function ResumeEditor({
     }
   }
 
-  const activeStyle = preview ?? style;
   const sheetVars = {
-    "--r-name-scale": activeStyle.nameScale,
-    "--r-header-scale": activeStyle.headerScale,
-    "--r-body-scale": activeStyle.bodyScale,
-    "--r-density": activeStyle.density,
-    "--r-accent": activeStyle.accent,
-    "--r-font": activeStyle.fontFamily || "inherit",
+    "--r-name-scale": style.nameScale,
+    "--r-header-scale": style.headerScale,
+    "--r-body-scale": style.bodyScale,
+    "--r-density": style.density,
+    "--r-accent": style.accent,
+    "--r-font": style.fontFamily || "inherit",
   } as CSSProperties;
 
   // measure how many A4 pages the content spans
@@ -558,6 +581,39 @@ export default function ResumeEditor({
         onAfterRestore={reloadData}
       />
 
+      {redesigning && (
+        <div className="diff-overlay no-print">
+          <div className="diff-loading">
+            ✨ Redesigning your résumé — revamping the look and sharpening the wording. This takes a minute…
+          </div>
+        </div>
+      )}
+      {overhaul && (
+        <div className="diff-overlay no-print">
+          <div className="diff-head">
+            <div>
+              <div className="diff-title">✨ AI redesign — review side by side</div>
+              {overhaul.rationale && <div className="diff-rationale">{overhaul.rationale}</div>}
+            </div>
+            <div className="diff-actions">
+              <button className="ghost-btn" onClick={() => setOverhaul(null)}>Keep original</button>
+              <button className="btn-primary" onClick={overwriteOverhaul}>Overwrite my résumé</button>
+              <button className="vb-btn primary" onClick={saveOverhaulAsNew}>Save as new version</button>
+            </div>
+          </div>
+          <div className="diff-sheets">
+            <div className="diff-col">
+              <div className="diff-label">Current</div>
+              <ResumeSheet data={data} />
+            </div>
+            <div className="diff-col">
+              <div className="diff-label proposed">Proposed</div>
+              <ResumeSheet data={overhaul.proposed} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="editor-shell">
         <aside className="editor-rail no-print">
           <div className="rail-group">
@@ -572,51 +628,43 @@ export default function ResumeEditor({
           </div>
 
           <div className="rail-group">
-            <div className="rail-title">Design</div>
-            {preview ? (
-              <div className="redesign-preview">
-                <div className="redesign-title">✨ AI redesign — previewing on the sheet</div>
-                {redesignNote && <p className="redesign-note">{redesignNote}</p>}
-                <div className="redesign-actions">
-                  <button className="ai-accept" onClick={acceptRedesign}>Keep it</button>
-                  <button className="ai-discard" onClick={discardRedesign}>Revert</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
-                  {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
-                </button>
-                {redesignErr && <div className="ai-err">{redesignErr}</div>}
+            <div className="rail-title">AI</div>
+            <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
+              {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
+            </button>
+            <div className="redesign-hint">Revamps look + wording using your mentor&apos;s insights; review side-by-side.</div>
+            {redesignErr && <div className="ai-err">{redesignErr}</div>}
+            <a className="rail-add rail-ai-link" href="/mentor">🎙 Mentor suggestions →</a>
+          </div>
 
-                <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
-                <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
-                <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
-                <Stepper label="Spacing" value={style.density} min={0.7} max={1.5} onChange={(v) => setStyle({ density: v })} />
-                <div className="design-row">
-                  <span>Accent</span>
-                  <input
-                    type="color"
-                    className="design-color"
-                    value={style.accent}
-                    onChange={(e) => setStyle({ accent: e.target.value })}
-                  />
-                </div>
-                <div className="design-row">
-                  <span>Font</span>
-                  <select
-                    className="design-font"
-                    value={style.fontFamily}
-                    onChange={(e) => setStyle({ fontFamily: e.target.value })}
-                  >
-                    {FONT_OPTIONS.map((f) => (
-                      <option key={f.label} value={f.value}>{f.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <button className="design-reset" onClick={() => setStyle(DEFAULT_STYLE)}>Reset to default</button>
-              </>
-            )}
+          <div className="rail-group">
+            <div className="rail-title">Design</div>
+            <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
+            <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
+            <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
+            <Stepper label="Spacing" value={style.density} min={0.7} max={1.5} onChange={(v) => setStyle({ density: v })} />
+            <div className="design-row">
+              <span>Accent</span>
+              <input
+                type="color"
+                className="design-color"
+                value={style.accent}
+                onChange={(e) => setStyle({ accent: e.target.value })}
+              />
+            </div>
+            <div className="design-row">
+              <span>Font</span>
+              <select
+                className="design-font"
+                value={style.fontFamily}
+                onChange={(e) => setStyle({ fontFamily: e.target.value })}
+              >
+                {FONT_OPTIONS.map((f) => (
+                  <option key={f.label} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+            <button className="design-reset" onClick={() => setStyle(DEFAULT_STYLE)}>Reset to default</button>
           </div>
         </aside>
 
@@ -1118,6 +1166,9 @@ function DatesField({
 }) {
   const [s, setS] = useState(start ?? "");
   const [e, setE] = useState(end ?? "");
+  // auto-size each input to its content so "July 2025 – Present" reads tight
+  // (no trailing gap from a fixed width), right-aligned as a clean meta line
+  const w = (v: string, ph: string) => `${Math.max((v || ph).length + 1, 5)}ch`;
   return (
     <span className="dates">
       <input
@@ -1126,16 +1177,16 @@ function DatesField({
         placeholder="start"
         onChange={(ev) => setS(ev.target.value)}
         onBlur={() => s !== (start ?? "") && onSave({ startDate: s })}
-        style={{ width: "72px" }}
+        style={{ width: w(s, "start"), textAlign: "right" }}
       />
-      {" – "}
+      <span className="dates-dash">–</span>
       <input
         className="f dates-input"
         value={e}
         placeholder="end"
         onChange={(ev) => setE(ev.target.value)}
         onBlur={() => e !== (end ?? "") && onSave({ endDate: e })}
-        style={{ width: "72px" }}
+        style={{ width: w(e, "end") }}
       />
     </span>
   );
