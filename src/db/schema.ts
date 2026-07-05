@@ -155,6 +155,19 @@ export const skills = pgTable("skills", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const certifications = pgTable("certifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  name: text("name"),
+  issuer: text("issuer"),
+  date: text("date"),
+  position: integer("position").default(0).notNull(),
+  sourceId: uuid("source_id").references(() => sources.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
   profileId: uuid("profile_id")

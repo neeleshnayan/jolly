@@ -292,25 +292,6 @@ a { color: var(--accent); }
 }
 .section:hover .section-x { opacity: 0.5; }
 .section-x:hover { opacity: 1 !important; background: #fee2e2; color: #dc2626; }
-/* add-an-entry, in the right margin just below the section's delete control */
-.section-add {
-  position: absolute;
-  top: 22px;
-  right: -40px;
-  z-index: 3;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 7px;
-  border-radius: 6px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.section:hover .section-add { opacity: 0.55; }
-.section-add:hover { opacity: 1 !important; background: #eef4ff; color: var(--accent); }
 
 /* design controls (in the left rail) + the save-version modal head */
 .design-head {
@@ -542,6 +523,7 @@ a { color: var(--accent); }
   border-bottom: 1px solid var(--line);
 }
 .vb-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.vb-sep { color: var(--line); font-size: 15px; }
 .vb-select {
   font: inherit;
   font-size: 13px;
@@ -669,6 +651,9 @@ a.start-tile:hover { border-color: var(--accent); }
 .entry .row > .title { flex: 1 1 auto; min-width: 0; }
 .entry .title { font-weight: 600; font-size: calc(15px * var(--r-body-scale, 1)); }
 .entry .org { color: var(--ink); font-size: calc(14px * var(--r-body-scale, 1)); }
+.entry .org-line { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; }
+.entry .org-line > .org { flex: 1 1 auto; min-width: 0; }
+.entry .org-line .loc { color: var(--muted); font-size: calc(13px * var(--r-body-scale, 1)); white-space: nowrap; flex: 0 0 auto; }
 .entry .dates { color: var(--muted); font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
 .bullets { margin: 8px 0 0; }
 
@@ -1122,6 +1107,9 @@ textarea.f { line-height: 1.55; }
   /* drop everything that isn't the résumé itself */
   .no-print { display: none !important; }
 
+  /* collapse the editor shell so the sheet fills the printable page */
+  .editor-shell, .editor-canvas { display: block; }
+  .sheet-frame { width: auto; margin: 0; }
   .resume-wrap { padding: 0; }
   .resume {
     max-width: none;

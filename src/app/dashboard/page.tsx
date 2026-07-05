@@ -15,7 +15,12 @@ export default async function DashboardPage({
 
   const full = await getFullProfile(userId);
   const hasResume = Boolean(
-    full && (full.experiences.length || full.education.length || full.projects.length || full.skills.length),
+    full &&
+      (full.experiences.length ||
+        full.education.length ||
+        full.projects.length ||
+        full.skills.length ||
+        full.certifications.length),
   );
   const { themes, untagged } = await getThemesWithVersions(userId);
   const applications = await listApplications(userId);

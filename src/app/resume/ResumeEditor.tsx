@@ -13,7 +13,7 @@ import UserChip from "../UserChip";
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
 type Bullet = { text: string; sourceId?: string };
-type EntryKind = "experience" | "education" | "skill" | "project";
+type EntryKind = "experience" | "education" | "skill" | "project" | "certification";
 
 // Design tokens applied to the sheet as CSS variables. This is the seam the AI
 // "re-paint" agent will one day write to — for now humans nudge it via the
@@ -97,12 +97,19 @@ interface Project {
   description: string | null;
   bullets: Bullet[] | null;
 }
+interface Certification {
+  id: string;
+  name: string | null;
+  issuer: string | null;
+  date: string | null;
+}
 interface FullProfile {
   profile: Profile;
   experiences: Experience[];
   education: Education[];
   skills: Skill[];
   projects: Project[];
+  certifications: Certification[];
 }
 
 export default function ResumeEditor({
@@ -122,6 +129,16 @@ export default function ResumeEditor({
   const [ai, setAi] = useState<AISession | null>(null);
   const aiRef = useRef<AISession | null>(null);
   aiRef.current = ai;
+
+  // the printed PDF's header (and saved filename) use the document title — set it
+  // to the person's name so it isn't "Career Co-Pilot"
+  useEffect(() => {
+    const prev = document.title;
+    document.title = (data.profile.fullName || "Resume").trim();
+    return () => {
+      document.title = prev;
+    };
+  }, [data.profile.fullName]);
 
   // design tokens (merged over defaults so old profiles just work)
   const style: StyleConfig = { ...DEFAULT_STYLE, ...(data.profile.styleConfig ?? {}) };
@@ -350,6 +367,8 @@ export default function ResumeEditor({
         if (kind === "education")
           return { ...d, education: [...d.education, { id, institution: null, degree: null, field: null, startDate: null, endDate: null, details: null }] };
         if (kind === "skill") return { ...d, skills: [...d.skills, { id, name: "New skill", category: null }] };
+        if (kind === "certification")
+          return { ...d, certifications: [...d.certifications, { id, name: null, issuer: null, date: null }] };
         return { ...d, projects: [...d.projects, { id, name: null, description: null, bullets: [] }] };
       });
       setStatus("");
@@ -397,6 +416,12 @@ export default function ResumeEditor({
         persistOrder(kind, m.map((x) => x.id));
         return { ...d, projects: m };
       }
+      if (kind === "certification") {
+        const m = moveById(d.certifications, from, to);
+        if (!m) return d;
+        persistOrder(kind, m.map((x) => x.id));
+        return { ...d, certifications: m };
+      }
       const m = moveById(d.skills, from, to);
       if (!m) return d;
       persistOrder(kind, m.map((x) => x.id));
@@ -411,6 +436,7 @@ export default function ResumeEditor({
       education: kind === "education" ? d.education.filter((x) => x.id !== id) : d.education,
       skills: kind === "skill" ? d.skills.filter((x) => x.id !== id) : d.skills,
       projects: kind === "project" ? d.projects.filter((x) => x.id !== id) : d.projects,
+      certifications: kind === "certification" ? d.certifications.filter((x) => x.id !== id) : d.certifications,
     }));
     void fetch("/api/profile/entry", {
       method: "POST",
@@ -423,6 +449,7 @@ export default function ResumeEditor({
     if (kind === "experience") return data.experiences.map((x) => x.id);
     if (kind === "education") return data.education.map((x) => x.id);
     if (kind === "skill") return data.skills.map((x) => x.id);
+    if (kind === "certification") return data.certifications.map((x) => x.id);
     return data.projects.map((x) => x.id);
   }
   function removeSection(kind: EntryKind, label: string) {
@@ -499,7 +526,11 @@ export default function ResumeEditor({
 
   const p = data.profile;
   const isEmpty =
-    !data.experiences.length && !data.education.length && !data.skills.length && !data.projects.length;
+    !data.experiences.length &&
+    !data.education.length &&
+    !data.skills.length &&
+    !data.projects.length &&
+    !data.certifications.length;
 
   return (
     <>
@@ -536,6 +567,7 @@ export default function ResumeEditor({
               <button className="rail-add" onClick={() => addEntry("education")}>+ Education</button>
               <button className="rail-add" onClick={() => addEntry("skill")}>+ Skill</button>
               <button className="rail-add" onClick={() => addEntry("project")}>+ Project</button>
+              <button className="rail-add" onClick={() => addEntry("certification")}>+ Cert</button>
             </div>
           </div>
 
@@ -708,7 +740,6 @@ export default function ResumeEditor({
           {data.experiences.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Experience section" onClick={() => removeSection("experience", "Experience")}>×</button>
-              <button className="section-add no-print" title="Add a role" onClick={() => addEntry("experience")}>+</button>
               <h2>Experience</h2>
               <DndContext id="dnd-exp" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("experience", ev)}>
               <SortableContext items={data.experiences.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -731,13 +762,22 @@ export default function ResumeEditor({
                       onSave={(patch) => save("experience", e.id, patch)}
                     />
                   </div>
-                  <Field
-                    className="f org"
-                    value={e.org}
-                    placeholder="Organization"
-                    onSave={(v) => save("experience", e.id, { org: v })}
-                    wrapClass="org"
-                  />
+                  <div className="org-line">
+                    <Field
+                      className="f org"
+                      value={e.org}
+                      placeholder="Organization"
+                      onSave={(v) => save("experience", e.id, { org: v })}
+                      wrapClass="org"
+                    />
+                    <span className="loc">
+                      <InlineField
+                        value={e.location}
+                        placeholder="+ location"
+                        onSave={(v) => save("experience", e.id, { location: v })}
+                      />
+                    </span>
+                  </div>
                   <BulletsField
                     bullets={e.bullets ?? []}
                     onSave={(bullets) => save("experience", e.id, { bullets })}
@@ -754,7 +794,6 @@ export default function ResumeEditor({
           {data.education.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Education section" onClick={() => removeSection("education", "Education")}>×</button>
-              <button className="section-add no-print" title="Add education" onClick={() => addEntry("education")}>+</button>
               <h2>Education</h2>
               <DndContext id="dnd-edu" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("education", ev)}>
               <SortableContext items={data.education.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -795,7 +834,6 @@ export default function ResumeEditor({
           {data.skills.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Skills section" onClick={() => removeSection("skill", "Skills")}>×</button>
-              <button className="section-add no-print" title="Add a skill" onClick={() => addEntry("skill")}>+</button>
               <h2>Skills</h2>
               <div className="skills-list">
                 {data.skills.map((s) => (
@@ -817,7 +855,6 @@ export default function ResumeEditor({
           {data.projects.length > 0 && (
             <section className="section">
               <button className="section-x no-print" title="Remove Projects section" onClick={() => removeSection("project", "Projects")}>×</button>
-              <button className="section-add no-print" title="Add a project" onClick={() => addEntry("project")}>+</button>
               <h2>Projects</h2>
               <DndContext id="dnd-proj" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("project", ev)}>
               <SortableContext items={data.projects.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -836,6 +873,48 @@ export default function ResumeEditor({
                   <BulletsField
                     bullets={pr.bullets ?? []}
                     onSave={(bullets) => save("project", pr.id, { bullets })}
+                  />
+                </div>
+                </SortableItem>
+              ))}
+              </SortableContext>
+              </DndContext>
+            </section>
+          )}
+
+          {/* certifications */}
+          {data.certifications.length > 0 && (
+            <section className="section">
+              <button className="section-x no-print" title="Remove Certifications section" onClick={() => removeSection("certification", "Certifications")}>×</button>
+              <h2>Certifications</h2>
+              <DndContext id="dnd-cert" sensors={sensors} collisionDetection={closestCenter} onDragEnd={(ev) => reorder("certification", ev)}>
+              <SortableContext items={data.certifications.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+              {data.certifications.map((c) => (
+                <SortableItem id={c.id} key={c.id}>
+                <div className="entry">
+                  <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("certification", c.id)}>×</button>
+                  <div className="row">
+                    <Field
+                      className="f title"
+                      value={c.name}
+                      placeholder="Certification"
+                      onSave={(v) => save("certification", c.id, { name: v })}
+                      wrapClass="title"
+                    />
+                    <span className="dates">
+                      <InlineField
+                        value={c.date}
+                        placeholder="date"
+                        onSave={(v) => save("certification", c.id, { date: v })}
+                      />
+                    </span>
+                  </div>
+                  <Field
+                    className="f org"
+                    value={c.issuer}
+                    placeholder="Issuer"
+                    onSave={(v) => save("certification", c.id, { issuer: v })}
+                    wrapClass="org"
                   />
                 </div>
                 </SortableItem>

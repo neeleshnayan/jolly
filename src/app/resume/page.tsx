@@ -17,7 +17,12 @@ export default async function ResumePage({
 
   const data = await getFullProfile(userId);
   const hasResume = Boolean(
-    data && (data.experiences.length || data.education.length || data.projects.length || data.skills.length),
+    data &&
+      (data.experiences.length ||
+        data.education.length ||
+        data.projects.length ||
+        data.skills.length ||
+        data.certifications.length),
   );
 
   // no profile row at all (dev ?u= with a fresh id) → just upload

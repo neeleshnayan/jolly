@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { profiles, experiences, education, skills, projects } from "@/db/schema";
+import { profiles, experiences, education, skills, projects, certifications } from "@/db/schema";
 
 /** Full Layer 2 for a user — what the resume template renders. */
 export async function getFullProfile(userId: string) {
@@ -12,12 +12,13 @@ export async function getFullProfile(userId: string) {
   if (!profile) return null;
 
   const pid = profile.id;
-  const [exps, edu, sk, proj] = await Promise.all([
+  const [exps, edu, sk, proj, certs] = await Promise.all([
     db.select().from(experiences).where(eq(experiences.profileId, pid)).orderBy(asc(experiences.position), asc(experiences.createdAt)),
     db.select().from(education).where(eq(education.profileId, pid)).orderBy(asc(education.position), asc(education.createdAt)),
     db.select().from(skills).where(eq(skills.profileId, pid)).orderBy(asc(skills.position), asc(skills.createdAt)),
     db.select().from(projects).where(eq(projects.profileId, pid)).orderBy(asc(projects.position), asc(projects.createdAt)),
+    db.select().from(certifications).where(eq(certifications.profileId, pid)).orderBy(asc(certifications.position), asc(certifications.createdAt)),
   ]);
 
-  return { profile, experiences: exps, education: edu, skills: sk, projects: proj };
+  return { profile, experiences: exps, education: edu, skills: sk, projects: proj, certifications: certs };
 }

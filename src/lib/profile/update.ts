@@ -14,6 +14,7 @@ import {
   education,
   skills,
   projects,
+  certifications,
 } from "@/db/schema";
 
 const bullet = z.object({ text: z.string(), sourceId: z.string().optional() });
@@ -60,6 +61,15 @@ const skillPatch = z
   .partial()
   .strict();
 
+const certificationPatch = z
+  .object({
+    name: z.string().nullable(),
+    issuer: z.string().nullable(),
+    date: z.string().nullable(),
+  })
+  .partial()
+  .strict();
+
 const projectPatch = z
   .object({
     name: z.string().nullable(),
@@ -75,10 +85,11 @@ const patchByKind = {
   education: educationPatch,
   skill: skillPatch,
   project: projectPatch,
+  certification: certificationPatch,
 } as const;
 
 export type EditKind = keyof typeof patchByKind;
-export type EntryKind = "experience" | "education" | "skill" | "project";
+export type EntryKind = "experience" | "education" | "skill" | "project" | "certification";
 
 function requireId(id: string | undefined): asserts id is string {
   if (!id) throw new Error("id is required for this edit");
@@ -118,6 +129,11 @@ export async function createEntry(userId: string, kind: EntryKind) {
         id = r.id;
         break;
       }
+      case "certification": {
+        const [r] = await tx.insert(certifications).values({ profileId: pid }).returning({ id: certifications.id });
+        id = r.id;
+        break;
+      }
     }
     await tx.insert(sources).values({ profileId: pid, kind: "user_edit", metadata: { action: "create", entity: kind, id } });
     return { id };
@@ -128,7 +144,7 @@ export async function createEntry(userId: string, kind: EntryKind) {
 export async function reorderEntries(userId: string, kind: EntryKind, ids: string[]) {
   return db.transaction(async (tx) => {
     const pid = await profileIdFor(tx, userId);
-    const table = { experience: experiences, education, skill: skills, project: projects }[kind];
+    const table = { experience: experiences, education, skill: skills, project: projects, certification: certifications }[kind];
     for (let i = 0; i < ids.length; i++) {
       await tx.update(table).set({ position: i }).where(and(eq(table.id, ids[i]), eq(table.profileId, pid)));
     }
@@ -140,7 +156,7 @@ export async function reorderEntries(userId: string, kind: EntryKind, ids: strin
 export async function deleteEntry(userId: string, kind: EntryKind, id: string) {
   return db.transaction(async (tx) => {
     const pid = await profileIdFor(tx, userId);
-    const where = { experience: experiences, education, skill: skills, project: projects }[kind];
+    const where = { experience: experiences, education, skill: skills, project: projects, certification: certifications }[kind];
     await tx.delete(where).where(and(eq(where.id, id), eq(where.profileId, pid)));
     await tx.insert(sources).values({ profileId: pid, kind: "user_edit", metadata: { action: "delete", entity: kind, id } });
     return { ok: true as const };
@@ -213,6 +229,10 @@ async function applyOne(tx: Tx, pid: string, kind: EditKind, id: string | undefi
     case "project":
       requireId(id);
       await tx.update(projects).set({ ...patch, updatedAt: new Date() }).where(and(eq(projects.id, id), eq(projects.profileId, pid)));
+      break;
+    case "certification":
+      requireId(id);
+      await tx.update(certifications).set({ ...patch }).where(and(eq(certifications.id, id), eq(certifications.profileId, pid)));
       break;
   }
 }

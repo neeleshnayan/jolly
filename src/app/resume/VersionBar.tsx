@@ -116,9 +116,9 @@ export default function VersionBar({
 
   return (
     <div className="version-bar no-print">
-      <span className="vb-label">Version</span>
+      <span className="vb-label">Résumé theme</span>
       <select className="vb-select" value={themeId} onChange={(e) => pickTheme(e.target.value)}>
-        <option value="">{hasThemes ? "— theme —" : "No versions yet"}</option>
+        <option value="">{hasThemes ? "— pick a theme —" : "No themes yet"}</option>
         {themes.map((t) => (
           <option key={t.id} value={t.id}>{t.name}</option>
         ))}
@@ -126,19 +126,23 @@ export default function VersionBar({
       </select>
 
       {versions.length > 0 && (
-        <select
-          className="vb-select wide"
-          value={versionId}
-          onChange={(e) => void pickVersion(e.target.value)}
-          disabled={busy}
-          title="Pick a version to load it into the editor"
-        >
-          {versions.map((v) => (
-            <option key={v.id} value={v.id}>
-              {(v.id === activeId ? "★ " : "") + fmt(v)}
-            </option>
-          ))}
-        </select>
+        <>
+          <span className="vb-sep">›</span>
+          <span className="vb-label">Version</span>
+          <select
+            className="vb-select wide"
+            value={versionId}
+            onChange={(e) => void pickVersion(e.target.value)}
+            disabled={busy}
+            title="Pick a version to load it into the editor"
+          >
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                {(v.id === activeId ? "★ " : "") + fmt(v)}
+              </option>
+            ))}
+          </select>
+        </>
       )}
 
       {versionId && currentTheme && (

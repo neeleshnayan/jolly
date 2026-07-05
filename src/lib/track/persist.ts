@@ -11,6 +11,7 @@ import {
   education,
   skills,
   projects,
+  certifications,
   sources,
   resumeThemes,
   resumeVersions,
@@ -108,6 +109,7 @@ export async function restoreVersion(userId: string, versionId: string) {
     education?: Record<string, unknown>[];
     skills?: Record<string, unknown>[];
     projects?: Record<string, unknown>[];
+    certifications?: Record<string, unknown>[];
   };
 
   await db.transaction(async (tx) => {
@@ -133,6 +135,7 @@ export async function restoreVersion(userId: string, versionId: string) {
     await tx.delete(education).where(eq(education.profileId, pid));
     await tx.delete(skills).where(eq(skills.profileId, pid));
     await tx.delete(projects).where(eq(projects.profileId, pid));
+    await tx.delete(certifications).where(eq(certifications.profileId, pid));
 
     if (c.experiences?.length) {
       await tx.insert(experiences).values(
@@ -182,6 +185,17 @@ export async function restoreVersion(userId: string, versionId: string) {
           description: (pr.description as string) ?? null,
           position: (pr.position as number) ?? i,
           bullets: (pr.bullets as { text: string }[]) ?? [],
+        })),
+      );
+    }
+    if (c.certifications?.length) {
+      await tx.insert(certifications).values(
+        c.certifications.map((ct, i) => ({
+          profileId: pid,
+          name: (ct.name as string) ?? null,
+          issuer: (ct.issuer as string) ?? null,
+          date: (ct.date as string) ?? null,
+          position: (ct.position as number) ?? i,
         })),
       );
     }
