@@ -16,8 +16,6 @@ type Job = {
   gaps: string[];
   why: string;
 };
-type Pick = { kind: string; job: Job };
-
 function comp(min: number | null, max: number | null) {
   if (!min && !max) return null;
   const f = (n: number) => (n >= 100000 ? `${Math.round(n / 100000)}L` : `${Math.round(n / 1000)}k`);
@@ -26,7 +24,6 @@ function comp(min: number | null, max: number | null) {
 
 export default function Recommendations({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Job[] | null>(null);
-  const [spectrum, setSpectrum] = useState<Pick[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
 
@@ -36,7 +33,6 @@ export default function Recommendations({ userId }: { userId: string }) {
       const r = await fetch(`/api/opportunities/matches?u=${userId}`);
       const j = await r.json();
       setMatches(j.matches ?? []);
-      setSpectrum(j.spectrum ?? []);
     } catch {
       setMatches([]);
     } finally {
@@ -83,21 +79,6 @@ export default function Recommendations({ userId }: { userId: string }) {
 
   return (
     <section className="dash-section">
-      {spectrum.length > 0 && (
-        <div className="spectrum">
-          <div className="spectrum-head">🎙 For your mentor call — three to talk through</div>
-          <div className="spectrum-row">
-            {spectrum.map((s) => (
-              <div className="spectrum-card" key={s.job.id}>
-                <span className="spectrum-kind">{s.kind}</span>
-                <div className="spectrum-title">{s.job.title}</div>
-                <div className="spectrum-co">{s.job.company}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="dash-section-head">
         <h2>Recommended for you</h2>
         <span className="dash-hint">Ranked to how you work, not just what you can do</span>

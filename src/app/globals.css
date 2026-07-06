@@ -1042,7 +1042,14 @@ textarea.f { line-height: 1.55; }
   background: radial-gradient(circle at 35% 30%, #60a5fa, #2563eb 70%);
   box-shadow: 0 12px 40px rgba(37, 99, 235, 0.35);
 }
-.orb-face { font-size: 52px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2)); }
+/* soft inner sheen — a clean Siri-style orb, no emoji */
+.orb-core {
+  width: 44%;
+  height: 44%;
+  border-radius: 999px;
+  background: radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%);
+  filter: blur(1px);
+}
 .orb::before,
 .orb::after {
   content: "";
@@ -1128,8 +1135,44 @@ textarea.f { line-height: 1.55; }
   color: var(--accent);
   font-weight: 600;
 }
-.caption-text { font-size: 17px; line-height: 1.5; color: var(--ink); }
+.caption-text { font-size: 18.5px; line-height: 1.55; color: var(--ink); letter-spacing: -0.01em; }
 .call-controls { margin: 6px 0; }
+
+/* in-call role cards — revealed only when the mentor brings a role up */
+.call-roles { margin: 20px auto 4px; max-width: 520px; width: 100%; }
+.call-roles-head {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.call-roles-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.call-role {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 12px;
+  text-align: left;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: role-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+}
+@keyframes role-in { to { opacity: 1; transform: translateY(0); } }
+.call-role-kind {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  background: #eef4ff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+.call-role-title { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.call-role-co { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .link-btn {
   border: none;
   background: transparent;
