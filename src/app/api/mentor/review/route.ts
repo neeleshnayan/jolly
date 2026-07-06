@@ -9,6 +9,12 @@ import { z } from "zod";
 import { persistInsights } from "@/lib/insights/persist";
 import { extractedInsight } from "@/lib/insights/schema";
 import { computeAndSaveScoring } from "@/lib/scoring/persist";
+import { runAgent } from "@/agents/run";
+import { targetRoleRecommender } from "@/agents/target-role";
+import { fillTargetTheme } from "@/lib/track/persist";
+import { getFullProfile } from "@/lib/profile/read";
+import { getMentorMap } from "@/lib/profile/map";
+import { buildProfileText } from "@/lib/scoring/profileText";
 
 export const runtime = "nodejs";
 
@@ -26,13 +32,23 @@ export async function POST(req: Request) {
       extraction: { insights },
       transcript,
     });
-    // new insights change the picture — refresh the cached scoring in the
-    // background so the "understanding" view reflects the call.
+    // in the background: refresh the cached scoring AND fill the TBD target-role
+    // theme from what the call revealed. Sequential (shared local GPU).
     after(async () => {
       try {
         await computeAndSaveScoring(userId);
       } catch (err) {
         console.warn("[/api/mentor/review] scoring refresh failed", err);
+      }
+      try {
+        const [full, map] = await Promise.all([getFullProfile(userId), getMentorMap(userId)]);
+        if (full) {
+          const profileText = buildProfileText(full, map.insights);
+          const { output } = await runAgent(targetRoleRecommender, { profileText }, { userId });
+          await fillTargetTheme(userId, output.role, output.rationale);
+        }
+      } catch (err) {
+        console.warn("[/api/mentor/review] target-role fill failed", err);
       }
     });
     return NextResponse.json({ ok: true, ...result });

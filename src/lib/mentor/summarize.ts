@@ -11,7 +11,7 @@ the mentor came to understand about them. Be warm and concrete. No preamble, no
 bullet points, no headings — just the recap paragraph.`;
 
 export async function summarizeCall(transcript: string): Promise<string> {
-  const provider = getProvider();
+  const provider = getProvider("mentor");
   let out = "";
   for await (const delta of provider.streamChat({
     system: SYSTEM,

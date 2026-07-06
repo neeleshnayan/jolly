@@ -32,7 +32,7 @@ Conversation:
 export const insightExtractor: Agent<{ transcript: string }, InsightExtraction> = {
   name: "insight-extractor",
   async run(input) {
-    const provider = getProvider();
+    const provider = getProvider("mentor");
     const res = await provider.extractStructured({
       schemaName: SCHEMA_NAME,
       jsonSchema: jsonSchema(),

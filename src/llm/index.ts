@@ -1,23 +1,27 @@
 import type { LLMProvider } from "./types";
 import { anthropicProvider } from "./anthropic";
 import { ollamaProvider } from "./ollama";
+import { openrouterProvider } from "./openrouter";
+
+const PROVIDERS: Record<string, LLMProvider> = {
+  ollama: ollamaProvider,
+  anthropic: anthropicProvider,
+  openrouter: openrouterProvider,
+};
 
 /**
- * Select the provider via LLM_PROVIDER ("ollama" | "anthropic").
- * Defaults to anthropic (safe for prod); set LLM_PROVIDER=ollama for free local
- * dev. Later this can route by task — cheap local for high-volume steps, Claude
- * for user-facing quality.
+ * Select the LLM provider. `task` enables per-task routing so we can spend on
+ * quality where it matters (the mentor) while keeping bulk work local + free:
+ *   LLM_PROVIDER_MENTOR=openrouter   → mentor calls use OpenRouter
+ * Falls back to LLM_PROVIDER, then "ollama". Nothing changes until those envs
+ * are set, so the default stays local + free.
  */
-export function getProvider(): LLMProvider {
-  const name = (process.env.LLM_PROVIDER ?? "anthropic").toLowerCase();
-  switch (name) {
-    case "ollama":
-      return ollamaProvider;
-    case "anthropic":
-      return anthropicProvider;
-    default:
-      throw new Error(`Unknown LLM_PROVIDER: ${name}`);
-  }
+export function getProvider(task?: string): LLMProvider {
+  const specific = task ? process.env[`LLM_PROVIDER_${task.toUpperCase()}`] : undefined;
+  const name = (specific ?? process.env.LLM_PROVIDER ?? "ollama").toLowerCase();
+  const provider = PROVIDERS[name];
+  if (!provider) throw new Error(`Unknown LLM provider: ${name}`);
+  return provider;
 }
 
 export * from "./types";

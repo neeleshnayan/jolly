@@ -41,6 +41,36 @@ export async function listThemes(userId: string) {
   return db.select().from(resumeThemes).where(eq(resumeThemes.profileId, pid)).orderBy(asc(resumeThemes.createdAt));
 }
 
+export const TBD_THEME_NAME = "TBD — after mentor call";
+
+/** On first upload: seed a "Default" theme + a placeholder target-role theme the
+ *  mentor call fills in later. Idempotent — does nothing if themes already exist. */
+export async function ensureStarterThemes(userId: string) {
+  const pid = await profileIdFor(userId);
+  const existing = await db.select({ id: resumeThemes.id }).from(resumeThemes).where(eq(resumeThemes.profileId, pid)).limit(1);
+  if (existing.length) return;
+  await db.insert(resumeThemes).values([
+    { profileId: pid, name: "Default", latentAttributes: { kind: "default" } },
+    { profileId: pid, name: TBD_THEME_NAME, latentAttributes: { kind: "target_role", pending: true } },
+  ]);
+}
+
+/** After a mentor call: rename the pending TBD theme to the recommended target role. */
+export async function fillTargetTheme(userId: string, role: string, rationale: string) {
+  const pid = await profileIdFor(userId);
+  const [tbd] = await db
+    .select({ id: resumeThemes.id })
+    .from(resumeThemes)
+    .where(and(eq(resumeThemes.profileId, pid), eq(resumeThemes.name, TBD_THEME_NAME)))
+    .limit(1);
+  if (!tbd) return { ok: false as const };
+  await db
+    .update(resumeThemes)
+    .set({ name: `Target: ${role}`, latentAttributes: { kind: "target_role", role, rationale } })
+    .where(eq(resumeThemes.id, tbd.id));
+  return { ok: true as const };
+}
+
 // ---- versions ----
 /** Snapshot the user's current résumé (content + style) as a version. */
 export async function createVersion(

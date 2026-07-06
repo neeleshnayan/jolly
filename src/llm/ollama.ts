@@ -83,33 +83,41 @@ export const ollamaProvider: LLMProvider = {
     }).catch(() => {});
   },
   async extractStructured(req) {
-    const res = await fetch(`${BASE}/api/chat`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: req.model ?? MODEL,
-        stream: false,
-        keep_alive: req.keepAlive ?? EXTRACT_KEEP_ALIVE, // default: free VRAM after this call
-        ...(THINK === undefined ? {} : { think: THINK }),
-        format: req.jsonSchema, // structured outputs: constrain to the schema
-        options: ollamaOptions({
-          temperature: 0,
-          numCtx: NUM_CTX,
-          numPredict: NUM_PREDICT ?? req.maxTokens,
-        }),
-        messages: [
-          ...(req.system ? [{ role: "system", content: req.system }] : []),
-          {
-            role: "user",
-            content: req.prompt,
-            // Ollama takes raw base64 strings; needs a vision model (e.g. gemma3)
-            ...(req.images?.length
-              ? { images: req.images.map((i) => i.dataBase64) }
-              : {}),
-          },
-        ],
+    const body = JSON.stringify({
+      model: req.model ?? MODEL,
+      stream: false,
+      keep_alive: req.keepAlive ?? EXTRACT_KEEP_ALIVE, // default: free VRAM after this call
+      ...(THINK === undefined ? {} : { think: THINK }),
+      format: req.jsonSchema, // structured outputs: constrain to the schema
+      options: ollamaOptions({
+        temperature: 0,
+        numCtx: NUM_CTX,
+        numPredict: NUM_PREDICT ?? req.maxTokens,
       }),
+      messages: [
+        ...(req.system ? [{ role: "system", content: req.system }] : []),
+        {
+          role: "user",
+          content: req.prompt,
+          // Ollama takes raw base64 strings; needs a vision model (e.g. gemma3)
+          ...(req.images?.length ? { images: req.images.map((i) => i.dataBase64) } : {}),
+        },
+      ],
     });
+
+    // A 5xx here often means llama-server crashed under memory pressure (e.g. a
+    // vision-projector CPU-offload OOM) and Ollama is reloading it. Wait and
+    // retry once — the reload usually lands on a clean load.
+    let res!: Response;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      res = await fetch(`${BASE}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      });
+      if (res.ok || res.status < 500 || attempt === 1) break;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
 
     if (!res.ok) {
       throw new Error(`Ollama error ${res.status}: ${await res.text()}`);

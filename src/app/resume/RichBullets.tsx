@@ -98,6 +98,11 @@ export function RichBullets({
 
   const curColor = (editor.getAttributes("textStyle").color as string) || "#1a1a1a";
   const curFont = (editor.getAttributes("textStyle").fontFamily as string) || "";
+  const curSize = parseInt((editor.getAttributes("textStyle").fontSize as string) || "14", 10) || 14;
+  const bumpSize = (delta: number) => {
+    const next = Math.min(40, Math.max(8, curSize + delta));
+    editor.chain().focus().setFontSize(`${next}px`).run();
+  };
 
   return (
     <div className="richwrap" ref={wrapRef} onFocusCapture={() => setFocused(true)} onBlur={onWrapBlur}>
@@ -131,6 +136,10 @@ export function RichBullets({
               </option>
             ))}
           </select>
+          <span className="sep" />
+          <button type="button" onMouseDown={hold} onClick={() => bumpSize(-1)} title="Smaller text">A−</button>
+          <span className="size-val">{curSize}</span>
+          <button type="button" onMouseDown={hold} onClick={() => bumpSize(1)} title="Larger text">A+</button>
         </div>
       )}
       <EditorContent editor={editor} />

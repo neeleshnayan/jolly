@@ -92,19 +92,19 @@ export default function VersionBar({
     }
   }
 
-  async function useForApplications() {
-    if (!versionId || !currentTheme) return;
+  async function setActiveVersion(id: string) {
+    if (!currentTheme) return; // untagged versions have no theme to mark active
     setBusy(true);
     setMsg("");
     try {
       const r = await fetch("/api/track/theme/active", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, themeId: currentTheme.id, versionId }),
+        body: JSON.stringify({ userId, themeId: currentTheme.id, versionId: id }),
       });
       if (!r.ok) throw new Error((await r.json()).error || "Failed");
-      setThemes((ts) => ts.map((t) => (t.id === currentTheme.id ? { ...t, activeVersionId: versionId } : t)));
-      setMsg("Set as active ✓");
+      setThemes((ts) => ts.map((t) => (t.id === currentTheme.id ? { ...t, activeVersionId: id } : t)));
+      setMsg("Active set ✓");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -128,32 +128,34 @@ export default function VersionBar({
       {versions.length > 0 && (
         <>
           <span className="vb-sep">›</span>
-          <span className="vb-label">Version</span>
-          <select
-            className="vb-select wide"
-            value={versionId}
-            onChange={(e) => void pickVersion(e.target.value)}
-            disabled={busy}
-            title="Pick a version to load it into the editor"
-          >
+          <div className="vb-chips">
             {versions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {(v.id === activeId ? "★ " : "") + fmt(v)}
-              </option>
+              <span
+                key={v.id}
+                className={`vb-chip${v.id === versionId ? " current" : ""}${v.id === activeId ? " active" : ""}`}
+              >
+                <button
+                  className="vb-chip-load"
+                  onClick={() => void pickVersion(v.id)}
+                  disabled={busy}
+                  title="Load this version into the editor"
+                >
+                  {fmt(v)}
+                </button>
+                {currentTheme && (
+                  <button
+                    className="vb-chip-star"
+                    onClick={() => void setActiveVersion(v.id)}
+                    disabled={busy}
+                    title={v.id === activeId ? "Active for applications" : "Set active for applications"}
+                  >
+                    {v.id === activeId ? "★" : "☆"}
+                  </button>
+                )}
+              </span>
             ))}
-          </select>
+          </div>
         </>
-      )}
-
-      {versionId && currentTheme && (
-        <button
-          className={`vb-btn${versionId === activeId ? " on" : ""}`}
-          onClick={useForApplications}
-          disabled={busy}
-          title="Use this version when applying under this theme"
-        >
-          {versionId === activeId ? "★ Active for applications" : "Set active for applications"}
-        </button>
       )}
 
       <button className="vb-btn primary" onClick={onSaveVersion} title="Snapshot the current résumé as a new version">
