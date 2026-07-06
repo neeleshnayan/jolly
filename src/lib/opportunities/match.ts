@@ -81,9 +81,13 @@ export function scoreMatch(user: ScoringVector, opp: OpportunityVector): MatchRe
   const scored = breakdown
     .filter((a) => a.weight > 0.15)
     .map((a) => ({ a, impact: a.weight * a.fit, miss: a.weight * (1 - a.fit) }));
-  const reasons = scored
-    .filter((x) => x.a.fit > 0.7)
-    .sort((x, y) => y.impact - x.impact)
+  // "why it fits YOU" is a motivational story, so prefer desire-axis alignments
+  // (what they'll love) over qualification gates (what they merely clear).
+  const strong = scored.filter((x) => x.a.fit > 0.72).sort((x, y) => y.impact - x.impact);
+  const reasons = [
+    ...strong.filter((x) => x.a.key.startsWith("d_")),
+    ...strong.filter((x) => x.a.key.startsWith("q_")),
+  ]
     .slice(0, 3)
     .map((x) => phrase(x.a, true));
   const gaps = scored

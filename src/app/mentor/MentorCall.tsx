@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
 
 type Phase = "idle" | "recording" | "thinking" | "speaking";
@@ -31,7 +32,7 @@ const DIMENSIONS = [
 // --- voice-activity tuning (all in one place; adjust to taste) ---
 const SPEECH_RMS = 0.018; // floor for "counts as speech" (raised by calibration)
 const BARGE_RMS = 0.05; // floor to interrupt the mentor mid-sentence
-const SILENCE_HANG_MS = 1000; // this much quiet ends your turn
+const SILENCE_HANG_MS = 1400; // this much quiet ends your turn (room for pauses)
 const MIN_SPEECH_MS = 350; // ignore blips shorter than this
 const POLL_MS = 60;
 const CALIBRATION_MS = 700; // sample the room's noise floor at call start
@@ -42,6 +43,8 @@ const SPEECH_BAND_MIN = 0.32; // fraction of energy that must sit in the speech 
 export default function MentorCall({ userId }: { userId: string }) {
   // media + analysis
   const streamRef = useRef<MediaStream | null>(null);
+  const cleanStreamRef = useRef<MediaStream | null>(null); // RNNoise-denoised stream we actually record
+  const rnnoiseRef = useRef<RnnoiseWorkletNode | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -184,7 +187,9 @@ export default function MentorCall({ userId }: { userId: string }) {
         window.clearInterval(id);
         samples.sort((a, b) => a - b);
         const floor = samples[Math.floor(samples.length * 0.75)] ?? 0;
-        speechThreshRef.current = Math.max(SPEECH_RMS, floor * 3);
+        // Only raise the BARGE threshold off the noise floor — leave the speech
+        // threshold at its (low) default so a quiet or pausing voice still
+        // registers and the user's turn isn't cut off mid-thought.
         bargeThreshRef.current = Math.max(BARGE_RMS, floor * 5);
       }
     }, 50);
@@ -221,7 +226,7 @@ export default function MentorCall({ userId }: { userId: string }) {
   }
 
   function beginRecording(now: number) {
-    const stream = streamRef.current;
+    const stream = cleanStreamRef.current ?? streamRef.current;
     if (!stream) return;
     chunksRef.current = [];
     let mr: MediaRecorder;
@@ -307,20 +312,41 @@ export default function MentorCall({ userId }: { userId: string }) {
     setError(null);
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
-        // autoGainControl OFF: it boosts steady background (fan hum) in quiet
-        // moments, which is exactly what causes false interruptions.
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+        // Keep AGC + noiseSuppression on so the voice stays LOUD and steady fan
+        // hum is filtered by the browser. (Fan-resistance for barge-in is handled
+        // by speech-band gating below, not by starving the mic of gain.)
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
       setError("Microphone access is needed for the call. Allow it and try again.");
       return;
     }
-    // set up energy analysis for voice-activity detection
-    const ctx = new AudioContext();
+    // RNNoise assumes 48kHz. Route mic → RNNoise → (analyser + recorder), so the
+    // VAD and Whisper both get denoised audio. Falls back to the raw mic if the
+    // worklet/wasm can't load.
+    const ctx = new AudioContext({ sampleRate: 48000 });
     ctxRef.current = ctx;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
-    ctx.createMediaStreamSource(streamRef.current).connect(analyser);
+    const source = ctx.createMediaStreamSource(streamRef.current);
+    try {
+      await ctx.audioWorklet.addModule("/rnnoise/workletProcessor.js");
+      const wasmBinary = await loadRnnoise({
+        url: "/rnnoise/rnnoise.wasm",
+        simdUrl: "/rnnoise/rnnoise_simd.wasm",
+      });
+      const rnnoise = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary });
+      rnnoiseRef.current = rnnoise;
+      const dest = ctx.createMediaStreamDestination();
+      source.connect(rnnoise);
+      rnnoise.connect(analyser); // VAD reads the cleaned signal
+      rnnoise.connect(dest); // recorder captures the cleaned signal
+      cleanStreamRef.current = dest.stream;
+    } catch (e) {
+      console.warn("[mentor] RNNoise unavailable, using raw mic", e);
+      source.connect(analyser);
+      cleanStreamRef.current = streamRef.current;
+    }
     analyserRef.current = analyser;
     dataRef.current = new Float32Array(analyser.fftSize);
     freqRef.current = new Uint8Array(analyser.frequencyBinCount);
@@ -370,6 +396,11 @@ export default function MentorCall({ userId }: { userId: string }) {
         mr.stop();
       } catch {}
     }
+    try {
+      rnnoiseRef.current?.destroy();
+    } catch {}
+    rnnoiseRef.current = null;
+    cleanStreamRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     ctxRef.current?.close().catch(() => {});
     audioRef.current?.pause();

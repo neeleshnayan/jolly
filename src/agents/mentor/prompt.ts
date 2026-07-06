@@ -13,9 +13,18 @@ const DIMENSIONS = [
   "pattern (recurring themes across their history)",
 ];
 
-export function buildMentorSystemPrompt(map: MentorMap): string {
+export type CallRole = { kind: string; title: string; company: string; why: string };
+
+export function buildMentorSystemPrompt(map: MentorMap, spectrum: CallRole[] = []): string {
   const name = map.profile?.fullName ?? "the person";
   const headline = map.profile?.headline ? ` (${map.profile.headline})` : "";
+
+  // three roles pre-picked across the spectrum, to make the call concrete
+  const rolesBlock = spectrum.length
+    ? `\n\nTHREE ROLES YOU'VE LINED UP TO DISCUSS (across the spectrum — a strong fit, a different path, a pivot). Don't dump them as a list; bring ONE up when it's natural, and use it to probe — "between building something from scratch and leading a team, which pulls at you more, and why?". Let their reaction teach you what they actually want:\n${spectrum
+        .map((r) => `- [${r.kind}] ${r.title} at ${r.company} — ${r.why}`)
+        .join("\n")}`
+    : "";
 
   const history = map.experiences.length
     ? map.experiences
@@ -78,7 +87,7 @@ Understanding so far:
 ${known}
 
 WHERE YOUR CURIOSITY IS THIN (drift here when it feels natural — never interrogate):
-${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}
+${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}
 
 Keep each turn to a sentence or two. This is a conversation, not a monologue — and it should feel alive, like talking to someone who really gets it, not like filling out a form.`;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Recommendations from "./Recommendations";
 
 type Version = {
   id: string;
@@ -139,6 +140,8 @@ export default function DashboardClient({
           <div className="dash-card-desc">Your scores &amp; what it&apos;s learned</div>
         </a>
       </div>
+
+      <Recommendations userId={userId} />
 
       <section className="dash-section">
         <div className="dash-section-head">
