@@ -207,6 +207,30 @@ export default function ResumeEditor({
     void openSaveVersion();
   }
 
+  // clean PDF: server-side puppeteer render (no browser date/URL headers)
+  const [pdfBusy, setPdfBusy] = useState(false);
+  async function downloadPdf() {
+    setPdfBusy(true);
+    setStatus("Building your PDF…");
+    try {
+      await flush(); // make sure the latest edits are in the PDF
+      const res = await fetch(`/api/resume/pdf?u=${userId}`);
+      if (!res.ok) throw new Error("PDF failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(data.profile.fullName || "resume").replace(/\s+/g, "_")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("");
+    } catch {
+      setStatus("PDF failed — try again");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   // save-as-version (snapshot the résumé under a theme with a hypothesis)
   const [showSave, setShowSave] = useState(false);
   const [themes, setThemes] = useState<{ id: string; name: string }[]>([]);
@@ -564,10 +588,11 @@ export default function ResumeEditor({
           <a className="ghost-btn" href="/dashboard">← Dashboard</a>
           <button
             className="ghost-btn"
-            onClick={() => window.print()}
-            title="Opens your browser's print dialog — choose “Save as PDF”"
+            onClick={() => void downloadPdf()}
+            disabled={pdfBusy}
+            title="Download a clean A4 PDF"
           >
-            Download PDF
+            {pdfBusy ? "Building…" : "Download PDF"}
           </button>
           <a href="/mentor">Talk to your mentor →</a>
           <UserChip />
@@ -1043,9 +1068,10 @@ export default function ResumeEditor({
               color: "var(--accent)",
               border: "1px solid var(--accent)",
             }}
-            onClick={() => window.print()}
+            onClick={() => void downloadPdf()}
+            disabled={pdfBusy}
           >
-            Download PDF
+            {pdfBusy ? "Building…" : "Download PDF"}
           </button>
           <a
             className="btn"
