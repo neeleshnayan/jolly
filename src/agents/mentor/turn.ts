@@ -7,6 +7,7 @@
 import type { ChatMessage } from "@/llm";
 import { getProvider } from "@/llm";
 import { getMentorMap } from "@/lib/profile/map";
+import { getCallSpectrum } from "@/lib/opportunities/recommend";
 import { buildMentorSystemPrompt } from "./prompt";
 
 export async function* mentorTurn(input: {
@@ -14,7 +15,8 @@ export async function* mentorTurn(input: {
   messages: ChatMessage[];
 }): AsyncIterable<string> {
   const map = await getMentorMap(input.userId);
-  const system = buildMentorSystemPrompt(map);
+  const spectrum = await getCallSpectrum(input.userId).catch(() => []);
+  const system = buildMentorSystemPrompt(map, spectrum);
   const provider = getProvider("mentor");
   yield* provider.streamChat({
     system,

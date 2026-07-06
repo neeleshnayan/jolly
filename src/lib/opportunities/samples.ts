@@ -1,0 +1,253 @@
+/**
+ * A curated sample of roles spanning the spectrum (founding eng → big-co staff →
+ * quant → PM → research), with hand-tuned vectors so seeding is instant and
+ * deterministic — ideal for testing the FILTER before a live JD feed exists.
+ * The real vectorizer (POST /api/opportunities) still handles pasted/ATS jobs.
+ */
+import type { OpportunityExtraction, OpportunityVector } from "./schema";
+
+const p = (score: number, rationale = "") => ({ score, rationale });
+
+export type SampleJob = {
+  title: string;
+  company: string;
+  location: string;
+  remote: "onsite" | "hybrid" | "remote";
+  compMin: number;
+  compMax: number;
+  stage: "startup" | "growth" | "enterprise";
+  domain: string;
+  url: string;
+  jd: string;
+  vector: OpportunityVector;
+};
+
+export const SAMPLE_JOBS: SampleJob[] = [
+  {
+    title: "Founding Engineer",
+    company: "Ledgerline (seed, YC)",
+    location: "Bengaluru / Remote",
+    remote: "remote",
+    compMin: 3500000,
+    compMax: 6000000,
+    stage: "startup",
+    domain: "fintech / web3",
+    url: "https://example.com/jobs/founding-engineer",
+    jd: "We're 4 people building programmable cross-border payments. As founding engineer you'll own the stack end-to-end — smart contracts, backend, and the first product surfaces — set technical direction, and ship to real users weekly. You'll wear every hat; equity is meaningful.",
+    vector: {
+      req_seniority: p(0.6, "senior enough to own the stack"),
+      req_leadership: p(0.3, "tiny team, lead by doing"),
+      req_technical_depth: p(0.85, "own contracts + backend"),
+      req_breadth: p(0.9, "wear every hat"),
+      off_building: p(0.95, "build from zero, ship weekly"),
+      off_people_leadership: p(0.2, "no reports yet"),
+      off_autonomy: p(0.95, "set technical direction"),
+      off_impact: p(0.9, "your calls shape the product"),
+      off_comp_level: p(0.55, "moderate cash, big equity"),
+      off_company_risk: p(0.95, "seed-stage, 4 people"),
+      off_growth: p(0.9, "0-to-1 stretch"),
+      off_domain_novelty: p(0.4, "fintech/web3, adjacent"),
+    },
+  },
+  {
+    title: "Machine Learning Engineer",
+    company: "Remy AI (Series A)",
+    location: "Remote (India-friendly)",
+    remote: "remote",
+    compMin: 4000000,
+    compMax: 7000000,
+    stage: "startup",
+    domain: "applied AI",
+    url: "https://example.com/jobs/ml-engineer",
+    jd: "Build and ship ML systems into production — data pipelines, model training, and the serving layer. Small pod, high ownership, fast iteration. You'll work across the stack from research to deployment.",
+    vector: {
+      req_seniority: p(0.55),
+      req_leadership: p(0.25),
+      req_technical_depth: p(0.85, "train + serve models"),
+      req_breadth: p(0.7, "research to deploy"),
+      off_building: p(0.85, "ship ML to prod"),
+      off_people_leadership: p(0.2),
+      off_autonomy: p(0.8, "high ownership pod"),
+      off_impact: p(0.75),
+      off_comp_level: p(0.65),
+      off_company_risk: p(0.75, "Series A"),
+      off_growth: p(0.85),
+      off_domain_novelty: p(0.35, "AI, close to background"),
+    },
+  },
+  {
+    title: "Senior Backend Engineer",
+    company: "Fabric (growth-stage SaaS)",
+    location: "Bengaluru (Hybrid)",
+    remote: "hybrid",
+    compMin: 4500000,
+    compMax: 7000000,
+    stage: "growth",
+    domain: "B2B SaaS",
+    url: "https://example.com/jobs/senior-backend",
+    jd: "Own services in a mature B2B platform — scale, reliability, and clean APIs. You'll work within an established team and roadmap, mentor a couple of juniors, and improve systems handling millions of requests.",
+    vector: {
+      req_seniority: p(0.65),
+      req_leadership: p(0.4),
+      req_technical_depth: p(0.7),
+      req_breadth: p(0.5),
+      off_building: p(0.5, "extend, not zero-to-one"),
+      off_people_leadership: p(0.4),
+      off_autonomy: p(0.5, "established roadmap"),
+      off_impact: p(0.55),
+      off_comp_level: p(0.7),
+      off_company_risk: p(0.5, "growth-stage"),
+      off_growth: p(0.55),
+      off_domain_novelty: p(0.3),
+    },
+  },
+  {
+    title: "Staff Software Engineer",
+    company: "Northwind (public, 5000+)",
+    location: "Bengaluru (Onsite)",
+    remote: "onsite",
+    compMin: 8000000,
+    compMax: 12000000,
+    stage: "enterprise",
+    domain: "enterprise infra",
+    url: "https://example.com/jobs/staff-engineer",
+    jd: "Set technical standards across a large org, review designs, and drive multi-team initiatives. Deep expertise required. Process-heavy, high compensation, stable environment.",
+    vector: {
+      req_seniority: p(0.9, "staff level"),
+      req_leadership: p(0.6),
+      req_technical_depth: p(0.9),
+      req_breadth: p(0.6),
+      off_building: p(0.35, "review + standards, less hands-on"),
+      off_people_leadership: p(0.6),
+      off_autonomy: p(0.4, "process-heavy"),
+      off_impact: p(0.6, "broad but diffuse"),
+      off_comp_level: p(0.9, "top-of-market cash"),
+      off_company_risk: p(0.1, "public, stable"),
+      off_growth: p(0.35, "steady"),
+      off_domain_novelty: p(0.2),
+    },
+  },
+  {
+    title: "Quantitative Researcher",
+    company: "Vertex Capital",
+    location: "New York (Onsite)",
+    remote: "onsite",
+    compMin: 15000000,
+    compMax: 25000000,
+    stage: "enterprise",
+    domain: "quant finance",
+    url: "https://example.com/jobs/quant-researcher",
+    jd: "Design and test systematic trading strategies. Heavy math and statistics, rigorous research, and large-scale data. Exceptional compensation; specialised, focused work in a structured environment.",
+    vector: {
+      req_seniority: p(0.7),
+      req_leadership: p(0.2),
+      req_technical_depth: p(0.95, "deep math/stats"),
+      req_breadth: p(0.3, "specialist"),
+      off_building: p(0.45),
+      off_people_leadership: p(0.15),
+      off_autonomy: p(0.55),
+      off_impact: p(0.6),
+      off_comp_level: p(0.98, "exceptional"),
+      off_company_risk: p(0.15, "established fund"),
+      off_growth: p(0.4),
+      off_domain_novelty: p(0.8, "quant is a real pivot"),
+    },
+  },
+  {
+    title: "Product Manager, AI",
+    company: "Butterfly (growth)",
+    location: "Remote",
+    remote: "remote",
+    compMin: 4000000,
+    compMax: 6500000,
+    stage: "growth",
+    domain: "consumer AI",
+    url: "https://example.com/jobs/pm-ai",
+    jd: "Own the roadmap for an AI product line. Talk to users, prioritise ruthlessly, and coordinate eng + design. Less hands-on coding, more influence and outcomes.",
+    vector: {
+      req_seniority: p(0.6),
+      req_leadership: p(0.6, "cross-functional lead"),
+      req_technical_depth: p(0.45, "technical PM, not IC"),
+      req_breadth: p(0.7),
+      off_building: p(0.4, "shape, don't build"),
+      off_people_leadership: p(0.55),
+      off_autonomy: p(0.6),
+      off_impact: p(0.75, "owns outcomes"),
+      off_comp_level: p(0.65),
+      off_company_risk: p(0.5),
+      off_growth: p(0.65),
+      off_domain_novelty: p(0.55, "PM is a role pivot"),
+    },
+  },
+  {
+    title: "Engineering Manager",
+    company: "Cobalt (mid-size)",
+    location: "Bengaluru (Hybrid)",
+    remote: "hybrid",
+    compMin: 6000000,
+    compMax: 9000000,
+    stage: "growth",
+    domain: "B2B SaaS",
+    url: "https://example.com/jobs/engineering-manager",
+    jd: "Lead a team of 6–8 engineers — hiring, growth, delivery, and process. Mostly people and planning; limited hands-on coding. Build a high-performing team.",
+    vector: {
+      req_seniority: p(0.75),
+      req_leadership: p(0.9, "people management"),
+      req_technical_depth: p(0.6),
+      req_breadth: p(0.5),
+      off_building: p(0.2, "little hands-on"),
+      off_people_leadership: p(0.95, "manage 6-8"),
+      off_autonomy: p(0.5),
+      off_impact: p(0.6),
+      off_comp_level: p(0.75),
+      off_company_risk: p(0.45),
+      off_growth: p(0.55),
+      off_domain_novelty: p(0.35),
+    },
+  },
+  {
+    title: "Applied AI Researcher",
+    company: "Helix Labs",
+    location: "Bengaluru (Onsite)",
+    remote: "onsite",
+    compMin: 7000000,
+    compMax: 11000000,
+    stage: "enterprise",
+    domain: "AI research",
+    url: "https://example.com/jobs/applied-ai-researcher",
+    jd: "Push the frontier on applied models — experiments, papers, and prototypes that graduate into products. Deep technical work, publication-oriented, in a well-funded lab.",
+    vector: {
+      req_seniority: p(0.7),
+      req_leadership: p(0.3),
+      req_technical_depth: p(0.95),
+      req_breadth: p(0.5),
+      off_building: p(0.55, "prototypes + experiments"),
+      off_people_leadership: p(0.25),
+      off_autonomy: p(0.7, "research freedom"),
+      off_impact: p(0.65),
+      off_comp_level: p(0.8),
+      off_company_risk: p(0.25, "well-funded lab"),
+      off_growth: p(0.6),
+      off_domain_novelty: p(0.6, "research is a shift"),
+    },
+  },
+];
+
+/** Build the persist-ready extraction (facts + vector) for a sample job. */
+export function sampleExtraction(j: SampleJob): OpportunityExtraction {
+  return {
+    facts: {
+      title: j.title,
+      company: j.company,
+      location: j.location,
+      remote: j.remote,
+      comp_min: j.compMin,
+      comp_max: j.compMax,
+      company_stage: j.stage,
+      domain: j.domain,
+      must_have_skills: [],
+      nice_to_have_skills: [],
+    },
+    vector: j.vector,
+  };
+}

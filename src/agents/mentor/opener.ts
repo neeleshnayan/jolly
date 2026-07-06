@@ -5,20 +5,22 @@
  */
 import { getProvider, type ChatMessage } from "@/llm";
 import { getMentorMap } from "@/lib/profile/map";
+import { getCallSpectrum } from "@/lib/opportunities/recommend";
 import { buildMentorSystemPrompt } from "./prompt";
 
 export async function mentorOpener(userId: string): Promise<string> {
   const map = await getMentorMap(userId);
   const first = map.profile?.fullName?.split(" ")[0];
-  const system = buildMentorSystemPrompt(map);
+  const spectrum = await getCallSpectrum(userId).catch(() => []);
+  const system = buildMentorSystemPrompt(map, spectrum);
 
   // A stage direction, not a real user turn — tells the mentor how to open.
   const direction: ChatMessage = {
     role: "user",
     content:
-      "[The voice call just connected — this is your very first line. Greet them warmly" +
+      "[The voice call just connected — this is your very first line. HARD RULE: do not invent or imagine anything — no texts, emails, calls, meetings, news, or events. You have ONLY their résumé. Greet them warmly" +
       (first ? ` by first name (${first})` : "") +
-      ", name one specific, concrete detail that is ACTUALLY in their résumé (never invent an event, message, or anecdote), and open naturally — either a genuine question OR a light observation about their path that they can react to (don't default to 'where are you in your search'). Two spoken sentences, warm and unhurried, no lists.]",
+      ", reference ONE concrete detail that literally appears in their résumé (a company, role, or project by name), and open with either a genuine question or a light observation they can react to (don't default to 'where are you in your search'). Two spoken sentences, warm and unhurried, no lists.]",
   };
 
   const provider = getProvider("mentor");
