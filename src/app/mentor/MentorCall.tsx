@@ -82,6 +82,11 @@ export default function MentorCall({ userId }: { userId: string }) {
   const [saveMsg, setSaveMsg] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [suggestLoading, setSuggestLoading] = useState(false);
+  // 3 roles pre-picked for this call — revealed on screen only when the mentor
+  // naturally brings them up (a surprise, not a spoiler).
+  type CallRole = { kind: string; title: string; company: string; why: string };
+  const spectrumRef = useRef<CallRole[]>([]);
+  const [roleCards, setRoleCards] = useState<CallRole[] | null>(null);
 
   function enter(p: Phase) {
     setPhase(p);
@@ -110,6 +115,15 @@ export default function MentorCall({ userId }: { userId: string }) {
     turnsRef.current = [...turnsRef.current, t];
     setTurns(turnsRef.current);
   }
+  // reveal the role cards the moment the mentor actually names one of them
+  function maybeRevealRoles(replyText: string) {
+    if (roleCards || !spectrumRef.current.length) return;
+    const t = replyText.toLowerCase();
+    const named = spectrumRef.current.some(
+      (r) => (r.title && t.includes(r.title.toLowerCase())) || (r.company && t.includes(r.company.toLowerCase())),
+    );
+    if (named) setRoleCards(spectrumRef.current);
+  }
   function buildTranscript(list: Turn[]) {
     return list.map((t) => `${t.role === "user" ? "You" : "Mentor"}: ${t.text}`).join("\n");
   }
@@ -120,6 +134,7 @@ export default function MentorCall({ userId }: { userId: string }) {
   // the caption reveal falls back to a words-per-second estimate.
   function playText(text: string) {
     audioRef.current?.pause();
+    maybeRevealRoles(text); // if the mentor named a role, surface the cards
     if (!text.trim()) {
       if (liveRef.current) {
         enter("idle");
@@ -355,6 +370,7 @@ export default function MentorCall({ userId }: { userId: string }) {
     turnsRef.current = [];
     setTurns([]);
     setReview(null);
+    setRoleCards(null);
     setShowTranscript(false);
     setSaveState("idle");
     setSaveMsg("");
@@ -363,6 +379,22 @@ export default function MentorCall({ userId }: { userId: string }) {
     enter("thinking");
     setStatus("Getting up to speed on your background…");
     vadTimerRef.current = window.setInterval(vadTick, POLL_MS);
+
+    // silently pre-load the 3-role spectrum; it's revealed only if the mentor
+    // brings a role up during the call (a surprise, not a spoiler)
+    fetch(`/api/opportunities/matches?u=${userId}`)
+      .then((r) => r.json())
+      .then((j) => {
+        spectrumRef.current = (j.spectrum ?? []).map(
+          (s: { kind: string; job: { title: string | null; company: string | null; why: string } }) => ({
+            kind: s.kind,
+            title: s.job.title ?? "",
+            company: s.job.company ?? "",
+            why: s.job.why,
+          }),
+        );
+      })
+      .catch(() => {});
 
     // mentor opens, personalized from the résumé/map
     try {
@@ -569,7 +601,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       {!live && !review && (
         <div className="call-hero">
           <div className="orb idle">
-            <div className="orb-face">🎧</div>
+            <span className="orb-core" />
           </div>
           <h1>Talk to your mentor</h1>
           <p className="sub">
@@ -585,7 +617,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       {live && (
         <div className="call-stage">
           <div className={`orb ${orbClass}`}>
-            <div className="orb-face">🎧</div>
+            <span className="orb-core" />
           </div>
           <div className="call-name">Your mentor</div>
           <div className="call-timer">{fmtTime(elapsed)}</div>
@@ -594,6 +626,21 @@ export default function MentorCall({ userId }: { userId: string }) {
             <div className="caption-label">{label}</div>
             {caption && <div className="caption-text">{caption}</div>}
           </div>
+
+          {roleCards && (
+            <div className="call-roles">
+              <div className="call-roles-head">Which of these pulls at you?</div>
+              <div className="call-roles-row">
+                {roleCards.map((r, i) => (
+                  <div className="call-role" key={i} style={{ animationDelay: `${i * 120}ms` }}>
+                    <span className="call-role-kind">{r.kind}</span>
+                    <div className="call-role-title">{r.title}</div>
+                    <div className="call-role-co">{r.company}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {turns.length > 0 && (
             <>
