@@ -15,7 +15,22 @@ const DIMENSIONS = [
 
 export type CallRole = { kind: string; title: string; company: string; why: string };
 
-export function buildMentorSystemPrompt(map: MentorMap, spectrum: CallRole[] = []): string {
+export function buildMentorSystemPrompt(
+  map: MentorMap,
+  spectrum: CallRole[] = [],
+  secondsLeft?: number,
+): string {
+  // time awareness + how to end the call well
+  const timeHint =
+    secondsLeft == null
+      ? ""
+      : secondsLeft > 300
+        ? `\n\nThe call has about ${Math.round(secondsLeft / 60)} minutes left. No rush, but keep it moving toward what matters.`
+        : secondsLeft > 60
+          ? `\n\nUnder ${Math.max(1, Math.round(secondsLeft / 60))} minutes left — land the most important thread and start steering toward a close.`
+          : `\n\nTime is basically up. Close now.`;
+  const closingBlock = `\n\nENDING THE CALL — end it YOURSELF the moment you have a real read on who they are and where they should aim; don't drag it out. To close: two warm, energising sentences — name one genuine strength you actually saw, and one concrete, hopeful next move — then put [[END_CALL]] on its very own at the end. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing. Inspire confidence and send them off with energy.`;
+
   const name = map.profile?.fullName ?? "the person";
   const headline = map.profile?.headline ? ` (${map.profile.headline})` : "";
 
@@ -87,7 +102,7 @@ Understanding so far:
 ${known}
 
 WHERE YOUR CURIOSITY IS THIN (drift here when it feels natural — never interrogate):
-${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}
+${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${closingBlock}${timeHint}
 
 Keep each turn to a sentence or two. This is a conversation, not a monologue — and it should feel alive, like talking to someone who really gets it, not like filling out a form.`;
 }

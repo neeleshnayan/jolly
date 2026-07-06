@@ -39,6 +39,8 @@ const CALIBRATION_MS = 700; // sample the room's noise floor at call start
 const BARGE_FRAMES = 4; // ~240ms of sustained speech-shaped sound to interrupt
 const SPEECH_BAND = [300, 3400]; // Hz — energy here is speech, not fan hum
 const SPEECH_BAND_MIN = 0.32; // fraction of energy that must sit in the speech band
+const CALL_LIMIT_SEC = 20 * 60; // countdown length; a focused call, extendable
+const EXTEND_SEC = 5 * 60;
 
 export default function MentorCall({ userId }: { userId: string }) {
   // media + analysis
@@ -77,6 +79,11 @@ export default function MentorCall({ userId }: { userId: string }) {
   const [revealFrac, setRevealFrac] = useState(1);
   const [showTranscript, setShowTranscript] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [limitSec, setLimitSec] = useState(CALL_LIMIT_SEC);
+  const limitRef = useRef(CALL_LIMIT_SEC); // mutable via "extend"
+  const callStartRef = useRef(0);
+  const endSessionRef = useRef<() => void>(() => {});
+  const pendingEndRef = useRef(false); // mentor asked to close; end after it speaks
   const [review, setReview] = useState<Review | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMsg, setSaveMsg] = useState("");
@@ -101,11 +108,19 @@ export default function MentorCall({ userId }: { userId: string }) {
   }, []);
   useEffect(() => {
     if (!live) return;
-    const t0 = Date.now();
-    setElapsed(0);
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
+    const id = setInterval(() => {
+      const e = Math.floor((Date.now() - callStartRef.current) / 1000);
+      setElapsed(e);
+      if (e >= limitRef.current) endSessionRef.current(); // hard backstop at 0:00
+    }, 1000);
     return () => clearInterval(id);
   }, [live]);
+  const remaining = Math.max(0, limitSec - elapsed);
+  function extendCall() {
+    limitRef.current += EXTEND_SEC;
+    setLimitSec(limitRef.current);
+  }
+  endSessionRef.current = endSession; // live handle for timer / audio-end callbacks
   useEffect(() => {
     const el = transcriptRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -155,6 +170,11 @@ export default function MentorCall({ userId }: { userId: string }) {
     };
     const done = () => {
       setRevealFrac(1);
+      if (pendingEndRef.current) {
+        pendingEndRef.current = false;
+        endSessionRef.current(); // the mentor's closing line just finished
+        return;
+      }
       if (liveRef.current) {
         enter("idle");
         setStatus("Listening — just start talking.");
@@ -301,6 +321,8 @@ export default function MentorCall({ userId }: { userId: string }) {
         "history",
         JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))),
       );
+      const secondsLeft = Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000));
+      fd.append("secondsLeft", String(secondsLeft));
       const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Turn failed");
@@ -310,6 +332,7 @@ export default function MentorCall({ userId }: { userId: string }) {
         return;
       }
       pushTurn({ role: "user", text: json.userText });
+      if (json.ended) pendingEndRef.current = true; // end the call after this reply plays
       if (json.replyText) {
         pushTurn({ role: "assistant", text: json.replyText });
         playText(json.replyText);
@@ -371,6 +394,11 @@ export default function MentorCall({ userId }: { userId: string }) {
     setTurns([]);
     setReview(null);
     setRoleCards(null);
+    callStartRef.current = Date.now();
+    limitRef.current = CALL_LIMIT_SEC;
+    setLimitSec(CALL_LIMIT_SEC);
+    setElapsed(0);
+    pendingEndRef.current = false;
     setShowTranscript(false);
     setSaveState("idle");
     setSaveMsg("");
@@ -620,7 +648,12 @@ export default function MentorCall({ userId }: { userId: string }) {
             <span className="orb-core" />
           </div>
           <div className="call-name">Your mentor</div>
-          <div className="call-timer">{fmtTime(elapsed)}</div>
+          <div className={`call-timer${remaining <= 120 ? " low" : ""}`}>
+            {fmtTime(remaining)} left
+            {remaining <= 180 && remaining > 0 && (
+              <button className="extend-btn" onClick={extendCall}>+5 min</button>
+            )}
+          </div>
 
           <div className="caption">
             <div className="caption-label">{label}</div>

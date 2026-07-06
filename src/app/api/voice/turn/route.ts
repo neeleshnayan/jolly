@@ -19,6 +19,9 @@ export async function POST(req: Request) {
     const file = form.get("audio");
     const userId = form.get("userId");
     const historyRaw = form.get("history");
+    const secondsLeftRaw = form.get("secondsLeft");
+    const secondsLeft =
+      typeof secondsLeftRaw === "string" && secondsLeftRaw !== "" ? Number(secondsLeftRaw) : undefined;
 
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "Missing 'audio'" }, { status: 400 });
@@ -41,10 +44,14 @@ export async function POST(req: Request) {
     // is ready, instead of waiting for the whole clip.
     const messages: ChatMessage[] = [...history, { role: "user", content: userText }];
     let replyText = "";
-    for await (const delta of mentorTurn({ userId, messages })) replyText += delta;
+    for await (const delta of mentorTurn({ userId, messages, secondsLeft })) replyText += delta;
     replyText = replyText.trim();
 
-    return NextResponse.json({ ok: true, userText, replyText });
+    // the mentor signals it's wrapping up with a marker — strip it, flag it
+    const ended = replyText.includes("[[END_CALL]]");
+    replyText = replyText.replace(/\[\[END_CALL\]\]/g, "").trim();
+
+    return NextResponse.json({ ok: true, userText, replyText, ended });
   } catch (err) {
     console.error("[/api/voice/turn]", err);
     return NextResponse.json(

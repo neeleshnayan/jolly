@@ -13,10 +13,11 @@ import { buildMentorSystemPrompt } from "./prompt";
 export async function* mentorTurn(input: {
   userId: string;
   messages: ChatMessage[];
+  secondsLeft?: number;
 }): AsyncIterable<string> {
   const map = await getMentorMap(input.userId);
   const spectrum = await getCallSpectrum(input.userId).catch(() => []);
-  const system = buildMentorSystemPrompt(map, spectrum);
+  const system = buildMentorSystemPrompt(map, spectrum, input.secondsLeft);
   const provider = getProvider("mentor");
   yield* provider.streamChat({
     system,
