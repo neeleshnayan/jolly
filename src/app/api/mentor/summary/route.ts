@@ -21,6 +21,17 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    // The USER must have actually said something. The mentor's own lines alone
+    // (a greeting to a silent room) once produced a fully hallucinated recap.
+    const userSaid = transcript
+      .split("\n")
+      .filter((l: string) => /^\s*you\s*:/i.test(l))
+      .join(" ")
+      .replace(/^\s*you\s*:/i, "")
+      .trim();
+    if (userSaid.length < 30) {
+      return NextResponse.json({ ok: true, summary: "", insights: [], silent: true });
+    }
 
     // Cap very long transcripts so the KV cache can't blow VRAM. Keep the most
     // recent turns (where conclusions land) plus a marker.

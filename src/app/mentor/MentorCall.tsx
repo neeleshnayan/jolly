@@ -120,6 +120,7 @@ export default function MentorCall({ userId }: { userId: string }) {
   useEffect(() => {
     if (!live) return;
     const id = setInterval(() => {
+      if (!callStartRef.current) return; // still connecting — the clock hasn't started
       const e = Math.floor((Date.now() - callStartRef.current) / 1000);
       setElapsed(e);
       if (e >= limitRef.current) endSessionRef.current(); // hard backstop at 0:00
@@ -387,7 +388,9 @@ export default function MentorCall({ userId }: { userId: string }) {
         "history",
         JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))),
       );
-      const secondsLeft = Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000));
+      const secondsLeft = callStartRef.current
+        ? Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000))
+        : limitRef.current; // clock not started yet — report a full tank
       fd.append("secondsLeft", String(secondsLeft));
       fd.append("brain", brainRef.current); // debug A/B — server ignores unless dev/admin
       const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
@@ -461,7 +464,8 @@ export default function MentorCall({ userId }: { userId: string }) {
     setTurns([]);
     setReview(null);
     setRoleCards(null);
-    callStartRef.current = Date.now();
+    callStartRef.current = 0; // the 20-min clock starts when the mentor SPEAKS, not now —
+    // model warm-up and greeting generation shouldn't eat the user's call time
     limitRef.current = CALL_LIMIT_SEC;
     setLimitSec(CALL_LIMIT_SEC);
     setElapsed(0);
@@ -472,7 +476,7 @@ export default function MentorCall({ userId }: { userId: string }) {
     liveRef.current = true;
     setLive(true);
     enter("thinking");
-    setStatus("Getting up to speed on your background…");
+    setStatus("Getting your mentor on the line…");
     vadTimerRef.current = window.setInterval(vadTick, POLL_MS);
 
     // silently pre-load the 3-role spectrum; it's revealed only if the mentor
@@ -491,19 +495,25 @@ export default function MentorCall({ userId }: { userId: string }) {
       })
       .catch(() => {});
 
-    // mentor opens, personalized from the résumé/map
+    // Warm the voice stack WHILE the greeting is generated — both finish before
+    // the clock starts, so cold-start (often ~10s) costs the user nothing.
     try {
-      const res = await fetch("/api/voice/greeting", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
+      const [, res] = await Promise.all([
+        fetch("/api/voice/warmup", { method: "POST" }).catch(() => null),
+        fetch("/api/voice/greeting", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userId }),
+        }),
+      ]);
       const json = await res.json();
       if (res.ok && json.text) {
+        callStartRef.current = Date.now(); // NOW the 20 minutes begin
         pushTurn({ role: "assistant", text: json.text });
         playText(json.text);
       } else throw new Error(json.error || "greeting failed");
     } catch {
+      callStartRef.current = Date.now();
       pushTurn({
         role: "assistant",
         text: "Hey — I'm your career mentor. Where are you in your search right now, and how's it feeling?",
@@ -544,8 +554,15 @@ export default function MentorCall({ userId }: { userId: string }) {
 
   async function generateSummary() {
     const transcript = buildTranscript(turnsRef.current);
-    if (transcript.trim().length < 20) {
-      setStatus("Ready when you are.");
+    // Gate on what the USER said — the mentor's own greeting is in the transcript,
+    // so without this a silent call still produced a fully hallucinated recap.
+    const userSaid = turnsRef.current
+      .filter((t) => t.role === "user")
+      .map((t) => t.text)
+      .join(" ")
+      .trim();
+    if (userSaid.length < 30) {
+      setStatus("We didn't really get to talk — no recap this time. Call again whenever you're ready.");
       return;
     }
     setReview({ loading: true, summary: "", insights: [] });
@@ -557,6 +574,11 @@ export default function MentorCall({ userId }: { userId: string }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not summarize");
+      if (json.silent) {
+        setReview(null);
+        setStatus("We didn't really get to talk — no recap this time.");
+        return;
+      }
       setReview({ loading: false, summary: json.summary ?? "", insights: json.insights ?? [] });
       void generateSuggestions(transcript);
     } catch (err) {
@@ -709,17 +731,23 @@ export default function MentorCall({ userId }: { userId: string }) {
 
       {!live && !review && (
         <div className="call-hero">
+          <div className="hero-glow" aria-hidden />
           <div className="orb idle">
             <span className="orb-core" />
           </div>
           <h1>Talk to your mentor</h1>
           <p className="sub">
-            A short voice call — no buttons, just talk. It listens, replies out
-            loud, and afterwards you review what it learned.
+            No buttons, no forms — just a conversation. Your mentor already knows
+            your résumé; it listens for who you&apos;re becoming.
           </p>
           <button className="btn call-cta" onClick={startSession}>
-            Start call
+            Start the call
           </button>
+          <div className="call-facts">
+            <span>🎙 voice only</span>
+            <span>⏱ 20 minutes</span>
+            <span>🔒 stays on your machine</span>
+          </div>
         </div>
       )}
 

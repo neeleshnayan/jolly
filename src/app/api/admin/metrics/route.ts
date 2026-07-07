@@ -16,7 +16,7 @@ export async function GET() {
   const adminId = await requireAdmin();
   if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
-  const [calls, callsByUser, edits, apps, agents, recentRuns] = await Promise.all([
+  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel] = await Promise.all([
     db.execute(sql`select count(*)::int as n from sources where kind = 'mentor_call'`),
     db.execute(sql`
       select coalesce(p.full_name, p.email, 'unknown') as who, count(*)::int as n, max(s.created_at) as last_at
@@ -45,6 +45,23 @@ export async function GET() {
     db.execute(sql`
       select agent, status, model, duration_ms, error, created_at
       from agent_runs order by created_at desc limit 15`),
+    // "active users" proxy until real session logging exists: a profile counts as
+    // active if ANY of its rows (sources = uploads/edits/calls, agent runs) were
+    // created in the window. Registered = total profiles.
+    db.execute(sql`
+      select
+        (select count(distinct profile_id)::int from sources where created_at > now() - interval '1 day') as active_today,
+        (select count(distinct profile_id)::int from sources where created_at > now() - interval '7 days') as active_week,
+        (select count(*)::int from profiles) as registered,
+        (select count(*)::int from profiles where created_at > now() - interval '7 days') as new_week`),
+    // per-model token totals — multiplied by a price map client-side for est. $
+    db.execute(sql`
+      select coalesce(model, '(unlogged)') as model,
+             count(*)::int as runs,
+             coalesce(sum(input_tokens), 0)::int as tokens_in,
+             coalesce(sum(output_tokens), 0)::int as tokens_out
+      from agent_runs
+      group by 1 order by runs desc`),
   ]);
 
   return NextResponse.json({
@@ -52,6 +69,8 @@ export async function GET() {
     mentorCalls: { total: (calls as unknown as { n: number }[])[0]?.n ?? 0, byUser: callsByUser },
     resumeEdits: (edits as unknown as { total: number; users: number }[])[0] ?? { total: 0, users: 0 },
     applications: (apps as unknown as { total: number; users: number; last7: number }[])[0] ?? { total: 0, users: 0, last7: 0 },
+    activity: (activity as unknown as { active_today: number; active_week: number; registered: number; new_week: number }[])[0] ?? null,
+    byModel,
     agents,
     recentRuns,
   });

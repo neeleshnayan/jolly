@@ -955,6 +955,19 @@ a.start-tile:hover { border-color: var(--accent); }
 .admin-table th { text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 .admin-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .admin-err { color: #b91c1c; }
+.admin-tabs { display: flex; gap: 4px; margin-top: 18px; border-bottom: 1px solid var(--line); }
+.admin-tab {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.admin-tab:hover { color: var(--ink); }
+.admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .admin-infer { display: inline-flex; gap: 6px; align-items: center; }
 .admin-count { width: 58px; padding: 7px 8px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; }
 .admin-pending { color: #b45309; font-weight: 600; }
@@ -1374,18 +1387,70 @@ textarea.f { line-height: 1.55; }
   animation: orb-ring 2.4s ease-out infinite;
 }
 
-/* pre-call hero */
+/* pre-call hero — an invitation, not a form */
 .call-hero {
+  position: relative;
   text-align: center;
-  padding: 40px 20px 20px;
+  min-height: calc(100vh - 140px);
+  padding: 8vh 20px 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
-.call-hero .orb { margin-bottom: 24px; }
-.call-hero h1 { margin: 6px 0 4px; font-size: 24px; letter-spacing: -0.02em; }
-.call-hero .sub { max-width: 400px; margin: 0; }
-.call-cta { width: auto; margin-top: 22px; padding: 13px 34px; font-size: 15px; }
+.hero-glow {
+  position: absolute;
+  top: 4vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 640px;
+  height: 640px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.14), rgba(56, 189, 248, 0.05) 45%, transparent 70%);
+  pointer-events: none;
+}
+[data-theme="dark"] .hero-glow {
+  background: radial-gradient(circle, rgba(122, 165, 248, 0.16), rgba(56, 189, 248, 0.05) 45%, transparent 70%);
+}
+.call-hero .orb {
+  margin-bottom: 34px;
+  width: 172px;
+  height: 172px;
+  box-shadow:
+    0 20px 60px rgba(37, 99, 235, 0.35),
+    0 0 120px rgba(56, 189, 248, 0.25);
+}
+.call-hero h1 {
+  margin: 0 0 10px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.call-hero .sub {
+  max-width: 430px;
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.call-cta {
+  width: auto;
+  margin-top: 30px;
+  padding: 15px 44px;
+  font-size: 16px;
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.call-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(37, 99, 235, 0.42); }
+.call-facts {
+  display: flex;
+  gap: 22px;
+  margin-top: 26px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
 
 /* in-call stage */
 .call-stage {
