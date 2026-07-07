@@ -102,25 +102,30 @@ export default function AdminPanel() {
   };
   const [stats, setStats] = useState<Stats | null>(null);
 
+  // Current filter params live in a REF so every caller — including the
+  // post-inference refresh — reloads what the user is actually looking at.
+  // (A stale closure here once refreshed the "all" list while the operator sat
+  // on the vectorized tab, hiding freshly processed jobs.)
+  const jobParamsRef = useRef({ status: "all" as "all" | "pending" | "vectorized", q: "", page: 0 });
+
   // paged on purpose — a 500-row dump once crashed the operator's browser
-  const loadJobs = useCallback(
-    async (status = jobStatus, q = jobQ, page = jobPage) => {
-      try {
-        const params = new URLSearchParams({ status, limit: String(PAGE), offset: String(page * PAGE) });
-        if (q.trim()) params.set("q", q.trim());
-        const r = await fetch(`/api/admin/jobs?${params}`, { cache: "no-store" });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error);
-        setJobs(j.jobs ?? []);
-        setJobsTotal(j.total ?? 0);
-        setPending(j.pending ?? 0);
-        setStats(j.stats ?? null);
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : "Failed to load jobs");
-      }
-    },
-    [jobStatus, jobQ, jobPage],
-  );
+  const loadJobs = useCallback(async (over?: Partial<{ status: "all" | "pending" | "vectorized"; q: string; page: number }>) => {
+    const next = { ...jobParamsRef.current, ...over };
+    jobParamsRef.current = next;
+    try {
+      const params = new URLSearchParams({ status: next.status, limit: String(PAGE), offset: String(next.page * PAGE) });
+      if (next.q.trim()) params.set("q", next.q.trim());
+      const r = await fetch(`/api/admin/jobs?${params}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      setJobs(j.jobs ?? []);
+      setJobsTotal(j.total ?? 0);
+      setPending(j.pending ?? 0);
+      setStats(j.stats ?? null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to load jobs");
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -129,23 +134,22 @@ export default function AdminPanel() {
       if (!rm.ok) throw new Error(jm.error);
       setM(jm);
       setErr("");
-      void loadJobs();
+      void loadJobs(); // refreshes whatever filter/page the user is on
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadJobs]);
   useEffect(() => {
     void load();
   }, [load]);
   function setJobFilter(status: "all" | "pending" | "vectorized") {
     setJobStatus(status);
     setJobPage(0);
-    void loadJobs(status, jobQ, 0);
+    void loadJobs({ status, page: 0 });
   }
   function setJobPageAndLoad(page: number) {
     setJobPage(page);
-    void loadJobs(jobStatus, jobQ, page);
+    void loadJobs({ page });
   }
 
   // phase 1 — cheap board pull, no GPU
@@ -451,7 +455,7 @@ export default function AdminPanel() {
                   placeholder="search title/company…"
                   value={jobQ}
                   onChange={(e) => setJobQ(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (setJobPage(0), void loadJobs(jobStatus, jobQ, 0))}
+                  onKeyDown={(e) => e.key === "Enter" && (setJobPage(0), void loadJobs({ q: jobQ, page: 0 }))}
                 />
               </span>
             </div>
