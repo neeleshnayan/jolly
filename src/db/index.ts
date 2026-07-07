@@ -15,9 +15,23 @@ function init(): DB {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set (Supabase connection string).");
   }
-  // `prepare: false` is required with the Supabase transaction pooler (6543);
-  // `max` + `idle_timeout` bound the footprint and release idle connections.
-  const client = postgres(connectionString, { prepare: false, max: 8, idle_timeout: 20 });
+  // `prepare: false` is required with the Supabase transaction pooler (6543).
+  // Tuning learned the hard way: the pooler intermittently hangs NEW connection
+  // attempts, and the default 30s connect_timeout turned that into 30-120s API
+  // stalls (admin metrics fans out 8 parallel queries → 8 cold opens). So:
+  // fewer connections (max 4), keep them warm much longer (idle 120s), and
+  // fail a hanging connect fast (10s) so the retry lands on a good socket.
+  // keep_alive detects half-open sockets (the network flap leaves connections
+  // that look alive but never answer — queries queued on them hang forever);
+  // max_lifetime recycles every socket within 5 minutes, bounding any wedge.
+  const client = postgres(connectionString, {
+    prepare: false,
+    max: 4,
+    idle_timeout: 120,
+    connect_timeout: 10,
+    keep_alive: 30,
+    max_lifetime: 300,
+  });
   g.__jollyDb = drizzle(client, { schema });
   return g.__jollyDb;
 }
