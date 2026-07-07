@@ -20,7 +20,7 @@ type Sheet = {
   certifications: { id: string; name: string | null; issuer: string | null; date: string | null }[];
 };
 
-const DEFAULT_STYLE = { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "" };
+const DEFAULT_STYLE = { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "", template: "clean" };
 
 function bulletsHtml(bullets: Bullet[] | null): string {
   if (!bullets?.length) return "";
@@ -46,7 +46,7 @@ export default function ResumeSheet({ data }: { data: Sheet }) {
   const p = data.profile;
 
   return (
-    <div className="resume ro" style={vars}>
+    <div className="resume ro" style={vars} data-template={String(s.template || "clean")}>
       <div className="name">{p.fullName}</div>
       {p.headline && <div className="headline">{p.headline}</div>}
       <div className="contact">

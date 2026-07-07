@@ -14,6 +14,15 @@ export const fontKeyToCss: Record<FontKey, string> = {
   helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
+// Layout templates (Teal-style looks) the sheet renders as pure CSS variants
+// keyed off data-template — content and tokens stay identical underneath.
+//   clean        — the default: left-aligned, understated
+//   accent-name  — the name set in the accent color; modern-warm
+//   ruled        — a bold accent rule across the top; confident, graphic
+//   serif-center — centered header, hairline section rules; formal/classic
+export const TEMPLATE_KEYS = ["clean", "accent-name", "ruled", "serif-center"] as const;
+export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
+
 // Loose numbers/strings on purpose — a local model may drift out of range; we
 // clamp and validate in toStyleConfig rather than rejecting the whole response.
 export const redesignResult = z.object({
@@ -23,6 +32,7 @@ export const redesignResult = z.object({
   density: z.number(),
   accent: z.string(),
   font: z.enum(FONT_KEYS),
+  template: z.enum(TEMPLATE_KEYS).default("clean"),
   rationale: z.string(),
 });
 export type RedesignResult = z.infer<typeof redesignResult>;
@@ -40,5 +50,6 @@ export function toStyleConfig(r: RedesignResult) {
     density: clamp(r.density, 0.7, 1.5),
     accent: HEX.test(r.accent) ? r.accent : "#2563eb",
     fontFamily: fontKeyToCss[r.font] ?? "",
+    template: (TEMPLATE_KEYS as readonly string[]).includes(r.template) ? r.template : "clean",
   };
 }

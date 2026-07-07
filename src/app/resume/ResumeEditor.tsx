@@ -26,6 +26,7 @@ type StyleConfig = {
   density: number;
   accent: string;
   fontFamily: string;
+  template: string; // clean | accent-name | ruled | serif-center (CSS-only layout variants)
 };
 const DEFAULT_STYLE: StyleConfig = {
   nameScale: 1,
@@ -34,7 +35,14 @@ const DEFAULT_STYLE: StyleConfig = {
   density: 1,
   accent: "#2563eb",
   fontFamily: "",
+  template: "clean",
 };
+const TEMPLATE_OPTIONS = [
+  { key: "clean", label: "Clean", hint: "Understated, left-aligned — the safe default" },
+  { key: "accent-name", label: "Accent", hint: "Your name in the accent color — modern & warm" },
+  { key: "ruled", label: "Ruled", hint: "Bold accent rule up top — confident, graphic" },
+  { key: "serif-center", label: "Centered", hint: "Centered header, hairline rules — formal" },
+];
 const FONT_OPTIONS = [
   { label: "Default (sans)", value: "" },
   { label: "Georgia", value: "Georgia, 'Times New Roman', serif" },
@@ -49,23 +57,23 @@ const FONT_OPTIONS = [
 const STYLE_PRESETS: { name: string; hint: string; style: StyleConfig }[] = [
   {
     name: "Classic",
-    hint: "Serif, restrained — finance / consulting",
-    style: { nameScale: 1.05, headerScale: 0.95, bodyScale: 1, density: 1.05, accent: "#1f2937", fontFamily: "Georgia, 'Times New Roman', serif" },
+    hint: "Centered serif, restrained — finance / consulting",
+    style: { nameScale: 1.05, headerScale: 0.95, bodyScale: 1, density: 1.05, accent: "#1f2937", fontFamily: "Georgia, 'Times New Roman', serif", template: "serif-center" },
   },
   {
     name: "Modern",
     hint: "Clean sans, blue accent — tech default",
-    style: { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "" },
+    style: { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "", template: "clean" },
   },
   {
     name: "Teal",
-    hint: "Warm professional teal — stands out, stays serious",
-    style: { nameScale: 1.1, headerScale: 1, bodyScale: 0.97, density: 0.92, accent: "#0f766e", fontFamily: "Calibri, 'Segoe UI', system-ui, sans-serif" },
+    hint: "Teal name, warm & serious — the Teal look",
+    style: { nameScale: 1.1, headerScale: 1, bodyScale: 0.97, density: 0.92, accent: "#0f766e", fontFamily: "Calibri, 'Segoe UI', system-ui, sans-serif", template: "accent-name" },
   },
   {
     name: "Compact",
-    hint: "Dense one-pager — lots of experience, one page",
-    style: { nameScale: 0.92, headerScale: 0.9, bodyScale: 0.92, density: 0.78, accent: "#334155", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
+    hint: "Ruled dense one-pager — lots of experience, one page",
+    style: { nameScale: 0.92, headerScale: 0.9, bodyScale: 0.92, density: 0.78, accent: "#334155", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", template: "ruled" },
   },
 ];
 
@@ -775,91 +783,6 @@ export default function ResumeEditor({
           </div>
 
           <div className="rail-group">
-            <div className="rail-title">AI</div>
-            <div className="ai-stack">
-              <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
-                {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
-              </button>
-              <div className="redesign-hint">New look + sharper wording from your mentor&apos;s read of you. Review side-by-side.</div>
-              {redesignErr && <div className="ai-err">{redesignErr}</div>}
-
-              {/* target a job: JD in → tailored résumé + cover letter out */}
-              <button className="rail-add" onClick={() => setJobOpen((v) => !v)}>
-                🎯 Target a job {jobOpen ? "▲" : "▼"}
-              </button>
-              {jobOpen && (
-                <div className="job-target">
-                  <textarea
-                    className="job-target-jd"
-                    placeholder="Paste the job description here (optional for a general cover letter)…"
-                    value={jd}
-                    onChange={(e) => setJd(e.target.value)}
-                    rows={6}
-                  />
-                  <div className="job-target-actions">
-                    <button className="tip-add" onClick={() => void generateLetter()} disabled={letterBusy}>
-                      {letterBusy ? "Writing…" : "✉ Cover letter"}
-                    </button>
-                    <button
-                      className="tip-add"
-                      onClick={() => void redesign(jd)}
-                      disabled={redesigning || !jd.trim()}
-                      title={jd.trim() ? "Re-emphasize your résumé toward this job" : "Paste a JD first"}
-                    >
-                      {redesigning ? "Tailoring…" : "📄 Tailor résumé"}
-                    </button>
-                  </div>
-                  {letterErr && <div className="ai-err">{letterErr}</div>}
-                </div>
-              )}
-
-              {/* mentor tips — facts from the call that belong on the résumé */}
-              {tips === null ? (
-                <button className="rail-add" onClick={() => void loadTips()} disabled={tipsState === "loading"}>
-                  {tipsState === "loading" ? "Reading your call…" : "💡 Mentor tips from your call"}
-                </button>
-              ) : tipsState === "none" ? (
-                <div className="tips-empty">No new résumé-worthy facts in your last call — talk to your mentor again as things happen.</div>
-              ) : tipsState === "error" ? (
-                <div className="ai-err">Couldn&apos;t read your call — try again.</div>
-              ) : (
-                <div className="tips-list">
-                  {tips.map((t, i) => (
-                    <div className={`tip${t.applied ? " applied" : ""}`} key={i}>
-                      <div className="tip-meta">
-                        {t.kind === "skill" ? "Skill" : t.entryLabel ?? "Bullet"}
-                      </div>
-                      <div className="tip-text">{t.text}</div>
-                      <button className="tip-add" onClick={() => void applyTip(i)} disabled={!!t.applied || (t.kind === "bullet" && !t.entryId)}>
-                        {t.applied ? "✓ Added" : t.kind === "bullet" && !t.entryId ? "No matching entry" : "+ Add"}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {targetRole ? (
-                <div className="mentor-teaser">
-                  <button className="mentor-teaser-head" onClick={() => setTargetOpen((v) => !v)}>
-                    🎯 Aim for <strong>{targetRole.role}</strong>
-                    <span className="mentor-teaser-caret">{targetOpen ? "▲" : "▼"}</span>
-                  </button>
-                  {targetOpen && (
-                    <div className="mentor-teaser-body">
-                      <p>{targetRole.rationale}</p>
-                      <button className="mentor-teaser-cta" onClick={() => void redesign()} disabled={redesigning}>
-                        Tighten résumé toward this →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
-              )}
-            </div>
-          </div>
-
-          <div className="rail-group">
             <div className="rail-title">Design</div>
             <div className="preset-row">
               {STYLE_PRESETS.map((p) => (
@@ -898,6 +821,19 @@ export default function ResumeEditor({
                   <option key={f.label} value={f.value}>{f.label}</option>
                 ))}
               </select>
+            </div>
+            <div className="rail-subtitle">Template</div>
+            <div className="preset-row">
+              {TEMPLATE_OPTIONS.map((t) => (
+                <button
+                  key={t.key}
+                  className={`preset-chip${style.template === t.key ? " active" : ""}`}
+                  onClick={() => setStyle({ template: t.key })}
+                  title={t.hint}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
             <button className="design-reset" onClick={() => setStyle(DEFAULT_STYLE)}>Reset to default</button>
           </div>
@@ -1018,7 +954,7 @@ export default function ResumeEditor({
           A4 · {pages} page{pages === 1 ? "" : "s"}
         </div>
         <div className="sheet-frame" ref={frameRef}>
-        <div className="resume" ref={resumeRef} style={sheetVars}>
+        <div className="resume" ref={resumeRef} style={sheetVars} data-template={style.template || "clean"}>
           {/* header */}
           <Field
             className="f name"
@@ -1326,6 +1262,92 @@ export default function ResumeEditor({
         </div>
       </main>
         </div>
+        <aside className="editor-rail editor-rail-right no-print">
+            <div className="rail-group">
+              <div className="rail-title">AI</div>
+              <div className="ai-stack">
+                <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
+                  {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
+                </button>
+                <div className="redesign-hint">New look + sharper wording from your mentor&apos;s read of you. Review side-by-side.</div>
+                {redesignErr && <div className="ai-err">{redesignErr}</div>}
+  
+                {/* target a job: JD in → tailored résumé + cover letter out */}
+                <button className="rail-add" onClick={() => setJobOpen((v) => !v)}>
+                  🎯 Target a job {jobOpen ? "▲" : "▼"}
+                </button>
+                {jobOpen && (
+                  <div className="job-target">
+                    <textarea
+                      className="job-target-jd"
+                      placeholder="Paste the job description here (optional for a general cover letter)…"
+                      value={jd}
+                      onChange={(e) => setJd(e.target.value)}
+                      rows={6}
+                    />
+                    <div className="job-target-actions">
+                      <button className="tip-add" onClick={() => void generateLetter()} disabled={letterBusy}>
+                        {letterBusy ? "Writing…" : "✉ Cover letter"}
+                      </button>
+                      <button
+                        className="tip-add"
+                        onClick={() => void redesign(jd)}
+                        disabled={redesigning || !jd.trim()}
+                        title={jd.trim() ? "Re-emphasize your résumé toward this job" : "Paste a JD first"}
+                      >
+                        {redesigning ? "Tailoring…" : "📄 Tailor résumé"}
+                      </button>
+                    </div>
+                    {letterErr && <div className="ai-err">{letterErr}</div>}
+                  </div>
+                )}
+  
+                {/* mentor tips — facts from the call that belong on the résumé */}
+                {tips === null ? (
+                  <button className="rail-add" onClick={() => void loadTips()} disabled={tipsState === "loading"}>
+                    {tipsState === "loading" ? "Reading your call…" : "💡 Mentor tips from your call"}
+                  </button>
+                ) : tipsState === "none" ? (
+                  <div className="tips-empty">No new résumé-worthy facts in your last call — talk to your mentor again as things happen.</div>
+                ) : tipsState === "error" ? (
+                  <div className="ai-err">Couldn&apos;t read your call — try again.</div>
+                ) : (
+                  <div className="tips-list">
+                    {tips.map((t, i) => (
+                      <div className={`tip${t.applied ? " applied" : ""}`} key={i}>
+                        <div className="tip-meta">
+                          {t.kind === "skill" ? "Skill" : t.entryLabel ?? "Bullet"}
+                        </div>
+                        <div className="tip-text">{t.text}</div>
+                        <button className="tip-add" onClick={() => void applyTip(i)} disabled={!!t.applied || (t.kind === "bullet" && !t.entryId)}>
+                          {t.applied ? "✓ Added" : t.kind === "bullet" && !t.entryId ? "No matching entry" : "+ Add"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+  
+                {targetRole ? (
+                  <div className="mentor-teaser">
+                    <button className="mentor-teaser-head" onClick={() => setTargetOpen((v) => !v)}>
+                      🎯 Aim for <strong>{targetRole.role}</strong>
+                      <span className="mentor-teaser-caret">{targetOpen ? "▲" : "▼"}</span>
+                    </button>
+                    {targetOpen && (
+                      <div className="mentor-teaser-body">
+                        <p>{targetRole.rationale}</p>
+                        <button className="mentor-teaser-cta" onClick={() => void redesign()} disabled={redesigning}>
+                          Tighten résumé toward this →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
+                )}
+              </div>
+            </div>
+        </aside>
       </div>
     </>
   );
