@@ -115,7 +115,7 @@ export default function DashboardClient({
   return (
     <main className="dash">
       <header className="dash-top">
-        <span className="brand">Career Co-Pilot</span>
+        <span className="brand">drizzle</span>
         <span className="dash-user">
           {avatarUrl && <img className="dash-avatar" src={avatarUrl} alt="" />}
           <span>{name ?? "You"}</span>

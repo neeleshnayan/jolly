@@ -44,6 +44,31 @@ const FONT_OPTIONS = [
   { label: "Helvetica", value: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
 ];
 
+// One-tap looks — curated token bundles (Teal-style guide vibes). Each is a
+// complete style so switching presets never leaves stale tokens behind.
+const STYLE_PRESETS: { name: string; hint: string; style: StyleConfig }[] = [
+  {
+    name: "Classic",
+    hint: "Serif, restrained — finance / consulting",
+    style: { nameScale: 1.05, headerScale: 0.95, bodyScale: 1, density: 1.05, accent: "#1f2937", fontFamily: "Georgia, 'Times New Roman', serif" },
+  },
+  {
+    name: "Modern",
+    hint: "Clean sans, blue accent — tech default",
+    style: { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "" },
+  },
+  {
+    name: "Teal",
+    hint: "Warm professional teal — stands out, stays serious",
+    style: { nameScale: 1.1, headerScale: 1, bodyScale: 0.97, density: 0.92, accent: "#0f766e", fontFamily: "Calibri, 'Segoe UI', system-ui, sans-serif" },
+  },
+  {
+    name: "Compact",
+    hint: "Dense one-pager — lots of experience, one page",
+    style: { nameScale: 0.92, headerScale: 0.9, bodyScale: 0.92, density: 0.78, accent: "#334155", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
+  },
+];
+
 // A live "edit with AI" session, anchored to one bulleted entry. `top` is its
 // vertical offset within the sheet frame, so the compose box (left margin) and
 // the suggestion card (right rail) line up with the entry they act on.
@@ -132,7 +157,7 @@ export default function ResumeEditor({
   aiRef.current = ai;
 
   // the printed PDF's header (and saved filename) use the document title — set it
-  // to the person's name so it isn't "Career Co-Pilot"
+  // to the person's name so it isn't the app name
   useEffect(() => {
     const prev = document.title;
     document.title = (data.profile.fullName || "Resume").trim();
@@ -174,6 +199,39 @@ export default function ResumeEditor({
   };
   const [tips, setTips] = useState<Tip[] | null>(null);
   const [tipsState, setTipsState] = useState<"idle" | "loading" | "none" | "error">("idle");
+  // "target a job" — paste a JD, get a tailored cover letter and/or a tailored redesign
+  const [jobOpen, setJobOpen] = useState(false);
+  const [jd, setJd] = useState("");
+  const [letter, setLetter] = useState<{ text: string; hooks: string[] } | null>(null);
+  const [letterBusy, setLetterBusy] = useState(false);
+  const [letterErr, setLetterErr] = useState("");
+  async function generateLetter() {
+    setLetterBusy(true);
+    setLetterErr("");
+    try {
+      const r = await fetch("/api/resume/cover-letter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, ...(jd.trim() ? { jd: jd.trim() } : {}) }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Couldn't write the letter");
+      setLetter({ text: j.letter, hooks: j.hooks ?? [] });
+    } catch (e) {
+      setLetterErr(e instanceof Error ? e.message : "Couldn't write the letter");
+    } finally {
+      setLetterBusy(false);
+    }
+  }
+  function downloadLetter() {
+    if (!letter) return;
+    const blob = new Blob([letter.text], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(data.profile.fullName || "cover-letter").trim().replace(/\s+/g, "-")}-cover-letter.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
   async function loadTips() {
     setTipsState("loading");
     try {
@@ -225,14 +283,14 @@ export default function ResumeEditor({
       .catch(() => {});
   }, [userId]);
   const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
-  async function redesign() {
+  async function redesign(jd?: string) {
     setRedesigning(true);
     setRedesignErr("");
     try {
       const res = await fetch("/api/resume/redesign", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId, ...(jd?.trim() ? { jd: jd.trim() } : {}) }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Redesign failed");
@@ -646,7 +704,7 @@ export default function ResumeEditor({
   return (
     <>
       <div className="topbar no-print">
-        <span className="brand">Career Co-Pilot</span>
+        <span className="brand">drizzle</span>
         <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <span className="status">{status}</span>
           <a className="ghost-btn" href="/dashboard">← Dashboard</a>
@@ -718,59 +776,104 @@ export default function ResumeEditor({
 
           <div className="rail-group">
             <div className="rail-title">AI</div>
-            <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
-              {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
-            </button>
-            <div className="redesign-hint">Revamps look + wording using your mentor&apos;s insights; review side-by-side.</div>
-            {redesignErr && <div className="ai-err">{redesignErr}</div>}
-
-            {targetRole ? (
-              <div className="mentor-teaser">
-                <button className="mentor-teaser-head" onClick={() => setTargetOpen((v) => !v)}>
-                  🎯 Aim for <strong>{targetRole.role}</strong>
-                  <span className="mentor-teaser-caret">{targetOpen ? "▲" : "▼"}</span>
-                </button>
-                {targetOpen && (
-                  <div className="mentor-teaser-body">
-                    <p>{targetRole.rationale}</p>
-                    <button className="mentor-teaser-cta" onClick={() => void redesign()} disabled={redesigning}>
-                      Tighten résumé toward this →
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
-            )}
-
-            {/* mentor tips — facts from the call that belong on the résumé */}
-            {tips === null ? (
-              <button className="rail-add" onClick={() => void loadTips()} disabled={tipsState === "loading"}>
-                {tipsState === "loading" ? "Reading your call…" : "💡 Mentor tips from your call"}
+            <div className="ai-stack">
+              <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
+                {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
               </button>
-            ) : tipsState === "none" ? (
-              <div className="tips-empty">No new résumé-worthy facts in your last call — talk to your mentor again as things happen.</div>
-            ) : tipsState === "error" ? (
-              <div className="ai-err">Couldn&apos;t read your call — try again.</div>
-            ) : (
-              <div className="tips-list">
-                {tips.map((t, i) => (
-                  <div className={`tip${t.applied ? " applied" : ""}`} key={i}>
-                    <div className="tip-meta">
-                      {t.kind === "skill" ? "Skill" : t.entryLabel ?? "Bullet"}
-                    </div>
-                    <div className="tip-text">{t.text}</div>
-                    <button className="tip-add" onClick={() => void applyTip(i)} disabled={!!t.applied || (t.kind === "bullet" && !t.entryId)}>
-                      {t.applied ? "✓ Added" : t.kind === "bullet" && !t.entryId ? "No matching entry" : "+ Add"}
+              <div className="redesign-hint">New look + sharper wording from your mentor&apos;s read of you. Review side-by-side.</div>
+              {redesignErr && <div className="ai-err">{redesignErr}</div>}
+
+              {/* target a job: JD in → tailored résumé + cover letter out */}
+              <button className="rail-add" onClick={() => setJobOpen((v) => !v)}>
+                🎯 Target a job {jobOpen ? "▲" : "▼"}
+              </button>
+              {jobOpen && (
+                <div className="job-target">
+                  <textarea
+                    className="job-target-jd"
+                    placeholder="Paste the job description here (optional for a general cover letter)…"
+                    value={jd}
+                    onChange={(e) => setJd(e.target.value)}
+                    rows={6}
+                  />
+                  <div className="job-target-actions">
+                    <button className="tip-add" onClick={() => void generateLetter()} disabled={letterBusy}>
+                      {letterBusy ? "Writing…" : "✉ Cover letter"}
+                    </button>
+                    <button
+                      className="tip-add"
+                      onClick={() => void redesign(jd)}
+                      disabled={redesigning || !jd.trim()}
+                      title={jd.trim() ? "Re-emphasize your résumé toward this job" : "Paste a JD first"}
+                    >
+                      {redesigning ? "Tailoring…" : "📄 Tailor résumé"}
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  {letterErr && <div className="ai-err">{letterErr}</div>}
+                </div>
+              )}
+
+              {/* mentor tips — facts from the call that belong on the résumé */}
+              {tips === null ? (
+                <button className="rail-add" onClick={() => void loadTips()} disabled={tipsState === "loading"}>
+                  {tipsState === "loading" ? "Reading your call…" : "💡 Mentor tips from your call"}
+                </button>
+              ) : tipsState === "none" ? (
+                <div className="tips-empty">No new résumé-worthy facts in your last call — talk to your mentor again as things happen.</div>
+              ) : tipsState === "error" ? (
+                <div className="ai-err">Couldn&apos;t read your call — try again.</div>
+              ) : (
+                <div className="tips-list">
+                  {tips.map((t, i) => (
+                    <div className={`tip${t.applied ? " applied" : ""}`} key={i}>
+                      <div className="tip-meta">
+                        {t.kind === "skill" ? "Skill" : t.entryLabel ?? "Bullet"}
+                      </div>
+                      <div className="tip-text">{t.text}</div>
+                      <button className="tip-add" onClick={() => void applyTip(i)} disabled={!!t.applied || (t.kind === "bullet" && !t.entryId)}>
+                        {t.applied ? "✓ Added" : t.kind === "bullet" && !t.entryId ? "No matching entry" : "+ Add"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {targetRole ? (
+                <div className="mentor-teaser">
+                  <button className="mentor-teaser-head" onClick={() => setTargetOpen((v) => !v)}>
+                    🎯 Aim for <strong>{targetRole.role}</strong>
+                    <span className="mentor-teaser-caret">{targetOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {targetOpen && (
+                    <div className="mentor-teaser-body">
+                      <p>{targetRole.rationale}</p>
+                      <button className="mentor-teaser-cta" onClick={() => void redesign()} disabled={redesigning}>
+                        Tighten résumé toward this →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
+              )}
+            </div>
           </div>
 
           <div className="rail-group">
             <div className="rail-title">Design</div>
+            <div className="preset-row">
+              {STYLE_PRESETS.map((p) => (
+                <button
+                  key={p.name}
+                  className={`preset-chip${style.accent === p.style.accent && style.fontFamily === p.style.fontFamily ? " active" : ""}`}
+                  onClick={() => setStyle(p.style)}
+                  title={p.hint}
+                >
+                  <span className="preset-dot" style={{ background: p.style.accent }} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
             <Stepper label="Name size" value={style.nameScale} onChange={(v) => setStyle({ nameScale: v })} />
             <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
             <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
@@ -802,6 +905,33 @@ export default function ResumeEditor({
 
         <div className="editor-canvas">
       <main className="resume-wrap">
+        {letter && (
+          <div className="save-modal-backdrop no-print" onClick={() => setLetter(null)}>
+            <div className="save-modal letter-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="design-head">
+                <span>Your cover letter</span>
+                <button className="design-close" onClick={() => setLetter(null)}>×</button>
+              </div>
+              {letter.hooks.length > 0 && (
+                <div className="letter-hooks">
+                  {letter.hooks.map((h, i) => (
+                    <span className="rec-chip good" key={i}>{h}</span>
+                  ))}
+                </div>
+              )}
+              <pre className="letter-body">{letter.text}</pre>
+              <div className="letter-actions">
+                <button className="btn-primary" onClick={() => void navigator.clipboard.writeText(letter.text)}>
+                  Copy
+                </button>
+                <button className="refine-toggle" onClick={downloadLetter}>Download .txt</button>
+                <button className="refine-toggle" onClick={() => void generateLetter()} disabled={letterBusy}>
+                  {letterBusy ? "Rewriting…" : "↻ Rewrite"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {showSave && (
           <div className="save-modal-backdrop no-print" onClick={() => setShowSave(false)}>
             <div className="save-modal" onClick={(e) => e.stopPropagation()}>

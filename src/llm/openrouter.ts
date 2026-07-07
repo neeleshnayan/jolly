@@ -18,7 +18,7 @@ function headers(): Record<string, string> {
     "content-type": "application/json",
     // optional attribution headers OpenRouter recommends
     "http-referer": process.env.OPENROUTER_APP_URL ?? "http://localhost:3000",
-    "x-title": "Career Co-Pilot",
+    "x-title": "drizzle",
   };
 }
 

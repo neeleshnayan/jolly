@@ -679,7 +679,7 @@ export default function MentorCall({ userId }: { userId: string }) {
   return (
     <div className="call">
       <div className="call-topbar">
-        <span className="brand">Career Co-Pilot</span>
+        <span className="brand">drizzle</span>
         <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
           {live ? (
             <button className="hangup" onClick={endSession}>

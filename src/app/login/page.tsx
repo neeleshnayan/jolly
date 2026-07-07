@@ -13,7 +13,8 @@ export default async function LoginPage({
   return (
     <main className="auth-wrap">
       <div className="auth-card">
-        <h1>Career Co-Pilot</h1>
+        <h1 className="brand-mark">drizzle</h1>
+        <p className="brand-tag">the first rain after the drought — action over inaction</p>
         <p className="sub">
           Sign in to pick up your résumé, your mentor&apos;s understanding of you, and your job matches.
         </p>

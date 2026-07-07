@@ -39,7 +39,13 @@ export async function POST(req: Request) {
     const insightNote = map.insights.length
       ? ` The user's mentor learned these things about them: ${map.insights.map((i) => i.content).join("; ")}. Where it's truthful and supported by the bullet, let the rewrite reflect these strengths and priorities — but never invent.`
       : "";
-    const OVERHAUL = OVERHAUL_BASE + insightNote;
+    // optional target JD: reframe emphasis toward what the role actually asks
+    // for (vocabulary, ordering, which achievements lead) — content stays true
+    const jd = typeof body.jd === "string" && body.jd.trim() ? body.jd.trim().slice(0, 12000) : null;
+    const jdNote = jd
+      ? ` The user is targeting this specific job — emphasize the experience most relevant to it and, where truthful, use its vocabulary: """${jd}"""`
+      : "";
+    const OVERHAUL = OVERHAUL_BASE + insightNote + jdNote;
 
     // 1) the new look
     const { output: design } = await runAgent(resumeRedesigner, { profileText, pages }, { userId });
