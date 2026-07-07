@@ -1236,6 +1236,56 @@ a.start-tile:hover { border-color: var(--accent); }
 .jobs-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
 @media (max-width: 700px) { .mix-grid { grid-template-columns: 1fr; } }
 
+/* ---------- document tabs + the cover-letter document ---------- */
+.doc-tabs { display: flex; gap: 4px; padding: 8px 20px 0; border-bottom: 1px solid var(--line); background: var(--paper); }
+.doc-tab {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.doc-tab:hover { color: var(--ink); }
+.doc-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+/* the resume stays MOUNTED on the letter tab (preserves edit state) — just hidden */
+.resume-wrap.show-letter .page-meta,
+.resume-wrap.show-letter .sheet-frame:not(.letter-frame) { display: none; }
+.letter-bar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
+.letter-bar .design-font { max-width: 240px; }
+.letter-sheet { min-height: 297mm; }
+.letter-sheet .contact { margin-bottom: 26px; }
+.letter-edit {
+  width: 100%;
+  min-height: 180mm;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: calc(14.5px * var(--r-body-scale, 1));
+  line-height: 1.7;
+  resize: vertical;
+}
+
+/* target-a-job opens as a READABLE drawer, not a cramped rail box */
+.job-target {
+  position: fixed;
+  top: 118px;
+  right: 16px;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  z-index: 45;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+.job-target-jd { min-height: 130px; }
+
 /* mentor tips in the editor's AI rail */
 .tips-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .tip { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--surface); }

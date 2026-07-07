@@ -202,6 +202,7 @@ export default function ResumeEditor({
   const [targetOpen, setTargetOpen] = useState(false);
   // mentor tips — résumé-worthy facts mined from the latest call transcript
   type Tip = {
+    id: string | null;
     kind: "bullet" | "skill";
     text: string;
     entryKind: "experience" | "project" | null;
@@ -221,6 +222,45 @@ export default function ResumeEditor({
   type AtsResult = { score: number; required: { term: string; hit: boolean }[]; preferred: { term: string; hit: boolean }[] };
   const [ats, setAts] = useState<AtsResult | null>(null);
   const [atsBusy, setAtsBusy] = useState(false);
+  // the cover letter is a first-class document beside the résumé: same theme,
+  // its own version history (cover_letters table)
+  const [docTab, setDocTab] = useState<"resume" | "letter">("resume");
+  const [letterText, setLetterText] = useState("");
+  const [letterVersions, setLetterVersions] = useState<{ id: string; label: string | null; content: string; createdAt: string }[]>([]);
+  const [letterSaving, setLetterSaving] = useState(false);
+  useEffect(() => {
+    fetch(`/api/cover-letters?u=${userId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        setLetterVersions(j.versions ?? []);
+        if (j.versions?.[0]) setLetterText((cur) => cur || j.versions[0].content);
+      })
+      .catch(() => {});
+  }, [userId]);
+  async function saveLetterVersion() {
+    if (letterText.trim().length < 40) return;
+    setLetterSaving(true);
+    try {
+      const label = jd.trim() ? jd.trim().split("\n")[0].slice(0, 60) : `Draft ${new Date().toLocaleDateString()}`;
+      const r = await fetch("/api/cover-letters", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, content: letterText, label, jd: jd.trim() || undefined }),
+      });
+      const j = await r.json();
+      if (r.ok) setLetterVersions((v) => [{ id: j.id, label, content: letterText, createdAt: new Date().toISOString() }, ...v]);
+    } finally {
+      setLetterSaving(false);
+    }
+  }
+  function downloadLetterText() {
+    const blob = new Blob([letterText], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(data.profile.fullName || "cover-letter").trim().replace(/\s+/g, "-")}-cover-letter.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
   async function checkAts() {
     setAtsBusy(true);
     setLetterErr("");
@@ -250,7 +290,13 @@ export default function ResumeEditor({
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Couldn't write the letter");
-      setLetter({ text: j.letter, hooks: j.hooks ?? [] });
+      // on the cover-letter tab, write straight into the document; the modal
+      // is only for quick generation while working on the résumé
+      if (docTab === "letter") {
+        setLetterText(j.letter);
+      } else {
+        setLetter({ text: j.letter, hooks: j.hooks ?? [] });
+      }
     } catch (e) {
       setLetterErr(e instanceof Error ? e.message : "Couldn't write the letter");
     } finally {
@@ -296,6 +342,7 @@ export default function ResumeEditor({
           entryKind: t.entryKind ?? undefined,
           entryId: t.entryId ?? undefined,
           text: t.text,
+          suggestionId: t.id ?? undefined,
         }),
       });
       if (!r.ok) throw new Error();
@@ -762,6 +809,16 @@ export default function ResumeEditor({
         onAfterRestore={reloadData}
       />
 
+      {/* one workspace, two documents — same theme, separate version histories */}
+      <div className="doc-tabs no-print">
+        <button className={`doc-tab${docTab === "resume" ? " active" : ""}`} onClick={() => setDocTab("resume")}>
+          📄 Résumé
+        </button>
+        <button className={`doc-tab${docTab === "letter" ? " active" : ""}`} onClick={() => setDocTab("letter")}>
+          ✉ Cover letter{letterVersions.length ? ` (${letterVersions.length})` : ""}
+        </button>
+      </div>
+
       {redesigning && (
         <div className="diff-overlay no-print">
           <div className="diff-loading">
@@ -866,7 +923,7 @@ export default function ResumeEditor({
         </aside>
 
         <div className="editor-canvas">
-      <main className="resume-wrap">
+      <main className={`resume-wrap${docTab === "letter" ? " show-letter" : ""}`}>
         {letter && (
           <div className="save-modal-backdrop no-print" onClick={() => setLetter(null)}>
             <div className="save-modal letter-modal" onClick={(e) => e.stopPropagation()}>
@@ -976,6 +1033,52 @@ export default function ResumeEditor({
             </>
           )}
         </div>
+        {docTab === "letter" && (
+          <div className="sheet-frame letter-frame">
+            <div className="letter-bar no-print">
+              <select
+                className="design-font"
+                value=""
+                onChange={(e) => {
+                  const v = letterVersions.find((x) => x.id === e.target.value);
+                  if (v) setLetterText(v.content);
+                }}
+              >
+                <option value="" disabled>
+                  {letterVersions.length ? `Load a version (${letterVersions.length})…` : "No saved versions yet"}
+                </option>
+                {letterVersions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label ?? "Draft"} · {new Date(v.createdAt).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
+              <button className="ghost-btn" onClick={() => void generateLetter()} disabled={letterBusy}>
+                {letterBusy ? "Writing…" : letterText ? "↻ Regenerate" : "✨ Generate"}
+              </button>
+              <button className="ghost-btn" onClick={downloadLetterText} disabled={!letterText.trim()}>Download .txt</button>
+              <button className="btn-primary" onClick={() => void saveLetterVersion()} disabled={letterSaving || letterText.trim().length < 40}>
+                {letterSaving ? "Saving…" : "+ Save as version"}
+              </button>
+            </div>
+            <div className="resume letter-sheet" style={sheetVars} data-template={style.template || "clean"}>
+              <div className="name">{p.fullName}</div>
+              <div className="contact">
+                {[p.email, p.phone, p.location].filter(Boolean).map((x, i) => (
+                  <span key={i}>{x}</span>
+                ))}
+              </div>
+              <textarea
+                className="letter-edit"
+                value={letterText}
+                onChange={(e) => setLetterText(e.target.value)}
+                placeholder={
+                  "Dear Hiring Manager…\n\nWrite here, or paste a job description under 🎯 Target a job (right rail) and hit ✨ Generate — the letter is built from your résumé and what your mentor knows about you."
+                }
+              />
+            </div>
+          </div>
+        )}
         <div className="page-meta no-print">
           A4 · {pages} page{pages === 1 ? "" : "s"}
         </div>
@@ -1020,6 +1123,13 @@ export default function ResumeEditor({
                 <div className="entry">
                   <button className="entry-x no-print" title="Remove role" onClick={() => removeEntry("experience", e.id)}>×</button>
                   <button className="ai-trigger no-print" title="Edit with AI" onClick={(ev) => openAI("experience", e.id, e.bullets ?? [], ev.currentTarget)}>✨</button>
+                  <EntryGear
+                    fields={[
+                      { label: "Location", value: e.location, placeholder: "e.g. Bengaluru, India", onSave: (v) => save("experience", e.id, { location: v }) },
+                      { label: "Start", value: e.startDate, placeholder: "e.g. Jul 2025", onSave: (v) => save("experience", e.id, { startDate: v }) },
+                      { label: "End", value: e.endDate, placeholder: "e.g. Present", onSave: (v) => save("experience", e.id, { endDate: v }) },
+                    ]}
+                  />
                   <div className="row">
                     <Field
                       className="f title"
@@ -1210,6 +1320,12 @@ export default function ResumeEditor({
                 <SortableItem id={c.id} key={c.id}>
                 <div className="entry">
                   <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("certification", c.id)}>×</button>
+                  <EntryGear
+                    fields={[
+                      { label: "Issuer", value: c.issuer, placeholder: "e.g. AWS", onSave: (v) => save("certification", c.id, { issuer: v }) },
+                      { label: "Date", value: c.date, placeholder: "e.g. 2024", onSave: (v) => save("certification", c.id, { date: v }) },
+                    ]}
+                  />
                   <div className="row">
                     <Field
                       className="f title"

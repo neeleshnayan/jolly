@@ -359,6 +359,41 @@ export const opportunities = pgTable(
   }),
 );
 
+// -------------------------------- resume_suggestions (pre-computed mentor tips)
+// Written ONCE after each call by the suggester; the editor's "Mentor tips"
+// just READS these. (Running the 27B suggester live from the editor loaded
+// 16.5GB into VRAM on click and froze the machine — never compute on read.)
+
+export const resumeSuggestions = pgTable("resume_suggestions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), // bullet | skill
+  text: text("text").notNull(),
+  rationale: text("rationale"),
+  entryKind: text("entry_kind"), // experience | project (bullets only)
+  entryId: uuid("entry_id"),
+  entryLabel: text("entry_label"),
+  status: text("status").default("open").notNull(), // open | applied | dismissed
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ------------------------------------------- cover_letters (their own versions)
+// The cover letter is a first-class document beside the résumé — same theme,
+// its own version history. Each row is a saved version; the newest is "current".
+
+export const coverLetters = pgTable("cover_letters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  label: text("label"),
+  content: text("content").notNull(),
+  jd: text("jd"), // the job it targets, if any
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ------------------------------------ scoring_snapshots (the evolving self)
 // One row per scoring computation, never overwritten — the diagnosis report
 // can show HOW the mentor's read moved after each call ("your autonomy read

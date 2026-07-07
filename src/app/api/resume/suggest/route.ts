@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq, and } from "drizzle-orm";
 import { db } from "@/db";
-import { profiles, sources } from "@/db/schema";
+import { profiles, sources, resumeSuggestions } from "@/db/schema";
 import { runAgent } from "@/agents/run";
 import { resumeSuggester } from "@/agents/resume-suggester";
 import { getFullProfile } from "@/lib/profile/read";
@@ -52,10 +52,10 @@ function evidenceChecksOut(evidence: string, saidText: string): boolean {
 const hasPlaceholder = (s: string) => /\[[^\]]{1,30}\]/.test(s); // "[timeframe]", "[X%]"…
 
 /**
- * GET /api/resume/suggest?u=<userId> — mentor tips ON DEMAND from the editor's
- * AI rail: re-reads the LATEST stored mentor-call transcript and suggests
- * résumé-worthy facts from it. Same engine as the post-call flow, no live call
- * needed. Returns { suggestions: [], noCall: true } if they've never talked.
+ * GET /api/resume/suggest?u=<userId> — READ-ONLY: serve the tips PRE-COMPUTED
+ * after the last call. Never runs a model (the live-compute version loaded the
+ * 27B on click and froze the operator's machine). { noCall: true } if they've
+ * never had a call.
  */
 export async function GET(req: NextRequest) {
   const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
@@ -63,15 +63,33 @@ export async function GET(req: NextRequest) {
 
   const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!p) return NextResponse.json({ error: "No profile" }, { status: 404 });
+
+  const stored = await db
+    .select()
+    .from(resumeSuggestions)
+    .where(and(eq(resumeSuggestions.profileId, p.id), eq(resumeSuggestions.status, "open")))
+    .orderBy(desc(resumeSuggestions.createdAt));
+  if (stored.length) {
+    return NextResponse.json({
+      ok: true,
+      suggestions: stored.map((s) => ({
+        id: s.id,
+        kind: s.kind,
+        text: s.text,
+        rationale: s.rationale ?? "",
+        entryKind: s.entryKind,
+        entryId: s.entryId,
+        entryLabel: s.entryLabel,
+      })),
+    });
+  }
+  // nothing stored: distinguish "never called" from "called, nothing new"
   const [call] = await db
-    .select({ rawText: sources.rawText })
+    .select({ id: sources.id })
     .from(sources)
     .where(and(eq(sources.profileId, p.id), eq(sources.kind, "mentor_call")))
-    .orderBy(desc(sources.createdAt))
     .limit(1);
-  const transcript = call?.rawText ?? "";
-  if (transcript.trim().length < 20) return NextResponse.json({ ok: true, suggestions: [], noCall: true });
-  return suggestFrom(userId, transcript);
+  return NextResponse.json({ ok: true, suggestions: [], noCall: !call });
 }
 
 export async function POST(req: Request) {
@@ -138,7 +156,34 @@ async function suggestFrom(userId: string, transcript: string) {
       };
     });
 
-    return NextResponse.json({ ok: true, suggestions });
+    // persist so the editor can read these instantly, forever, without a model.
+    // fresh call replaces the previous OPEN batch (applied/dismissed history stays)
+    const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+    let stored: { id: string }[] = [];
+    if (p) {
+      await db.delete(resumeSuggestions).where(and(eq(resumeSuggestions.profileId, p.id), eq(resumeSuggestions.status, "open")));
+      if (suggestions.length) {
+        stored = await db
+          .insert(resumeSuggestions)
+          .values(
+            suggestions.map((s) => ({
+              profileId: p.id,
+              kind: s.kind,
+              text: s.text,
+              rationale: s.rationale ?? null,
+              entryKind: s.entryKind,
+              entryId: s.entryId,
+              entryLabel: s.entryLabel,
+            })),
+          )
+          .returning({ id: resumeSuggestions.id });
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      suggestions: suggestions.map((s, i) => ({ ...s, id: stored[i]?.id ?? null })),
+    });
   } catch (err) {
     console.error("[/api/resume/suggest]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });

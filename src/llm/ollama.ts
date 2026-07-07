@@ -81,6 +81,9 @@ function parseJsonLoose(content: string): unknown {
  * were OOMing exactly this way. Best-effort; never throws.
  */
 export async function releaseLiveModel(): Promise<void> {
+  // when live and extract are the SAME model (the one-small-model doctrine on
+  // low-RAM boxes), eviction would just force a pointless 20s reload
+  if (LIVE_MODEL === MODEL) return;
   try {
     await fetch(`${BASE}/api/generate`, {
       method: "POST",
