@@ -48,7 +48,10 @@ export function buildMentorSystemPrompt(
     secondsLeft != null && secondsLeft > 600
       ? ` IMPORTANT: it is still EARLY in this call (over ${Math.round(secondsLeft / 60)} minutes remain). Do NOT close yet — there is more of them to understand. Only close this early if THEY say they need to go.`
       : "";
-  const closingBlock = `\n\nENDING THE CALL — end it YOURSELF the moment you have a real read on who they are and where they should aim; don't drag it out. To close: two warm, energising sentences — name one genuine strength you actually saw, and one concrete, hopeful next move — then put [[END_CALL]] on its very own at the end. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing. Inspire confidence and send them off with energy.${earlyGuard}`;
+  const closingBlock = `\n\nENDING THE CALL — a TWO-STEP close, never abrupt:
+1. When you have a real read on who they are (or time is running short), first ASK: "before we wrap — anything else on your mind you want to think through together?" Give them the floor. Do NOT end on this turn.
+2. After they respond (or decline), close: two warm, energising sentences — name one genuine strength you actually saw, and one concrete, hopeful next move — then put [[END_CALL]] on its very own line at the end.
+If time has fully run out mid-thread, bounce politely: acknowledge the thread is worth more time ("that deserves a proper conversation — bring it to our next call"), then do step 2 in the same turn. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing.${earlyGuard}`;
 
   const name = map.profile?.fullName ?? "the person";
   const headline = map.profile?.headline ? ` (${map.profile.headline})` : "";
@@ -64,8 +67,14 @@ export function buildMentorSystemPrompt(
     : "";
 
   // three roles pre-picked across the spectrum, to make the call concrete
+  // past the midpoint the roles MUST come up — a whole call without them means
+  // the reveal moment (and the reaction data it generates) never happens
+  const midpointNudge =
+    secondsLeft != null && secondsLeft <= 600
+      ? ` The call is past its midpoint and you haven't necessarily raised these yet — find a natural bridge from what they've been saying and bring ONE up in your next turn or two, naming the role title and company out loud.`
+      : "";
   const rolesBlock = spectrum.length
-    ? `\n\nTHREE ROLES YOU'VE LINED UP TO DISCUSS (across the spectrum — a strong fit, a different path, a pivot). Don't dump them as a list; bring ONE up when it's natural, and use it to probe — "between building something from scratch and leading a team, which pulls at you more, and why?". Let their reaction teach you what they actually want:\n${spectrum
+    ? `\n\nTHREE ROLES YOU'VE LINED UP TO DISCUSS (across the spectrum — a strong fit, a different path, a pivot). Don't dump them as a list; bring ONE up when it's natural, NAMING THE TITLE AND COMPANY exactly (the screen shows them cards when you do), and use it to probe — "between building something from scratch and leading a team, which pulls at you more, and why?". Let their reaction teach you what they actually want:${midpointNudge}\n${spectrum
         .map((r) => `- [${r.kind}] ${r.title} at ${r.company} — ${r.why}`)
         .join("\n")}`
     : "";

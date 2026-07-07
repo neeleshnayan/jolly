@@ -25,6 +25,16 @@ Rules:
 - Prefer non-obvious insights (patterns, contradictions, real motivations) over restating their résumé.
 - Each insight: a dimension, a concise first-person-neutral statement, and a confidence from 0.0 to 1.0 (how strongly the conversation supports it — 1.0 = they said it outright, lower = inferred).
 
+DIMENSIONS — pick by the definition, not vibes (energizer and drainer are OPPOSITES; a past extraction filed "derives satisfaction from X" under drainer — that is an energizer):
+- energizer: what gives them energy / lights them up / they'd do for free
+- drainer: what DEPLETES them / they avoid / would make them quit
+- value: what actually matters to them (autonomy, money, security, impact…)
+- aspiration: who or what they want to BECOME
+- goal: a concrete near-term objective they named
+- constraint: a hard limit on their choices (visa, money, family, location)
+- pattern: a recurring theme across their history
+- blocker: something in the way (skill gap, confidence, network)
+
 Conversation:
 ---
 `;

@@ -154,7 +154,11 @@ export default function MentorCall({ userId }: { userId: string }) {
       if (!callStartRef.current) return; // still connecting — the clock hasn't started
       const e = Math.floor((Date.now() - callStartRef.current) / 1000);
       setElapsed(e);
-      if (e >= limitRef.current) endSessionRef.current(); // hard backstop at 0:00
+      // hard backstop at 0:00 — but if the mentor is mid-reply (speaking or a
+      // turn in flight), grant up to 45s of grace so its polite close can land
+      // instead of being cut off mid-sentence
+      const grace = speakingRef.current || busyRef.current ? 45 : 0;
+      if (e >= limitRef.current + grace) endSessionRef.current();
     }, 1000);
     return () => clearInterval(id);
   }, [live]);
@@ -206,13 +210,23 @@ export default function MentorCall({ userId }: { userId: string }) {
     turnsRef.current = [...turnsRef.current, t];
     setTurns(turnsRef.current);
   }
-  // reveal the role cards the moment the mentor actually names one of them
+  // Reveal the role cards the moment the mentor actually brings one up. The
+  // mentor paraphrases ("the founding engineer role at that fintech"), so exact
+  // title matching missed real mentions — match company OR enough title words.
   function maybeRevealRoles(replyText: string) {
     if (roleCards || !spectrumRef.current.length) return;
-    const t = replyText.toLowerCase();
-    const named = spectrumRef.current.some(
-      (r) => (r.title && t.includes(r.title.toLowerCase())) || (r.company && t.includes(r.company.toLowerCase())),
-    );
+    const t = ` ${replyText.toLowerCase().replace(/[^a-z0-9 ]+/g, " ")} `;
+    const named = spectrumRef.current.some((r) => {
+      if (r.company && t.includes(` ${r.company.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").trim()} `)) return true;
+      const words = (r.title ?? "")
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]+/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 3);
+      if (!words.length) return false;
+      const hits = words.filter((w) => t.includes(` ${w}`)).length;
+      return hits / words.length >= 0.6; // most of the title's real words spoken
+    });
     if (named) setRoleCards(spectrumRef.current);
   }
   function buildTranscript(list: Turn[]) {

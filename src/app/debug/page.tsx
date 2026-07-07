@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import UserChip from "../UserChip";
 
@@ -14,7 +14,17 @@ type DebugData = {
   scoringError?: string | null;
 };
 
+// useSearchParams needs a Suspense boundary for prod prerendering — without
+// this the PRODUCTION BUILD fails (dev mode never surfaces it)
 export default function DebugPage() {
+  return (
+    <Suspense fallback={<main className="debug"><p className="sub">Loading…</p></main>}>
+      <DebugInner />
+    </Suspense>
+  );
+}
+
+function DebugInner() {
   const u = useSearchParams().get("u");
   const [data, setData] = useState<DebugData | null>(null);
   const [error, setError] = useState<string | null>(null);

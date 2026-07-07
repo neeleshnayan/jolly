@@ -22,9 +22,18 @@ export const COMPANIES: { source: Source; slug: string }[] = [
   { source: "greenhouse", slug: "duolingo" },
   // legal (legal-tech hires counsel, legal ops, paralegals — not just devs)
   { source: "greenhouse", slug: "everlaw" },
-  // health (clinical + ops + tech)
+  // health (clinical + ops + tech; onemedical is heavy on actual clinicians)
   { source: "greenhouse", slug: "doximity" },
   { source: "greenhouse", slug: "zocdoc" },
+  { source: "greenhouse", slug: "onemedical" },
+  // finance & quant
+  { source: "greenhouse", slug: "point72" },
+  { source: "greenhouse", slug: "janestreet" },
+  // marketing / content / education
+  { source: "greenhouse", slug: "sproutsocial" },
+  { source: "greenhouse", slug: "hootsuite" },
+  { source: "greenhouse", slug: "coursera" },
+  { source: "greenhouse", slug: "outschool" },
   // remote-first (the side-hustle / work-from-anywhere pool)
   { source: "greenhouse", slug: "gitlab" },
   { source: "greenhouse", slug: "remotecom" },

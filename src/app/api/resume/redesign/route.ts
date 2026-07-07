@@ -46,7 +46,15 @@ export async function POST(req: Request) {
     const jdNote = jd
       ? ` The user is targeting this specific job — emphasize the experience most relevant to it and, where truthful, use its vocabulary: """${jd}"""`
       : "";
-    const OVERHAUL = OVERHAUL_BASE + insightNote + jdNote;
+    // the ATS check's missing keywords close the loop: translate what's already
+    // true into screen-legible vocabulary — never manufacture what isn't there
+    const missing = Array.isArray(body.missingKeywords)
+      ? (body.missingKeywords as unknown[]).filter((k): k is string => typeof k === "string").slice(0, 20)
+      : [];
+    const atsNote = missing.length
+      ? ` An ATS keyword check found these JD terms MISSING from the résumé: ${missing.join(", ")}. Where a bullet ALREADY truthfully demonstrates one of these, rephrase it to use that exact term (e.g. work that plainly used Python should say "Python"). If nothing on the résumé genuinely supports a term, LEAVE IT OUT — never fabricate experience to satisfy a keyword.`
+      : "";
+    const OVERHAUL = OVERHAUL_BASE + insightNote + jdNote + atsNote;
 
     // 1) the new look
     const { output: design } = await runAgent(resumeRedesigner, { profileText, pages }, { userId });

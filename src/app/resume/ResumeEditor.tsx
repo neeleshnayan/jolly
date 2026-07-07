@@ -368,10 +368,17 @@ export default function ResumeEditor({
     setRedesigning(true);
     setRedesignErr("");
     try {
+      // the ATS check's missing keywords feed the rewrite: rephrase what's
+      // truthfully there into the JD's vocabulary (never invent)
+      const missing = ats ? [...ats.required, ...ats.preferred].filter((k) => !k.hit).map((k) => k.term) : [];
       const res = await fetch("/api/resume/redesign", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, ...(jd?.trim() ? { jd: jd.trim() } : {}) }),
+        body: JSON.stringify({
+          userId,
+          ...(jd?.trim() ? { jd: jd.trim() } : {}),
+          ...(jd?.trim() && missing.length ? { missingKeywords: missing.slice(0, 20) } : {}),
+        }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Redesign failed");

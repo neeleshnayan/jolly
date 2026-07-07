@@ -438,7 +438,7 @@ a { color: var(--accent); }
   padding-bottom: 6px;
   margin: 0 0 12px;
 }
-.entry { margin-bottom: calc(18px * var(--r-density, 1)); position: relative; }
+.entry { margin-bottom: calc(13px * var(--r-density, 1)); position: relative; } /* was 18px — read as gappy */
 /* delete control lives in the right margin of the sheet, clear of the text */
 .entry-x {
   position: absolute;
@@ -1408,6 +1408,10 @@ a.start-tile:hover { border-color: var(--accent); }
    long institution/title fills the line instead of clipping (e.g. "Manipal
    Institute of Technology"), while the dates stay pinned right */
 .entry .row > .title { flex: 1 1 auto; min-width: 0; }
+/* same rule for a degree/subtitle line inside a .row — without flex-grow the
+   wrapper collapsed to the input's default width and clipped long text like
+   "BTech, Computer & Communication Engineering (minor in Digital Marketing)" */
+.entry .row > .org { flex: 1 1 auto; min-width: 0; }
 .entry .title { font-weight: 600; font-size: calc(15px * var(--r-body-scale, 1)); }
 .entry .org { color: var(--ink); font-size: calc(14px * var(--r-body-scale, 1)); }
 .entry .org-line { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; }

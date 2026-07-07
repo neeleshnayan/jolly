@@ -487,7 +487,7 @@ export default function AdminPanel() {
                       <td className="admin-dim">{fmtComp(j.compMin, j.compMax)}</td>
                       <td className="admin-dim">{j.domain ?? "—"}{j.companyStage && j.companyStage !== "unknown" ? ` · ${j.companyStage}` : ""}</td>
                       <td className="admin-dim">{j.source}</td>
-                      <td>{j.vectorizedAt ? "✓" : <span className="admin-pending">pending</span>}</td>
+                      <td>{j.vectorizedAt ? <span title={new Date(j.vectorizedAt).toLocaleString()}>✓ {fmtAgo(j.vectorizedAt)}</span> : <span className="admin-pending">pending</span>}</td>
                       <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
                       <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
                     </tr>,

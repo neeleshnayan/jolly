@@ -3,6 +3,7 @@ import "./globals.css";
 import ThemeToggle from "./ThemeToggle";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "drizzle — your career co-pilot",
   description: "Understood once, working for you everywhere: résumé, mentor, opportunities.",
   openGraph: {
