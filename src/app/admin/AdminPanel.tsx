@@ -71,6 +71,8 @@ export default function AdminPanel() {
   const [fetching, setFetching] = useState(false);
   const [inferring, setInferring] = useState(false);
   const [inferCount, setInferCount] = useState("10");
+  const [inferBatch, setInferBatch] = useState("5");
+  const [inferPause, setInferPause] = useState("30");
   const [fetchLog, setFetchLog] = useState<string[] | null>(null);
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [pending, setPending] = useState(0);
@@ -116,16 +118,18 @@ export default function AdminPanel() {
     }
   }
 
-  // phase 2 — GPU inference in batches of 5 with a 30s cooldown between batches
+  // phase 2 — GPU inference, fully operator-controlled: total, batch, cooldown
   async function runInference() {
     setInferring(true);
     const n = Math.max(1, parseInt(inferCount, 10) || 10);
-    setFetchLog([`Vectorizing up to ${n} pending job(s) — batches of 5, 30s cooldown. Leave this page open…`]);
+    const b = Math.max(1, parseInt(inferBatch, 10) || 5);
+    const p = Math.max(0, parseInt(inferPause, 10) || 30);
+    setFetchLog([`Vectorizing up to ${n} pending job(s) — batches of ${b}, ${p}s cooldown. Leave this page open…`]);
     try {
       const r = await fetch("/api/admin/run-inference", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ count: n }),
+        body: JSON.stringify({ count: n, batch: b, sleepSec: p }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -290,15 +294,18 @@ export default function AdminPanel() {
               {fetching ? "Pulling boards…" : "⟳ Fetch jobs"}
             </button>
             <span className="admin-infer">
-              <input
-                className="admin-count"
-                type="number"
-                min={1}
-                max={50}
-                value={inferCount}
-                onChange={(e) => setInferCount(e.target.value)}
-                title="How many pending jobs to vectorize this run"
-              />
+              <label className="admin-knob" title="Total pending jobs to vectorize this run">
+                total
+                <input className="admin-count" type="number" min={1} max={50} value={inferCount} onChange={(e) => setInferCount(e.target.value)} />
+              </label>
+              <label className="admin-knob" title="Jobs per batch before a cooldown">
+                batch
+                <input className="admin-count" type="number" min={1} max={10} value={inferBatch} onChange={(e) => setInferBatch(e.target.value)} />
+              </label>
+              <label className="admin-knob" title="Seconds of GPU cooldown between batches">
+                pause&nbsp;s
+                <input className="admin-count" type="number" min={0} max={120} value={inferPause} onChange={(e) => setInferPause(e.target.value)} />
+              </label>
               <button className="btn-primary" onClick={() => void runInference()} disabled={inferring || fetching || pending === 0}>
                 {inferring ? "Vectorizing…" : `▶ Run inference${pending ? ` (${pending} pending)` : ""}`}
               </button>

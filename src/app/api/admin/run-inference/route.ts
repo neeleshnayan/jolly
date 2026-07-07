@@ -14,10 +14,12 @@ export async function POST(req: NextRequest) {
   const adminId = await requireAdmin();
   if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as { count?: number };
+  const body = (await req.json().catch(() => ({}))) as { count?: number; batch?: number; sleepSec?: number };
   const limit = Math.min(50, Math.max(1, body.count ?? 10)); // keep one request bounded
+  const batchSize = Math.min(10, Math.max(1, body.batch ?? 5));
+  const sleepMs = Math.min(120, Math.max(0, body.sleepSec ?? 30)) * 1000;
   try {
-    const result = await runInference({ limit });
+    const result = await runInference({ limit, batchSize, sleepMs });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error("[/api/admin/run-inference]", err);
