@@ -163,6 +163,56 @@ export default function ResumeEditor({
   // the mentor's recommended target role (from the filled TBD theme), if any
   const [targetRole, setTargetRole] = useState<{ role: string; rationale: string } | null>(null);
   const [targetOpen, setTargetOpen] = useState(false);
+  // mentor tips — résumé-worthy facts mined from the latest call transcript
+  type Tip = {
+    kind: "bullet" | "skill";
+    text: string;
+    entryKind: "experience" | "project" | null;
+    entryId: string | null;
+    entryLabel: string | null;
+    applied?: boolean;
+  };
+  const [tips, setTips] = useState<Tip[] | null>(null);
+  const [tipsState, setTipsState] = useState<"idle" | "loading" | "none" | "error">("idle");
+  async function loadTips() {
+    setTipsState("loading");
+    try {
+      const r = await fetch(`/api/resume/suggest?u=${userId}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      if (j.noCall || !(j.suggestions ?? []).length) {
+        setTips([]);
+        setTipsState("none");
+      } else {
+        setTips(j.suggestions);
+        setTipsState("idle");
+      }
+    } catch {
+      setTipsState("error");
+    }
+  }
+  async function applyTip(i: number) {
+    const t = tips?.[i];
+    if (!t || t.applied) return;
+    try {
+      const r = await fetch("/api/resume/suggest/apply", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          kind: t.kind,
+          entryKind: t.entryKind ?? undefined,
+          entryId: t.entryId ?? undefined,
+          text: t.text,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      setTips((cur) => cur?.map((x, idx) => (idx === i ? { ...x, applied: true } : x)) ?? null);
+      await reloadData(); // the new bullet/skill shows up in the sheet
+    } catch {
+      /* leave un-applied; user can retry */
+    }
+  }
   useEffect(() => {
     fetch(`/api/track/version?u=${userId}`)
       .then((r) => r.json())
@@ -691,6 +741,31 @@ export default function ResumeEditor({
               </div>
             ) : (
               <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
+            )}
+
+            {/* mentor tips — facts from the call that belong on the résumé */}
+            {tips === null ? (
+              <button className="rail-add" onClick={() => void loadTips()} disabled={tipsState === "loading"}>
+                {tipsState === "loading" ? "Reading your call…" : "💡 Mentor tips from your call"}
+              </button>
+            ) : tipsState === "none" ? (
+              <div className="tips-empty">No new résumé-worthy facts in your last call — talk to your mentor again as things happen.</div>
+            ) : tipsState === "error" ? (
+              <div className="ai-err">Couldn&apos;t read your call — try again.</div>
+            ) : (
+              <div className="tips-list">
+                {tips.map((t, i) => (
+                  <div className={`tip${t.applied ? " applied" : ""}`} key={i}>
+                    <div className="tip-meta">
+                      {t.kind === "skill" ? "Skill" : t.entryLabel ?? "Bullet"}
+                    </div>
+                    <div className="tip-text">{t.text}</div>
+                    <button className="tip-add" onClick={() => void applyTip(i)} disabled={!!t.applied || (t.kind === "bullet" && !t.entryId)}>
+                      {t.applied ? "✓ Added" : t.kind === "bullet" && !t.entryId ? "No matching entry" : "+ Add"}
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

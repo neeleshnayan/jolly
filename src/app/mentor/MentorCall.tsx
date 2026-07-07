@@ -54,6 +54,12 @@ export default function MentorCall({ userId }: { userId: string }) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
   const freqRef = useRef<Uint8Array<ArrayBuffer>>(new Uint8Array(0));
+  // a second analyser tapped off the mentor's TTS so the orb reacts to ITS voice
+  // while it speaks (the mic analyser reacts to the user's voice otherwise)
+  const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
+  const voiceDataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
+  const voiceSrcRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const orbRef = useRef<HTMLDivElement | null>(null); // drive --orb-level without re-rendering
   const vadTimerRef = useRef<number | null>(null);
   // adaptive thresholds — calibrated to the room's noise floor at call start
   const speechThreshRef = useRef(SPEECH_RMS);
@@ -115,6 +121,39 @@ export default function MentorCall({ userId }: { userId: string }) {
     }, 1000);
     return () => clearInterval(id);
   }, [live]);
+  // Speech-reactive orb: one rAF while live reads real amplitude (mentor's voice
+  // while it speaks, else the mic) and writes --orb-level so a white dot grows /
+  // shrinks with the sound. CSS-var only — no React renders, so it's near-free.
+  useEffect(() => {
+    if (!live) return;
+    let raf = 0;
+    let smooth = 0;
+    const loop = () => {
+      let level = 0;
+      const va = voiceAnalyserRef.current;
+      if (speakingRef.current && va) {
+        const b = voiceDataRef.current;
+        va.getFloatTimeDomainData(b);
+        let s = 0;
+        for (let i = 0; i < b.length; i++) s += b[i] * b[i];
+        level = Math.sqrt(s / b.length);
+      } else if (analyserRef.current) {
+        level = computeRms(); // the user's mic
+      }
+      // speech RMS sits ~0.01–0.25 → map into 0..1 with a small noise floor
+      const target = Math.max(0, Math.min(1, (level - 0.012) * 7));
+      // fast attack, gentle release — lively but not jittery (Siri-like)
+      smooth += (target - smooth) * (target > smooth ? 0.5 : 0.14);
+      orbRef.current?.style.setProperty("--orb-level", smooth.toFixed(3));
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      orbRef.current?.style.setProperty("--orb-level", "0");
+    };
+  }, [live]);
+
   const remaining = Math.max(0, limitSec - elapsed);
   function extendCall() {
     limitRef.current += EXTEND_SEC;
@@ -159,6 +198,28 @@ export default function MentorCall({ userId }: { userId: string }) {
     }
     const audio = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}`);
     audioRef.current = audio;
+    // tap the mentor's voice for the reactive orb (route through the context so we
+    // can read its amplitude); falls back to plain playback if the graph refuses.
+    const ctx = ctxRef.current;
+    if (ctx) {
+      try {
+        void ctx.resume();
+        voiceSrcRef.current?.disconnect();
+        const src = ctx.createMediaElementSource(audio);
+        if (!voiceAnalyserRef.current) {
+          const va = ctx.createAnalyser();
+          va.fftSize = 512;
+          va.smoothingTimeConstant = 0.6;
+          voiceAnalyserRef.current = va;
+          voiceDataRef.current = new Float32Array(va.fftSize);
+          va.connect(ctx.destination);
+        }
+        src.connect(voiceAnalyserRef.current);
+        voiceSrcRef.current = src;
+      } catch {
+        /* couldn't tap — audio still plays through the element itself */
+      }
+    }
     setSpokenText(text);
     setRevealFrac(0);
     enter("speaking");
@@ -461,6 +522,11 @@ export default function MentorCall({ userId }: { userId: string }) {
     } catch {}
     rnnoiseRef.current = null;
     cleanStreamRef.current = null;
+    try {
+      voiceSrcRef.current?.disconnect();
+    } catch {}
+    voiceSrcRef.current = null;
+    voiceAnalyserRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     ctxRef.current?.close().catch(() => {});
     audioRef.current?.pause();
@@ -644,7 +710,7 @@ export default function MentorCall({ userId }: { userId: string }) {
 
       {live && (
         <div className="call-stage">
-          <div className={`orb ${orbClass}`}>
+          <div className={`orb reactive ${orbClass}`} ref={orbRef}>
             <span className="orb-core" />
           </div>
           <div className="call-name">Your mentor</div>

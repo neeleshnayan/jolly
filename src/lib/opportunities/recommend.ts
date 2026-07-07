@@ -3,13 +3,14 @@
  * and pick a 3-role "spectrum" to prime the mentor before a call. Uses the
  * CACHED scoring vector (recomputed only when missing) so this is cheap.
  */
-import { desc } from "drizzle-orm";
+import { desc, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { opportunities } from "@/db/schema";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
+import { getPreferences, type Preferences } from "@/lib/preferences";
 import { scoreMatch } from "./match";
 import type { ScoringVector } from "@/lib/scoring/schema";
-import type { OpportunityVector } from "./schema";
+import type { OpportunityVector, OpportunityFacts } from "./schema";
 
 export type RankedJob = {
   id: string;
@@ -22,6 +23,9 @@ export type RankedJob = {
   stage: string | null;
   domain: string | null;
   url: string | null;
+  source: string | null;
+  summary: string;
+  coreRequirements: string[];
   fit: number;
   qualification: number;
   desire: number;
@@ -52,14 +56,84 @@ function whySummary(m: { fit: number; reasons: string[]; gaps: string[] }): stri
   return `${pct}% fit for where you are right now.`;
 }
 
+// ---- concrete refinements the user states explicitly (comp + where/how) ----
+const compFmt = (n: number) => (n >= 100000 ? `₹${Math.round(n / 100000)}L` : `₹${Math.round(n / 1000)}k`);
+
+/** How well the role's stated pay meets the user's expectation. Unknown comp is
+ *  neutral (never penalized). Below target is a soft, proportional penalty. */
+function compRefine(pref: Preferences, compMin: number | null, compMax: number | null) {
+  const exp = pref.expectedComp;
+  if (!exp) return { factor: 1 } as { factor: number; reason?: string; gap?: string };
+  const top = compMax ?? compMin;
+  if (!top) return { factor: 1 };
+  if (top >= exp) return { factor: 1, reason: `Comp clears your ${compFmt(exp)} target` };
+  const ratio = top / exp;
+  return { factor: Math.max(0.6, 0.6 + 0.4 * ratio), gap: `Comp ~${Math.round((1 - ratio) * 100)}% under your target` };
+}
+
+/** Location / remote compatibility — soft factors so nothing is hidden, just
+ *  ranked lower when it clashes with how the user wants to work. */
+function locationRefine(pref: Preferences, remote: string | null, location: string | null) {
+  let factor = 1;
+  let reason: string | undefined;
+  let gap: string | undefined;
+  const want = pref.remote;
+  const isRemote = remote === "remote";
+  if (want && want !== "any" && remote && remote !== "unknown") {
+    if (want === "remote" && !isRemote) {
+      factor *= 0.7;
+      gap = "Not remote — you wanted remote";
+    } else if (want === "onsite" && isRemote) {
+      factor *= 0.92;
+    } else if (isRemote || want === remote) {
+      reason = isRemote ? "Remote" : `${remote[0].toUpperCase()}${remote.slice(1)}`;
+    }
+  }
+  if (pref.locations?.length && !isRemote && location) {
+    const loc = location.toLowerCase();
+    const hit = pref.locations.find((c) => loc.includes(c.toLowerCase()));
+    if (hit) reason = `In ${hit}`;
+    else if (want !== "remote") {
+      factor *= 0.82;
+      gap = gap ?? `${location} — outside your locations`;
+    }
+  }
+  return { factor, reason, gap };
+}
+
 export async function rankMatches(userId: string): Promise<RankedJob[]> {
   const vec = await userVector(userId);
   if (!vec) return [];
-  const roles = await db.select().from(opportunities).orderBy(desc(opportunities.createdAt)).limit(100);
+  const [allRoles, pref] = await Promise.all([
+    // only vectorized roles — a pending row's empty vector would fake 0.5 on
+    // every axis and rank as a meaningless mid-pack match
+    db
+      .select()
+      .from(opportunities)
+      .where(isNotNull(opportunities.vectorizedAt))
+      .orderBy(desc(opportunities.createdAt))
+      .limit(100),
+    getPreferences(userId),
+  ]);
+  // Curated fixtures are a FALLBACK, not content: the moment real ATS-fetched
+  // roles exist, only real ones are ranked. (Samples stay in the DB so an empty
+  // deployment still demos, but users should never see them next to real jobs.)
+  const real = allRoles.filter((r) => r.source !== "sample");
+  const roles = real.length ? real : allRoles;
   return roles
     .map((r) => {
       const v = (r.vector ?? {}) as OpportunityVector;
+      const f = (r.facts ?? {}) as Partial<OpportunityFacts>;
       const m = scoreMatch(vec, v);
+      const c = compRefine(pref, r.compMin, r.compMax);
+      const l = locationRefine(pref, r.remote, r.location);
+      // concrete notes lead — they're the explicit knobs the user just set
+      const reasons = [c.reason, l.reason, ...m.reasons].filter(Boolean) as string[];
+      const gaps = [c.gap, l.gap, ...m.gaps].filter(Boolean) as string[];
+      // older rows predate the summary/core_requirements fields — fall back to
+      // a trimmed JD slice so the card never shows a blank description
+      const summary = f.summary?.trim() || (r.rawText ?? "").replace(/\s+/g, " ").trim().slice(0, 220);
+      const coreRequirements = f.core_requirements?.length ? f.core_requirements : f.must_have_skills ?? [];
       return {
         id: r.id,
         title: r.title,
@@ -71,14 +145,17 @@ export async function rankMatches(userId: string): Promise<RankedJob[]> {
         stage: r.companyStage,
         domain: r.domain,
         url: r.url,
-        fit: m.fit,
+        source: r.source,
+        summary,
+        coreRequirements,
+        fit: m.fit * c.factor * l.factor,
         qualification: m.qualification,
         desire: m.desire,
         novelty: v.off_domain_novelty?.score ?? 0.3,
         building: v.off_building?.score ?? 0.5,
         peopleLeadership: v.off_people_leadership?.score ?? 0.3,
-        reasons: m.reasons,
-        gaps: m.gaps,
+        reasons,
+        gaps,
         why: whySummary(m),
       };
     })

@@ -245,6 +245,8 @@ export function sampleExtraction(j: SampleJob): OpportunityExtraction {
       comp_max: j.compMax,
       company_stage: j.stage,
       domain: j.domain,
+      summary: j.jd,
+      core_requirements: [],
       must_have_skills: [],
       nice_to_have_skills: [],
     },

@@ -4,7 +4,10 @@
  * concrete résumé entry (so the client can one-tap accept). Nothing is written
  * here; acceptance goes through /api/resume/suggest/apply.
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { desc, eq, and } from "drizzle-orm";
+import { db } from "@/db";
+import { profiles, sources } from "@/db/schema";
 import { runAgent } from "@/agents/run";
 import { resumeSuggester } from "@/agents/resume-suggester";
 import { getFullProfile } from "@/lib/profile/read";
@@ -19,6 +22,29 @@ function norm(s: string | null | undefined) {
   return (s ?? "").toLowerCase().trim();
 }
 
+/**
+ * GET /api/resume/suggest?u=<userId> — mentor tips ON DEMAND from the editor's
+ * AI rail: re-reads the LATEST stored mentor-call transcript and suggests
+ * résumé-worthy facts from it. Same engine as the post-call flow, no live call
+ * needed. Returns { suggestions: [], noCall: true } if they've never talked.
+ */
+export async function GET(req: NextRequest) {
+  const userId = (await getSessionUserId()) ?? req.nextUrl.searchParams.get("u");
+  if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  if (!p) return NextResponse.json({ error: "No profile" }, { status: 404 });
+  const [call] = await db
+    .select({ rawText: sources.rawText })
+    .from(sources)
+    .where(and(eq(sources.profileId, p.id), eq(sources.kind, "mentor_call")))
+    .orderBy(desc(sources.createdAt))
+    .limit(1);
+  const transcript = call?.rawText ?? "";
+  if (transcript.trim().length < 20) return NextResponse.json({ ok: true, suggestions: [], noCall: true });
+  return suggestFrom(userId, transcript);
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -26,6 +52,15 @@ export async function POST(req: Request) {
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const transcript = typeof body.transcript === "string" ? body.transcript : "";
     if (transcript.trim().length < 20) return NextResponse.json({ ok: true, suggestions: [] });
+    return suggestFrom(userId, transcript);
+  } catch (err) {
+    console.error("[/api/resume/suggest]", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+  }
+}
+
+async function suggestFrom(userId: string, transcript: string) {
+  try {
 
     const [full, map] = await Promise.all([getFullProfile(userId), getMentorMap(userId)]);
     if (!full) return NextResponse.json({ error: "No profile" }, { status: 404 });

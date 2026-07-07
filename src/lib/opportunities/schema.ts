@@ -39,6 +39,13 @@ export const opportunityFacts = z.object({
   comp_max: z.number().nullable().default(null),
   company_stage: z.enum(["startup", "growth", "enterprise", "unknown"]).default("unknown"),
   domain: z.string().default(""),
+  // a comprehensible plain-English read of the role — what the person would
+  // actually DO day to day. Written for a candidate skimming a card, not a
+  // truncated slice of the raw JD.
+  summary: z.string().default(""),
+  // 3-6 concrete requirements a candidate would check themselves against
+  // (skills, years of experience, domain knowledge) — NOT vague adjectives.
+  core_requirements: z.array(z.string()).default([]),
   must_have_skills: z.array(z.string()).default([]),
   nice_to_have_skills: z.array(z.string()).default([]),
 });

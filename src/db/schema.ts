@@ -22,6 +22,7 @@ import {
   integer,
   jsonb,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------- enums
@@ -77,6 +78,16 @@ export const profiles = pgTable("profiles", {
   // and only recompute after uploads / mentor calls or an explicit request.
   scoring: jsonb("scoring").$type<Record<string, unknown>>(),
   scoringAt: timestamp("scoring_at", { withTimezone: true }),
+  // explicit, user-stated refinements for matching — concrete comp targets and
+  // where/how they want to work. Fold into ranking on top of the scoring vector.
+  preferences: jsonb("preferences")
+    .$type<{
+      currentComp?: number; // annual, in the résumé's currency (₹ here)
+      expectedComp?: number;
+      locations?: string[]; // preferred cities / regions
+      remote?: "remote" | "hybrid" | "onsite" | "any";
+    }>()
+    .default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -318,30 +329,42 @@ export const opportunitySource = pgEnum("opportunity_source", [
   "lever",
   "ashby",
   "pasted",
+  "sample",
   "other",
 ]);
 
-export const opportunities = pgTable("opportunities", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  source: opportunitySource("source").default("pasted").notNull(),
-  externalId: text("external_id"), // ATS job id, for dedup
-  url: text("url"),
-  company: text("company"),
-  title: text("title"),
-  location: text("location"),
-  remote: text("remote"), // onsite | hybrid | remote | unknown
-  compMin: integer("comp_min"),
-  compMax: integer("comp_max"),
-  companyStage: text("company_stage"), // startup | growth | enterprise | unknown
-  domain: text("domain"),
-  rawText: text("raw_text"), // the JD
-  vector: jsonb("vector").$type<Record<string, unknown>>().default({}),
-  facts: jsonb("facts").$type<Record<string, unknown>>().default({}),
-  addedByProfileId: uuid("added_by_profile_id").references(() => profiles.id, {
-    onDelete: "set null",
+export const opportunities = pgTable(
+  "opportunities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: opportunitySource("source").default("pasted").notNull(),
+    externalId: text("external_id"), // ATS job id, for dedup
+    url: text("url"),
+    company: text("company"),
+    title: text("title"),
+    location: text("location"),
+    remote: text("remote"), // onsite | hybrid | remote | unknown
+    compMin: integer("comp_min"),
+    compMax: integer("comp_max"),
+    companyStage: text("company_stage"), // startup | growth | enterprise | unknown
+    domain: text("domain"),
+    rawText: text("raw_text"), // the JD
+    vector: jsonb("vector").$type<Record<string, unknown>>().default({}),
+    facts: jsonb("facts").$type<Record<string, unknown>>().default({}),
+    // null = fetched from a board but not yet vectorized (inference pending).
+    // Lets the admin split cheap board-fetching from GPU-heavy inference.
+    vectorizedAt: timestamp("vectorized_at", { withTimezone: true }),
+    addedByProfileId: uuid("added_by_profile_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    // nulls stay distinct, so pasted/sample rows (external_id null) never collide;
+    // board rows dedup on their ATS id. Blocks double-inserts from racing fetches.
+    externalIdUniq: uniqueIndex("opportunities_external_id_uniq").on(t.externalId),
   }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+);
 
 // ------------------------------------------- agent_runs (observability layer)
 // One row per agent invocation: what ran, on whom, how much it cost, how long,

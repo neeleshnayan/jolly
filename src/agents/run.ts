@@ -18,16 +18,23 @@ export async function runAgent<I, O>(
   const started = Date.now();
   let runId: string | undefined;
 
-  if (ctx.profileId) {
-    try {
-      const [row] = await db
-        .insert(agentRuns)
-        .values({ profileId: ctx.profileId, agent: agent.name, status: "running" })
-        .returning({ id: agentRuns.id });
-      runId = row.id;
-    } catch {
-      /* observability must not break the main path */
-    }
+  // Log every run, not just ones tied to a profile — worker/system calls
+  // (job vectorization, etc.) have no profileId but still cost real tokens,
+  // and the admin ROI view needs to see that spend too. `userId` is stashed in
+  // meta so "worker" runs are still identifiable without a profile row.
+  try {
+    const [row] = await db
+      .insert(agentRuns)
+      .values({
+        profileId: ctx.profileId ?? null,
+        agent: agent.name,
+        status: "running",
+        meta: { userId: ctx.userId, ...ctx.meta },
+      })
+      .returning({ id: agentRuns.id });
+    runId = row.id;
+  } catch {
+    /* observability must not break the main path */
   }
 
   try {
@@ -44,7 +51,7 @@ export async function runAgent<I, O>(
             outputTokens: result.usage?.outputTokens,
             durationMs: Date.now() - started,
             finishedAt: new Date(),
-            meta: result.meta ?? {},
+            meta: { userId: ctx.userId, ...ctx.meta, ...result.meta },
           })
           .where(eq(agentRuns.id, runId));
       } catch {

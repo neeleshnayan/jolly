@@ -11,26 +11,40 @@ type Job = {
   compMin: number | null;
   compMax: number | null;
   stage: string | null;
+  url: string | null;
+  source: string | null;
+  summary: string;
+  coreRequirements: string[];
   fit: number;
   reasons: string[];
   gaps: string[];
   why: string;
 };
+const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", sample: "Curated JD", pasted: "Curated JD" };
+const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
 function comp(min: number | null, max: number | null) {
   if (!min && !max) return null;
   const f = (n: number) => (n >= 100000 ? `${Math.round(n / 100000)}L` : `${Math.round(n / 1000)}k`);
   return `₹${f(min ?? max!)}–${f(max ?? min!)}`;
 }
 
+type Prefs = { currentComp?: number; expectedComp?: number; locations?: string[]; remote?: "remote" | "hybrid" | "onsite" | "any" };
+
 export default function Recommendations({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Job[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [showRefine, setShowRefine] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>({});
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/opportunities/matches?u=${userId}`);
+      // no-store: the ranking is already computed fresh server-side every call
+      // (live DB query), but some browsers cache identical GET URLs anyway —
+      // this guarantees a refresh actually shows new data.
+      const r = await fetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" });
       const j = await r.json();
       setMatches(j.matches ?? []);
     } catch {
@@ -42,7 +56,27 @@ export default function Recommendations({ userId }: { userId: string }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    fetch(`/api/preferences?u=${userId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setPrefs(j.preferences ?? {}))
+      .catch(() => {});
+  }, [load, userId]);
+
+  async function savePrefs(next: Prefs) {
+    setSavingPrefs(true);
+    try {
+      const r = await fetch("/api/preferences", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, preferences: next }),
+      });
+      const j = await r.json();
+      setPrefs(j.preferences ?? next);
+      await load(); // re-rank with the new refinements
+    } finally {
+      setSavingPrefs(false);
+    }
+  }
 
   async function seed() {
     setSeeding(true);
@@ -82,7 +116,16 @@ export default function Recommendations({ userId }: { userId: string }) {
       <div className="dash-section-head">
         <h2>Recommended for you</h2>
         <span className="dash-hint">Ranked to how you work, not just what you can do</span>
+        {process.env.NODE_ENV !== "production" && (
+          <button className="refine-toggle" onClick={() => void load()} disabled={loading} title="Debug only — force a fresh fetch, bypassing any cache">
+            {loading ? "Refreshing…" : "⟳ Refresh (debug)"}
+          </button>
+        )}
+        <button className="refine-toggle" onClick={() => setShowRefine((v) => !v)}>
+          {showRefine ? "Close" : "Refine ⚙"}
+        </button>
       </div>
+      {showRefine && <RefinePanel prefs={prefs} saving={savingPrefs} onSave={savePrefs} />}
       <div className="rec-list">
         {top.map((j) => (
           <div className="rec-card" key={j.id}>
@@ -92,12 +135,53 @@ export default function Recommendations({ userId }: { userId: string }) {
             </div>
             <div className="rec-main">
               <div className="rec-title-row">
-                <span className="rec-title">{j.title}</span>
-                <span className="rec-co">{j.company}</span>
+                <div>
+                  <div className="rec-title">{j.title}</div>
+                  <div className="rec-co">{j.company}</div>
+                </div>
+                {j.source && <span className="rec-source">{SOURCE_LABEL[j.source] ?? j.source}</span>}
               </div>
-              <div className="rec-meta">
-                {[j.location, comp(j.compMin, j.compMax), j.stage].filter(Boolean).join(" · ")}
+
+              <div className="rec-facts">
+                {comp(j.compMin, j.compMax) && (
+                  <div className="rec-fact">
+                    <span className="rec-fact-label">Comp</span>
+                    <span className="rec-fact-value">{comp(j.compMin, j.compMax)}</span>
+                  </div>
+                )}
+                {j.location && (
+                  <div className="rec-fact">
+                    <span className="rec-fact-label">Location</span>
+                    <span className="rec-fact-value">{j.location}</span>
+                  </div>
+                )}
+                {j.remote && REMOTE_LABEL[j.remote] && (
+                  <div className="rec-fact">
+                    <span className="rec-fact-label">Work style</span>
+                    <span className="rec-fact-value">{REMOTE_LABEL[j.remote]}</span>
+                  </div>
+                )}
+                {j.stage && (
+                  <div className="rec-fact">
+                    <span className="rec-fact-label">Stage</span>
+                    <span className="rec-fact-value">{j.stage}</span>
+                  </div>
+                )}
               </div>
+
+              {j.summary && <p className="rec-summary">{j.summary}</p>}
+
+              {j.coreRequirements.length > 0 && (
+                <div className="rec-reqs">
+                  <div className="rec-reqs-label">What they're looking for</div>
+                  <ul>
+                    {j.coreRequirements.slice(0, 5).map((req, i) => (
+                      <li key={i}>{req}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="rec-why">{j.why}</div>
               {(j.reasons.length > 0 || j.gaps.length > 0) && (
                 <div className="rec-chips">
@@ -109,10 +193,72 @@ export default function Recommendations({ userId }: { userId: string }) {
                   ))}
                 </div>
               )}
+              {j.url && (
+                <a className="rec-apply" href={j.url} target="_blank" rel="noopener noreferrer">
+                  View &amp; apply ↗
+                </a>
+              )}
             </div>
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+// comp is stored in absolute ₹; the form talks in LPA (lakhs/yr) for sanity
+const toL = (n?: number) => (n ? String(Math.round(n / 100000)) : "");
+const fromL = (s: string) => {
+  const n = parseFloat(s);
+  return isFinite(n) && n > 0 ? Math.round(n * 100000) : undefined;
+};
+
+function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean; onSave: (p: Prefs) => void }) {
+  const [current, setCurrent] = useState(toL(prefs.currentComp));
+  const [expected, setExpected] = useState(toL(prefs.expectedComp));
+  const [locations, setLocations] = useState((prefs.locations ?? []).join(", "));
+  const [remote, setRemote] = useState<Prefs["remote"]>(prefs.remote ?? "any");
+
+  function submit() {
+    onSave({
+      currentComp: fromL(current),
+      expectedComp: fromL(expected),
+      locations: locations.split(",").map((s) => s.trim()).filter(Boolean),
+      remote,
+    });
+  }
+
+  return (
+    <div className="refine-panel">
+      <div className="refine-grid">
+        <label className="refine-field">
+          <span>Current comp (₹ LPA)</span>
+          <input type="number" inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="e.g. 35" />
+        </label>
+        <label className="refine-field">
+          <span>Expected comp (₹ LPA)</span>
+          <input type="number" inputMode="numeric" value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="e.g. 60" />
+        </label>
+        <label className="refine-field">
+          <span>How you want to work</span>
+          <select value={remote} onChange={(e) => setRemote(e.target.value as Prefs["remote"])}>
+            <option value="any">Open to anything</option>
+            <option value="remote">Remote</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="onsite">Onsite</option>
+          </select>
+        </label>
+        <label className="refine-field refine-wide">
+          <span>Preferred locations (comma-separated)</span>
+          <input value={locations} onChange={(e) => setLocations(e.target.value)} placeholder="Bengaluru, Remote, New York" />
+        </label>
+      </div>
+      <div className="refine-actions">
+        <span className="refine-note">Used to re-rank on top of your work style — nothing is hidden, just ordered.</span>
+        <button className="btn-primary" onClick={submit} disabled={saving}>
+          {saving ? "Saving…" : "Save & re-rank"}
+        </button>
+      </div>
+    </div>
   );
 }

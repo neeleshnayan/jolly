@@ -1,0 +1,58 @@
+/**
+ * GET /api/admin/metrics — the operator's numbers, admin-gated:
+ *   1. mentor conversations (total + per user, with names)
+ *   2. résumé edits (user_edit sources)
+ *   3. applications sent
+ *   4. agent runs by agent — count, errors, avg latency, tokens (the ROI view)
+ */
+import { NextResponse } from "next/server";
+import { sql } from "drizzle-orm";
+import { db } from "@/db";
+import { requireAdmin } from "@/lib/auth/admin";
+
+export const runtime = "nodejs";
+
+export async function GET() {
+  const adminId = await requireAdmin();
+  if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+
+  const [calls, callsByUser, edits, apps, agents, recentRuns] = await Promise.all([
+    db.execute(sql`select count(*)::int as n from sources where kind = 'mentor_call'`),
+    db.execute(sql`
+      select coalesce(p.full_name, p.email, 'unknown') as who, count(*)::int as n, max(s.created_at) as last_at
+      from sources s join profiles p on p.id = s.profile_id
+      where s.kind = 'mentor_call'
+      group by 1 order by n desc limit 20`),
+    db.execute(sql`
+      select count(*)::int as total,
+             count(distinct profile_id)::int as users
+      from sources where kind = 'user_edit'`),
+    db.execute(sql`
+      select count(*)::int as total,
+             count(distinct a.profile_id)::int as users,
+             count(*) filter (where a.applied_at > now() - interval '7 days')::int as last7
+      from applications a`),
+    db.execute(sql`
+      select agent,
+             count(*)::int as runs,
+             count(*) filter (where status = 'error')::int as errors,
+             round(avg(duration_ms))::int as avg_ms,
+             coalesce(sum(input_tokens), 0)::int as tokens_in,
+             coalesce(sum(output_tokens), 0)::int as tokens_out,
+             max(created_at) as last_at
+      from agent_runs
+      group by agent order by runs desc`),
+    db.execute(sql`
+      select agent, status, model, duration_ms, error, created_at
+      from agent_runs order by created_at desc limit 15`),
+  ]);
+
+  return NextResponse.json({
+    ok: true,
+    mentorCalls: { total: (calls as unknown as { n: number }[])[0]?.n ?? 0, byUser: callsByUser },
+    resumeEdits: (edits as unknown as { total: number; users: number }[])[0] ?? { total: 0, users: 0 },
+    applications: (apps as unknown as { total: number; users: number; last7: number }[])[0] ?? { total: 0, users: 0, last7: 0 },
+    agents,
+    recentRuns,
+  });
+}

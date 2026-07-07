@@ -26,6 +26,11 @@ const THINK =
   process.env.OLLAMA_THINK === undefined
     ? undefined
     : process.env.OLLAMA_THINK.toLowerCase() !== "false";
+// Voice turns must NEVER think: gemma4/qwen3 default to hidden reasoning tokens,
+// which reads as a 10-20s dead-air stall before every spoken reply (measured:
+// 382 tokens/16s thinking vs 17 tokens/0.7s without). Default hard-off for the
+// live path; OLLAMA_LIVE_THINK=true to re-enable for experiments.
+const LIVE_THINK = (process.env.OLLAMA_LIVE_THINK ?? "false").toLowerCase() !== "false";
 
 function ollamaOptions(opts: {
   temperature: number;
@@ -145,7 +150,8 @@ export const ollamaProvider: LLMProvider = {
         model: req.model ?? LIVE_MODEL,
         stream: true,
         keep_alive: LIVE_KEEP_ALIVE, // keep the voice model warm across turns
-        ...(THINK === undefined ? {} : { think: THINK }),
+        think: THINK ?? LIVE_THINK, // default false — see LIVE_THINK note above
+
         options: ollamaOptions({ temperature: 0.7, numCtx: NUM_CTX }),
         messages: [
           ...(req.system ? [{ role: "system", content: req.system }] : []),

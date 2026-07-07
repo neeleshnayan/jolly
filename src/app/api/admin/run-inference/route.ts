@@ -1,0 +1,26 @@
+/**
+ * POST /api/admin/run-inference — phase 2: vectorize pending jobs on the local
+ * model, `batch` at a time with a cooldown between batches so the GPU doesn't
+ * cook on a long run. Body: { count?: number } — how many to process this run.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth/admin";
+import { runInference } from "@/lib/jobs/fetch";
+
+export const runtime = "nodejs";
+export const maxDuration = 600;
+
+export async function POST(req: NextRequest) {
+  const adminId = await requireAdmin();
+  if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+
+  const body = (await req.json().catch(() => ({}))) as { count?: number };
+  const limit = Math.min(50, Math.max(1, body.count ?? 10)); // keep one request bounded
+  try {
+    const result = await runInference({ limit });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("[/api/admin/run-inference]", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });
+  }
+}
