@@ -50,9 +50,19 @@ type JobRow = {
   title: string | null;
   company: string | null;
   location: string | null;
+  remote: string | null;
+  compMin: number | null;
+  compMax: number | null;
+  domain: string | null;
+  companyStage: string | null;
   url: string | null;
   vectorizedAt: string | null;
   createdAt: string;
+};
+const fmtComp = (min: number | null, max: number | null) => {
+  if (!min && !max) return "—";
+  const f = (n: number) => (n >= 100000 ? `${Math.round(n / 100000)}L` : `${Math.round(n / 1000)}k`);
+  return `₹${f(min ?? max!)}–${f(max ?? min!)}`;
 };
 
 export default function AdminPanel() {
@@ -304,16 +314,22 @@ export default function AdminPanel() {
 
           <section className="admin-section">
             <h2>All jobs in DB ({jobs.length}{pending ? ` · ${pending} awaiting inference` : ""})</h2>
-            <table className="admin-table">
-              <thead><tr><th>Title</th><th>Company</th><th>Source</th><th>Status</th><th>Added</th><th></th></tr></thead>
+            <table className="admin-table admin-jobs-table">
+              <thead>
+                <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Status</th><th>Added</th><th></th></tr>
+              </thead>
               <tbody>
                 {jobs.map((j) => (
                   <tr key={j.id}>
                     <td>{j.url ? <a href={j.url} target="_blank" rel="noopener noreferrer">{j.title}</a> : j.title}</td>
                     <td>{j.company}</td>
-                    <td>{j.source}</td>
-                    <td>{j.vectorizedAt ? "vectorized" : <span className="admin-pending">pending</span>}</td>
-                    <td>{fmtAgo(j.createdAt)}</td>
+                    <td className="admin-dim">{j.location ?? "—"}</td>
+                    <td className="admin-dim">{j.remote && j.remote !== "unknown" ? j.remote : "—"}</td>
+                    <td className="admin-dim">{fmtComp(j.compMin, j.compMax)}</td>
+                    <td className="admin-dim">{j.domain ?? "—"}{j.companyStage && j.companyStage !== "unknown" ? ` · ${j.companyStage}` : ""}</td>
+                    <td className="admin-dim">{j.source}</td>
+                    <td>{j.vectorizedAt ? "✓" : <span className="admin-pending">pending</span>}</td>
+                    <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
                     <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
                   </tr>
                 ))}

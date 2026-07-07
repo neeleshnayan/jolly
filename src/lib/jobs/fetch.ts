@@ -18,12 +18,24 @@ import { releaseLiveModel } from "@/llm/ollama";
 import { COMPANIES } from "./companies";
 import { fetchBoard } from "./ats";
 
-const DEFAULT_TITLE_FILTER =
-  "engineer|developer|research|scientist|founding|technical|product manager|infra|platform|machine learning|\\bai\\b|\\bml\\b|data";
-// Hard exclusions beat the include list — "Account Executive, AI Native" and
-// "AI Compliance Officer" both contain "AI" but are not builder roles.
-const DEFAULT_TITLE_EXCLUDE =
-  "account executive|sales|gtm|go.to.market|partnership|business development|recruit|sourcer|counsel|legal|compliance|policy|marketing|brand|communications|finance|accounting|payroll|people ops|talent|administrative|executive assistant|customer success|support";
+// Early users are DIVERSE — lawyers, designers, doctors, engineers, PMs,
+// writers, remote side-hustlers — so the net is wide across verticals.
+// (The old filter was engineer-biased and its exclude list literally blocked
+// counsel/legal/marketing titles.) Override with JOBS_TITLE_FILTER.
+const DEFAULT_TITLE_FILTER = [
+  "engineer|developer|software|architect|devops|infra|platform|\\bai\\b|\\bml\\b|machine learning",
+  "design|\\bux\\b|\\bui\\b|creative|brand|visual",
+  "product|program|project|manager|operations|strategy|chief of staff",
+  "counsel|attorney|legal|paralegal|contracts|compliance",
+  "physician|doctor|clinical|nurse|medical|health|care|therapist",
+  "research|scientist|data|analyst|analytics",
+  "writer|content|marketing|growth|editor|communications",
+  "sales|account|success|support|partnership|community",
+  "finance|accountant|people|talent|recruit",
+].join("|");
+// exclusions now empty by default — every vertical is someone's career.
+// Set JOBS_TITLE_EXCLUDE to re-introduce noise filtering per deployment.
+const DEFAULT_TITLE_EXCLUDE = "";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,7 +57,11 @@ export async function fetchRawJobs(opts?: { log?: (line: string) => void }): Pro
     opts?.log?.(s);
   };
   const titleFilter = new RegExp(process.env.JOBS_TITLE_FILTER ?? DEFAULT_TITLE_FILTER, "i");
-  const titleExclude = new RegExp(process.env.JOBS_TITLE_EXCLUDE ?? DEFAULT_TITLE_EXCLUDE, "i");
+  const excludeSrc = process.env.JOBS_TITLE_EXCLUDE ?? DEFAULT_TITLE_EXCLUDE;
+  const titleExclude = excludeSrc ? new RegExp(excludeSrc, "i") : null;
+  // bound intake per board so remote.com's 283 postings can't drown the mix;
+  // the pending pile stays scannable and inference stays a deliberate choice
+  const perBoard = Number(process.env.JOBS_FETCH_PER_BOARD ?? 30);
 
   let inserted = 0;
   let scanned = 0;
@@ -61,10 +77,12 @@ export async function fetchRawJobs(opts?: { log?: (line: string) => void }): Pro
       continue;
     }
     const before = jobs.length;
-    jobs = jobs.filter((j) => j.jd.length >= 80 && titleFilter.test(j.title) && !titleExclude.test(j.title));
+    jobs = jobs
+      .filter((j) => j.jd.length >= 80 && titleFilter.test(j.title) && !(titleExclude && titleExclude.test(j.title)))
+      .slice(0, perBoard);
     scanned += before;
     matched += jobs.length;
-    log(`${c.source}:${c.slug} → ${jobs.length} builder roles (of ${before})`);
+    log(`${c.source}:${c.slug} → taking ${jobs.length} of ${before} postings`);
     if (!jobs.length) continue;
 
     // skip ones we already have (by external_id) so we don't clobber vectors
