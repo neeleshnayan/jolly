@@ -117,6 +117,7 @@ interface Education {
   institution: string | null;
   degree: string | null;
   field: string | null;
+  location: string | null;
   startDate: string | null;
   endDate: string | null;
   details: string | null;
@@ -130,6 +131,8 @@ interface Project {
   id: string;
   name: string | null;
   description: string | null;
+  startDate: string | null;
+  endDate: string | null;
   bullets: Bullet[] | null;
 }
 interface Certification {
@@ -565,11 +568,11 @@ export default function ResumeEditor({
         if (kind === "experience")
           return { ...d, experiences: [...d.experiences, { id, org: null, title: null, location: null, startDate: null, endDate: null, isCurrent: false, bullets: [] }] };
         if (kind === "education")
-          return { ...d, education: [...d.education, { id, institution: null, degree: null, field: null, startDate: null, endDate: null, details: null }] };
+          return { ...d, education: [...d.education, { id, institution: null, degree: null, field: null, location: null, startDate: null, endDate: null, details: null }] };
         if (kind === "skill") return { ...d, skills: [...d.skills, { id, name: "New skill", category: null }] };
         if (kind === "certification")
           return { ...d, certifications: [...d.certifications, { id, name: null, issuer: null, date: null }] };
-        return { ...d, projects: [...d.projects, { id, name: null, description: null, bullets: [] }] };
+        return { ...d, projects: [...d.projects, { id, name: null, description: null, startDate: null, endDate: null, bullets: [] }] };
       });
       setStatus("");
     } catch (err) {
@@ -1070,6 +1073,14 @@ export default function ResumeEditor({
                 <SortableItem id={ed.id} key={ed.id}>
                 <div className="entry">
                   <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("education", ed.id)}>×</button>
+                  <EntryGear
+                    fields={[
+                      { label: "Location", value: ed.location, placeholder: "e.g. Manipal, India", onSave: (v) => save("education", ed.id, { location: v }) },
+                      { label: "Start", value: ed.startDate, placeholder: "e.g. Sep 2015", onSave: (v) => save("education", ed.id, { startDate: v }) },
+                      { label: "End", value: ed.endDate, placeholder: "e.g. Jun 2019", onSave: (v) => save("education", ed.id, { endDate: v }) },
+                      { label: "Details", value: ed.details, placeholder: "GPA, honors, thesis…", onSave: (v) => save("education", ed.id, { details: v }) },
+                    ]}
+                  />
                   <div className="row">
                     <Field
                       className="f title"
@@ -1084,13 +1095,25 @@ export default function ResumeEditor({
                       onSave={(patch) => save("education", ed.id, patch)}
                     />
                   </div>
-                  <Field
-                    className="f org"
-                    value={[ed.degree, ed.field].filter(Boolean).join(", ")}
-                    placeholder="Degree, Field"
-                    onSave={(v) => save("education", ed.id, { degree: v })}
-                    wrapClass="org"
-                  />
+                  <div className="row">
+                    <Field
+                      className="f org"
+                      value={[ed.degree, ed.field].filter(Boolean).join(", ")}
+                      placeholder="Degree, Field"
+                      onSave={(v) => save("education", ed.id, { degree: v })}
+                      wrapClass="org"
+                    />
+                    {ed.location && <span className="loc">{ed.location}</span>}
+                  </div>
+                  {ed.details && (
+                    <Field
+                      className="f org"
+                      value={ed.details}
+                      placeholder="Details"
+                      onSave={(v) => save("education", ed.id, { details: v })}
+                      wrapClass="org"
+                    />
+                  )}
                 </div>
                 </SortableItem>
               ))}
@@ -1132,13 +1155,38 @@ export default function ResumeEditor({
                 <div className="entry">
                   <button className="entry-x no-print" title="Remove" onClick={() => removeEntry("project", pr.id)}>×</button>
                   <button className="ai-trigger no-print" title="Edit with AI" onClick={(ev) => openAI("project", pr.id, pr.bullets ?? [], ev.currentTarget)}>✨</button>
-                  <Field
-                    className="f title"
-                    value={pr.name}
-                    placeholder="Project"
-                    onSave={(v) => save("project", pr.id, { name: v })}
-                    wrapClass="title"
+                  <EntryGear
+                    fields={[
+                      { label: "Start", value: pr.startDate, placeholder: "e.g. Jan 2018", onSave: (v) => save("project", pr.id, { startDate: v }) },
+                      { label: "End", value: pr.endDate, placeholder: "e.g. Dec 2019", onSave: (v) => save("project", pr.id, { endDate: v }) },
+                      { label: "Subtitle", value: pr.description, placeholder: "e.g. Founder · autonomous drone for emergencies", onSave: (v) => save("project", pr.id, { description: v }) },
+                    ]}
                   />
+                  <div className="row">
+                    <Field
+                      className="f title"
+                      value={pr.name}
+                      placeholder="Project"
+                      onSave={(v) => save("project", pr.id, { name: v })}
+                      wrapClass="title"
+                    />
+                    {(pr.startDate || pr.endDate) && (
+                      <DatesField
+                        start={pr.startDate}
+                        end={pr.endDate}
+                        onSave={(patch) => save("project", pr.id, patch)}
+                      />
+                    )}
+                  </div>
+                  {pr.description && (
+                    <Field
+                      className="f org"
+                      value={pr.description}
+                      placeholder="Subtitle"
+                      onSave={(v) => save("project", pr.id, { description: v })}
+                      wrapClass="org"
+                    />
+                  )}
                   <BulletsField
                     bullets={pr.bullets ?? []}
                     onSave={(bullets) => save("project", pr.id, { bullets })}
@@ -1529,6 +1577,42 @@ function DatesField({
         onBlur={() => e !== (end ?? "") && onSave({ endDate: e })}
         style={{ width: w(e, "end") }}
       />
+    </span>
+  );
+}
+
+/** Per-entry ⚙ in the right margin: the home for meta fields that don't earn a
+ *  permanent spot on the sheet (location, dates, subtitle). One gear per entry,
+ *  a small popover, blur-to-save — fields render on the page once filled. */
+function EntryGear({
+  fields,
+}: {
+  fields: { label: string; value: string | null; placeholder: string; onSave: (v: string) => void }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Record<number, string>>({});
+  return (
+    <span className="entry-gear-wrap no-print">
+      <button className="entry-gear" title="More details (dates, location…)" onClick={() => setOpen((v) => !v)}>
+        ⚙
+      </button>
+      {open && (
+        <span className="gear-pop">
+          {fields.map((f, i) => (
+            <label className="gear-field" key={f.label}>
+              <span>{f.label}</span>
+              <input
+                className="f"
+                defaultValue={f.value ?? ""}
+                placeholder={f.placeholder}
+                onChange={(e) => setDraft((d) => ({ ...d, [i]: e.target.value }))}
+                onBlur={() => draft[i] !== undefined && draft[i] !== (f.value ?? "") && f.onSave(draft[i])}
+              />
+            </label>
+          ))}
+          <button className="tip-add" onClick={() => setOpen(false)}>Done</button>
+        </span>
+      )}
     </span>
   );
 }

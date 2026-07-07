@@ -14,9 +14,9 @@ type Sheet = {
     styleConfig?: Record<string, string | number> | null;
   };
   experiences: { id: string; org: string | null; title: string | null; location: string | null; startDate: string | null; endDate: string | null; bullets: Bullet[] | null }[];
-  education: { id: string; institution: string | null; degree: string | null; field: string | null; startDate: string | null; endDate: string | null }[];
+  education: { id: string; institution: string | null; degree: string | null; field: string | null; location?: string | null; startDate: string | null; endDate: string | null; details?: string | null }[];
   skills: { id: string; name: string }[];
-  projects: { id: string; name: string | null; bullets: Bullet[] | null }[];
+  projects: { id: string; name: string | null; description?: string | null; startDate?: string | null; endDate?: string | null; bullets: Bullet[] | null }[];
   certifications: { id: string; name: string | null; issuer: string | null; date: string | null }[];
 };
 
@@ -83,7 +83,11 @@ export default function ResumeSheet({ data }: { data: Sheet }) {
                 <span className="title">{ed.institution}</span>
                 {dates(ed.startDate, ed.endDate) && <span className="dates">{dates(ed.startDate, ed.endDate)}</span>}
               </div>
-              <div className="org">{[ed.degree, ed.field].filter(Boolean).join(", ")}</div>
+              <div className="row">
+                <span className="org">{[ed.degree, ed.field].filter(Boolean).join(", ")}</span>
+                {ed.location && <span className="loc">{ed.location}</span>}
+              </div>
+              {ed.details && <div className="org">{ed.details}</div>}
             </div>
           ))}
         </section>
@@ -105,7 +109,13 @@ export default function ResumeSheet({ data }: { data: Sheet }) {
           <h2>Projects</h2>
           {data.projects.map((pr) => (
             <div className="entry" key={pr.id}>
-              <span className="title">{pr.name}</span>
+              <div className="row">
+                <span className="title">{pr.name}</span>
+                {dates(pr.startDate ?? null, pr.endDate ?? null) && (
+                  <span className="dates">{dates(pr.startDate ?? null, pr.endDate ?? null)}</span>
+                )}
+              </div>
+              {pr.description && <div className="org">{pr.description}</div>}
               <div className="ro-bullets" dangerouslySetInnerHTML={{ __html: bulletsHtml(pr.bullets) }} />
             </div>
           ))}

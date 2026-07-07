@@ -77,29 +77,62 @@ export default function AdminPanel() {
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [pending, setPending] = useState(0);
   const [tab, setTab] = useState<Tab>("usage");
+  const [jobsTotal, setJobsTotal] = useState(0);
+  const [jobStatus, setJobStatus] = useState<"all" | "pending" | "vectorized">("all");
+  const [jobQ, setJobQ] = useState("");
+  const [jobPage, setJobPage] = useState(0);
+  const PAGE = 50;
+  type Stats = {
+    verticals: { vertical: string; total: number; done: number }[];
+    boards: { company: string | null; total: number; done: number }[];
+  };
+  const [stats, setStats] = useState<Stats | null>(null);
+
+  // paged on purpose — a 500-row dump once crashed the operator's browser
+  const loadJobs = useCallback(
+    async (status = jobStatus, q = jobQ, page = jobPage) => {
+      try {
+        const params = new URLSearchParams({ status, limit: String(PAGE), offset: String(page * PAGE) });
+        if (q.trim()) params.set("q", q.trim());
+        const r = await fetch(`/api/admin/jobs?${params}`, { cache: "no-store" });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error);
+        setJobs(j.jobs ?? []);
+        setJobsTotal(j.total ?? 0);
+        setPending(j.pending ?? 0);
+        setStats(j.stats ?? null);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Failed to load jobs");
+      }
+    },
+    [jobStatus, jobQ, jobPage],
+  );
 
   const load = useCallback(async () => {
     try {
-      const [rm, rj] = await Promise.all([
-        fetch("/api/admin/metrics", { cache: "no-store" }),
-        fetch("/api/admin/jobs", { cache: "no-store" }),
-      ]);
+      const rm = await fetch("/api/admin/metrics", { cache: "no-store" });
       const jm = await rm.json();
-      const jj = await rj.json();
       if (!rm.ok) throw new Error(jm.error);
       setM(jm);
-      if (rj.ok) {
-        setJobs(jj.jobs ?? []);
-        setPending(jj.pending ?? 0);
-      }
       setErr("");
+      void loadJobs();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     void load();
   }, [load]);
+  function setJobFilter(status: "all" | "pending" | "vectorized") {
+    setJobStatus(status);
+    setJobPage(0);
+    void loadJobs(status, jobQ, 0);
+  }
+  function setJobPageAndLoad(page: number) {
+    setJobPage(page);
+    void loadJobs(jobStatus, jobQ, page);
+  }
 
   // phase 1 — cheap board pull, no GPU
   async function refreshJobs() {
@@ -319,8 +352,59 @@ export default function AdminPanel() {
 
           {fetchLog && <pre className="admin-log">{fetchLog.join("\n")}</pre>}
 
+          {stats && (
+            <section className="admin-section">
+              <h2>Pipeline mix — fetch more of what&apos;s thin</h2>
+              <div className="mix-grid">
+                <div>
+                  <div className="mix-label">By vertical (title-based, all {jobsTotal || "—"} rows)</div>
+                  {stats.verticals.map((v) => {
+                    const max = Math.max(...stats.verticals.map((x) => x.total), 1);
+                    return (
+                      <div className="mix-row" key={v.vertical}>
+                        <span className="mix-name">{v.vertical}</span>
+                        <span className="mix-bar">
+                          <span className="mix-fill" style={{ width: `${(v.total / max) * 100}%` }}>
+                            <span className="mix-done" style={{ width: `${v.total ? (v.done / v.total) * 100 : 0}%` }} />
+                          </span>
+                        </span>
+                        <span className="mix-n">{v.done}/{v.total}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="admin-note">bar = postings in DB · filled part = already vectorized</div>
+                </div>
+                <div>
+                  <div className="mix-label">By board</div>
+                  {stats.boards.slice(0, 12).map((b) => (
+                    <div className="mix-row" key={b.company ?? "?"}>
+                      <span className="mix-name">{b.company ?? "—"}</span>
+                      <span className="mix-n">{b.done}/{b.total}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
           <section className="admin-section">
-            <h2>All jobs in DB ({jobs.length}{pending ? ` · ${pending} awaiting inference` : ""})</h2>
+            <div className="jobs-controls">
+              <h2 style={{ margin: 0 }}>Jobs ({jobsTotal}{pending ? ` · ${pending} pending` : ""})</h2>
+              <span className="jobs-filters">
+                {(["all", "pending", "vectorized"] as const).map((s) => (
+                  <button key={s} className={`admin-tab${jobStatus === s ? " active" : ""}`} onClick={() => setJobFilter(s)}>
+                    {s}
+                  </button>
+                ))}
+                <input
+                  className="f-box jobs-search"
+                  placeholder="search title/company…"
+                  value={jobQ}
+                  onChange={(e) => setJobQ(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (setJobPage(0), void loadJobs(jobStatus, jobQ, 0))}
+                />
+              </span>
+            </div>
             <table className="admin-table admin-jobs-table">
               <thead>
                 <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Status</th><th>Added</th><th></th></tr>
@@ -342,6 +426,11 @@ export default function AdminPanel() {
                 ))}
               </tbody>
             </table>
+            <div className="jobs-pager">
+              <button className="refine-toggle" disabled={jobPage === 0} onClick={() => setJobPageAndLoad(jobPage - 1)}>← Prev</button>
+              <span className="dash-hint">page {jobPage + 1} of {Math.max(1, Math.ceil(jobsTotal / PAGE))}</span>
+              <button className="refine-toggle" disabled={(jobPage + 1) * PAGE >= jobsTotal} onClick={() => setJobPageAndLoad(jobPage + 1)}>Next →</button>
+            </div>
           </section>
         </>
       )}

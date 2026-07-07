@@ -285,13 +285,14 @@ a { color: var(--accent); }
 .ai-compose {
   position: absolute;
   right: calc(100% + 20px);
-  width: 264px;
+  width: 280px;
   z-index: 8;
-  background: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 8px 28px rgba(37, 99, 235, 0.14);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.16);
 }
 .ai-compose-label { font-size: 12.5px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
 .ai-compose-input {
@@ -332,13 +333,14 @@ a { color: var(--accent); }
 .ai-preview {
   position: absolute;
   left: calc(100% + 20px);
-  width: 300px;
+  width: 320px;
   z-index: 8;
-  background: color-mix(in srgb, var(--accent) 6%, var(--paper));
-  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--paper));
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: 0 8px 28px rgba(37, 99, 235, 0.12);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.16);
 }
 .ai-preview-label { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
 .ai-preview ul { margin: 0 0 10px; padding-left: 18px; }
@@ -394,6 +396,18 @@ a { color: var(--accent); }
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
   /* design tokens (set as inline CSS vars from styleConfig; fallbacks here) */
   font-family: var(--r-font, inherit);
+}
+
+/* The sheet is a DOCUMENT: pin the inner design tokens to paper values so the
+   app theme (dark mode) never bleeds into the page or its edit controls —
+   chips, field hovers, borders and markers all derive from these. */
+.resume {
+  --ink: var(--sheet-ink);
+  --paper: var(--sheet);
+  --surface: #f6f7f9;
+  --line: #e5e7eb;
+  --muted: #6b7280;
+  --accent: #2563eb;
 }
 .resume .name {
   font-size: calc(30px * var(--r-name-scale, 1));
@@ -462,6 +476,41 @@ a { color: var(--accent); }
 }
 .entry:hover .ai-trigger { opacity: 0.7; }
 .ai-trigger:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 9%, var(--paper)); }
+/* per-entry ⚙ (right margin, under the ×) — the home for meta fields that
+   don't earn a permanent spot on the sheet: location, dates, subtitle */
+.entry-gear-wrap { position: absolute; top: 22px; right: -40px; z-index: 6; }
+.entry-gear {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 7px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.entry:hover .entry-gear { opacity: 0.65; }
+.entry-gear:hover { opacity: 1; background: color-mix(in srgb, var(--accent) 9%, var(--paper)); color: var(--accent); }
+.gear-pop {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 240px;
+  background: var(--sheet);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gear-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+.gear-field input { border: 1px solid #e5e7eb; border-radius: 7px; padding: 6px 8px; font-size: 13px; margin: 0; width: 100%; text-transform: none; letter-spacing: normal; }
+.gear-pop .tip-add { align-self: flex-end; }
+
 /* whole-section delete, anchored to the section header in the right margin */
 .section-x {
   position: absolute;
@@ -1169,6 +1218,23 @@ a.start-tile:hover { border-color: var(--accent); }
 /* bookmark-a-job row on the dashboard */
 .bookmark-row { display: flex; gap: 8px; align-items: center; margin: 2px 0 14px; flex-wrap: wrap; }
 .bookmark-input { flex: 1; min-width: 260px; font-size: 13px; }
+
+
+/* pipeline mix — vertical/board distribution */
+.mix-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; }
+.mix-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 700; margin-bottom: 8px; }
+.mix-row { display: grid; grid-template-columns: 150px 1fr 64px; align-items: center; gap: 10px; padding: 3px 0; font-size: 12.5px; }
+.mix-grid > div:last-child .mix-row { grid-template-columns: 1fr 64px; }
+.mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; display: block; }
+.mix-fill { display: block; height: 100%; border-radius: 999px; background: color-mix(in srgb, var(--accent) 30%, var(--paper)); position: relative; }
+.mix-done { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.mix-n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.jobs-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.jobs-filters { display: inline-flex; gap: 4px; align-items: center; }
+.jobs-search { width: 200px; font-size: 12.5px; padding: 6px 10px; }
+.jobs-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
+@media (max-width: 700px) { .mix-grid { grid-template-columns: 1fr; } }
 
 /* mentor tips in the editor's AI rail */
 .tips-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }

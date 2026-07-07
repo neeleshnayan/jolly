@@ -49,6 +49,7 @@ const educationPatch = z
     institution: z.string().nullable(),
     degree: z.string().nullable(),
     field: z.string().nullable(),
+    location: z.string().nullable(),
     startDate: z.string().nullable(),
     endDate: z.string().nullable(),
     details: z.string().nullable(),
@@ -74,6 +75,8 @@ const projectPatch = z
   .object({
     name: z.string().nullable(),
     description: z.string().nullable(),
+    startDate: z.string().nullable(),
+    endDate: z.string().nullable(),
     bullets: z.array(bullet),
   })
   .partial()
