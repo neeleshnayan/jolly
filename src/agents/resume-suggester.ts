@@ -23,16 +23,24 @@ For each, return:
 - targetRole: for a bullet, the role or project it belongs to, named exactly as it appears on their résumé (e.g. "Foodlabs" or "Krypton Fund"). For a skill, "".
 - text: for a bullet, one crisp résumé-voice line (strong past-tense verb, concrete, quantified if they gave a number). For a skill, just the skill name.
 - rationale: one short phrase on what they said that supports it.
+- evidence: a VERBATIM quote (copy the exact words) of the CANDIDATE's line from the
+  transcript that proves this. Copy-paste it, do not paraphrase. Suggestions
+  whose evidence isn't an actual quote get automatically discarded.
 
-RULES:
-- Only include things they ACTUALLY said on the call. Never invent metrics, tools, or scope.
+RULES — the only source of truth is what the CANDIDATE SAID in the transcript below:
+- The candidate's lines start with "You:". Only those lines count as revealed facts.
+  The résumé is context to know what's ALREADY listed — it is NOT a source of suggestions.
+- If you cannot copy an exact supporting quote from a "You:" line, DO NOT suggest it.
+- Never invent metrics, tools, names, or scope. Never write placeholders like
+  "[timeframe]" or "[X%]" — if a detail wasn't said, leave it out of the text entirely.
 - Skip anything already present on the résumé below.
-- Prefer 3–6 high-signal suggestions. If nothing new is worth adding, return an empty list.
+- Prefer 2–5 high-signal suggestions. If they revealed nothing new, return an empty list —
+  an empty list is a GOOD answer, not a failure.
 
 CALL TRANSCRIPT:
 ${transcript}
 
-CURRENT RÉSUMÉ:
+CURRENT RÉSUMÉ (for dedup only — NOT a source):
 ${resumeText}`;
 }
 

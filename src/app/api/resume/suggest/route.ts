@@ -22,6 +22,35 @@ function norm(s: string | null | undefined) {
   return (s ?? "").toLowerCase().trim();
 }
 
+// ---- hallucination gate ----------------------------------------------------
+// The suggester must cite a verbatim quote of the candidate's own words. Local
+// models routinely ignore "only what they said" instructions, so we verify here:
+// a suggestion survives only if its evidence actually matches the candidate's
+// lines ("You: …") in the transcript. Verbatim quotes drift a little through
+// generation, so accept either a normalized substring hit or a strong word-overlap.
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+
+function candidateText(transcript: string): string {
+  const userLines = transcript
+    .split("\n")
+    .filter((l) => /^\s*you\s*:/i.test(l))
+    .join(" ");
+  // transcripts from other formats may not prefix lines — fall back to everything
+  return squash(userLines || transcript);
+}
+
+function evidenceChecksOut(evidence: string, saidText: string): boolean {
+  const ev = squash(evidence);
+  if (ev.length < 12) return false; // too short to prove anything
+  if (saidText.includes(ev)) return true;
+  const words = ev.split(" ").filter((w) => w.length > 3);
+  if (words.length < 3) return false;
+  const hits = words.filter((w) => saidText.includes(w)).length;
+  return hits / words.length >= 0.75;
+}
+
+const hasPlaceholder = (s: string) => /\[[^\]]{1,30}\]/.test(s); // "[timeframe]", "[X%]"…
+
 /**
  * GET /api/resume/suggest?u=<userId> — mentor tips ON DEMAND from the editor's
  * AI rail: re-reads the LATEST stored mentor-call transcript and suggests
@@ -68,6 +97,17 @@ async function suggestFrom(userId: string, transcript: string) {
     const resumeText = buildProfileText(full, map.insights);
     const { output } = await runAgent(resumeSuggester, { transcript, resumeText }, { userId });
 
+    // the gate: keep only suggestions the candidate verifiably said on the call
+    const said = candidateText(transcript);
+    const verified = output.suggestions.filter(
+      (s) => evidenceChecksOut(s.evidence, said) && !hasPlaceholder(s.text),
+    );
+    if (verified.length < output.suggestions.length) {
+      console.warn(
+        `[resume/suggest] dropped ${output.suggestions.length - verified.length}/${output.suggestions.length} suggestion(s) with unverifiable evidence`,
+      );
+    }
+
     // resolve each bullet's targetRole to a concrete experience/project entry
     const targets = [
       ...full.experiences.map((e) => ({
@@ -84,7 +124,7 @@ async function suggestFrom(userId: string, transcript: string) {
       })),
     ];
 
-    const suggestions = output.suggestions.map((s) => {
+    const suggestions = verified.map((s) => {
       if (s.kind === "skill") return { ...s, entryKind: null, entryId: null, entryLabel: null };
       const t = norm(s.targetRole);
       const match =
