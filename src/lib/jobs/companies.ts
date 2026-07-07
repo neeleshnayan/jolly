@@ -37,8 +37,14 @@ export const COMPANIES: { source: Source; slug: string }[] = [
   // remote-first (the side-hustle / work-from-anywhere pool)
   { source: "greenhouse", slug: "gitlab" },
   { source: "greenhouse", slug: "remotecom" },
-  // india
+  // india (many Indian firms use Darwinbox/Naukri, not GH/Lever — the bookmark
+  // feature covers those; this is what's reachable via public JSON)
   { source: "greenhouse", slug: "phonepe" },
   { source: "greenhouse", slug: "groww" },
   { source: "greenhouse", slug: "postman" },
+  { source: "lever", slug: "meesho" },
+  { source: "greenhouse", slug: "sigmoid" },
+  // london / uk
+  { source: "greenhouse", slug: "monzo" },
+  { source: "greenhouse", slug: "gocardless" },
 ];

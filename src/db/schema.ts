@@ -394,6 +394,45 @@ export const coverLetters = pgTable("cover_letters", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// ------------------------------ Mentor Connect (people who made your move)
+// A mentor's value is the EDGES they've traversed (Goldman Ops → PM), not
+// their attribute list. v0: mentors self-declare transitions; matching is
+// deterministic edge-overlap; the founder brokers intros manually with an
+// auto-generated pre-brief. No payments, no booking — supply first.
+
+export const mentorProfiles = pgTable("mentor_profiles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .unique()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  headline: text("headline"), // "Product lead at X, ex-Goldman"
+  journey: text("journey"), // the story in their words
+  expertise: jsonb("expertise").$type<string[]>().default([]).notNull(),
+  transitions: jsonb("transitions").$type<{ from: string; to: string }[]>().default([]).notNull(),
+  languages: text("languages"),
+  timezone: text("timezone"),
+  availability: text("availability").default("occasionally").notNull(), // occasionally | part-time | open
+  feeHr: integer("fee_hr"), // ₹/hr; null = free ("founding mentor")
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const mentorIntros = pgTable("mentor_intros", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  seekerProfileId: uuid("seeker_profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  mentorProfileId: uuid("mentor_profile_id")
+    .notNull()
+    .references(() => mentorProfiles.id, { onDelete: "cascade" }),
+  status: text("status").default("requested").notNull(), // requested | brokered | completed | declined
+  prebrief: text("prebrief"), // what the mentor receives about the seeker
+  note: text("note"), // seeker's own words on what they want
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ------------------------------------ scoring_snapshots (the evolving self)
 // One row per scoring computation, never overwritten — the diagnosis report
 // can show HOW the mentor's read moved after each call ("your autonomy read

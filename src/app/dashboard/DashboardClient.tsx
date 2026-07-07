@@ -140,6 +140,10 @@ export default function DashboardClient({
           <div className="dash-card-title">Your diagnosis</div>
           <div className="dash-card-desc">The mentor&apos;s read on you, as a report</div>
         </a>
+        <a className="dash-card" href="/mentors">
+          <div className="dash-card-title">Mentor Connect</div>
+          <div className="dash-card-desc">People who&apos;ve already made your move</div>
+        </a>
       </div>
 
       <Recommendations userId={userId} />

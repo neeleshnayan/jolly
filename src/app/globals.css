@@ -2052,3 +2052,52 @@ textarea.f { line-height: 1.55; }
   .chip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   a { color: var(--ink); text-decoration: none; }
 }
+
+
+/* ---------- Mentor Connect (/mentors) ---------- */
+.mentors-wrap { max-width: 760px; margin: 0 auto; padding: 26px 22px 90px; }
+.mentors-head h1 { margin: 10px 0 6px; font-size: 32px; letter-spacing: -0.03em; }
+.mentors-edge { font-size: 14px; margin: 4px 0 8px; }
+.mentors-edge b { color: var(--accent); font-weight: 650; }
+.mentors-empty { border: 1px dashed var(--line); border-radius: 14px; padding: 18px 20px; }
+.mentors-empty p { margin: 0 0 8px; font-size: 14px; line-height: 1.6; }
+.mentor-cards { display: flex; flex-direction: column; gap: 14px; }
+.mentor-card { border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; background: var(--paper); }
+.mentor-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.mentor-headline { font-weight: 650; font-size: 15.5px; }
+.mentor-meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.mentor-fit { font-size: 18px; font-weight: 750; color: #15803d; flex: 0 0 auto; }
+.mentor-transitions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mentor-transition {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 11px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--paper));
+  background: color-mix(in srgb, var(--accent) 8%, var(--paper));
+  color: var(--accent);
+}
+.mentor-journey { font-size: 13.5px; line-height: 1.6; color: var(--ink); margin: 10px 0 0; }
+.mentor-why { margin: 10px 0 0; padding-left: 18px; }
+.mentor-why li { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.mentor-card .tip-add { margin-top: 12px; }
+.intro-ask { display: flex; gap: 8px; margin-top: 12px; align-items: flex-start; }
+.intro-ask textarea { flex: 1; }
+.prebrief-preview {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  max-height: 45vh;
+  overflow: auto;
+}
+.mentor-form { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 18px; background: var(--surface); }
+.mentor-form textarea, .mentor-form input, .mentor-form select {
+  font: inherit; font-size: 13.5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); width: 100%;
+}
+.transition-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+.transition-row span { color: var(--muted); }
