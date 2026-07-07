@@ -195,6 +195,29 @@ export default function AdminPanel() {
     setJobs((cur) => cur.filter((j) => j.id !== id));
   }
 
+  // expandable extraction view: what did the model actually pull out of the JD?
+  type JobDetail = {
+    facts: Record<string, unknown> | null;
+    vector: Record<string, { score?: number; rationale?: string }> | null;
+    jdChars: number;
+  };
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [details, setDetails] = useState<Record<string, JobDetail>>({});
+  async function toggleDetail(id: string) {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    if (!details[id]) {
+      try {
+        const r = await fetch(`/api/admin/jobs?id=${id}`, { cache: "no-store" });
+        const j = await r.json();
+        if (r.ok) setDetails((d) => ({ ...d, [id]: j }));
+      } catch {}
+    }
+  }
+
   if (err) return <div className="admin-wrap"><p className="ai-err">{err}</p></div>;
   if (!m) return <div className="admin-wrap"><p className="dash-empty">Loading metrics…</p></div>;
 
@@ -437,20 +460,73 @@ export default function AdminPanel() {
                 <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Status</th><th>Added</th><th></th></tr>
               </thead>
               <tbody>
-                {jobs.map((j) => (
-                  <tr key={j.id}>
-                    <td>{j.url ? <a href={j.url} target="_blank" rel="noopener noreferrer">{j.title}</a> : j.title}</td>
-                    <td>{j.company}</td>
-                    <td className="admin-dim">{j.location ?? "—"}</td>
-                    <td className="admin-dim">{j.remote && j.remote !== "unknown" ? j.remote : "—"}</td>
-                    <td className="admin-dim">{fmtComp(j.compMin, j.compMax)}</td>
-                    <td className="admin-dim">{j.domain ?? "—"}{j.companyStage && j.companyStage !== "unknown" ? ` · ${j.companyStage}` : ""}</td>
-                    <td className="admin-dim">{j.source}</td>
-                    <td>{j.vectorizedAt ? "✓" : <span className="admin-pending">pending</span>}</td>
-                    <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
-                    <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
-                  </tr>
-                ))}
+                {jobs.map((j) => {
+                  const d = details[j.id];
+                  const facts = (d?.facts ?? {}) as {
+                    summary?: string;
+                    core_requirements?: string[];
+                    must_have_skills?: string[];
+                  };
+                  return [
+                    <tr key={j.id} className={expandedId === j.id ? "row-open" : undefined}>
+                      <td>
+                        {j.vectorizedAt && (
+                          <button className="row-expand" onClick={() => void toggleDetail(j.id)} title="What the model extracted">
+                            {expandedId === j.id ? "▾" : "▸"}
+                          </button>
+                        )}
+                        {j.url ? <a href={j.url} target="_blank" rel="noopener noreferrer">{j.title}</a> : j.title}
+                      </td>
+                      <td>{j.company}</td>
+                      <td className="admin-dim">{j.location ?? "—"}</td>
+                      <td className="admin-dim">{j.remote && j.remote !== "unknown" ? j.remote : "—"}</td>
+                      <td className="admin-dim">{fmtComp(j.compMin, j.compMax)}</td>
+                      <td className="admin-dim">{j.domain ?? "—"}{j.companyStage && j.companyStage !== "unknown" ? ` · ${j.companyStage}` : ""}</td>
+                      <td className="admin-dim">{j.source}</td>
+                      <td>{j.vectorizedAt ? "✓" : <span className="admin-pending">pending</span>}</td>
+                      <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
+                      <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
+                    </tr>,
+                    expandedId === j.id ? (
+                      <tr key={`${j.id}-detail`} className="detail-row">
+                        <td colSpan={10}>
+                          {!d ? (
+                            <span className="admin-dim">Loading extraction…</span>
+                          ) : (
+                            <div className="job-detail">
+                              {facts.summary && <p className="job-detail-summary">{facts.summary}</p>}
+                              {(facts.core_requirements?.length ?? 0) > 0 && (
+                                <div className="job-detail-block">
+                                  <span className="job-detail-label">Core requirements</span>
+                                  <ul>{facts.core_requirements!.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                                </div>
+                              )}
+                              {(facts.must_have_skills?.length ?? 0) > 0 && (
+                                <div className="job-detail-block">
+                                  <span className="job-detail-label">Skills</span>
+                                  <span className="admin-dim"> {facts.must_have_skills!.join(" · ")}</span>
+                                </div>
+                              )}
+                              {d.vector && (
+                                <div className="job-detail-block">
+                                  <span className="job-detail-label">Vector ({d.jdChars.toLocaleString()} JD chars)</span>
+                                  <div className="vec-grid">
+                                    {Object.entries(d.vector).map(([k, v]) => (
+                                      <span className="vec-chip" key={k} title={v?.rationale ?? ""}>
+                                        {k.replace(/^(req|off)_/, "").replace(/_/g, " ")} <b>{(v?.score ?? 0).toFixed(1)}</b>
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="admin-note">hover a chip for the model&apos;s rationale</div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ) : null,
+                  ];
+                })}
               </tbody>
             </table>
             <div className="jobs-pager">

@@ -39,6 +39,15 @@ export async function GET(req: NextRequest) {
   if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
 
   const p = req.nextUrl.searchParams;
+
+  // detail mode: everything the model extracted for one job
+  const detailId = p.get("id");
+  if (detailId) {
+    const [row] = await db.select().from(opportunities).where(eq(opportunities.id, detailId)).limit(1);
+    if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, facts: row.facts, vector: row.vector, jdChars: (row.rawText ?? "").length });
+  }
+
   const status = p.get("status") ?? "all";
   const q = (p.get("q") ?? "").trim();
   const limit = Math.min(100, Math.max(10, Number(p.get("limit") ?? 50)));
@@ -70,7 +79,10 @@ export async function GET(req: NextRequest) {
     })
     .from(opportunities)
     .where(where)
-    .orderBy(desc(opportunities.createdAt))
+    // the vectorized tab answers "what did the model just process?" — order by
+    // WHEN IT WAS VECTORIZED, not when it was fetched (freshly processed old
+    // fetches were hiding at the bottom)
+    .orderBy(status === "vectorized" ? desc(opportunities.vectorizedAt) : desc(opportunities.createdAt))
     .limit(limit)
     .offset(offset);
 

@@ -1220,6 +1220,18 @@ a.start-tile:hover { border-color: var(--accent); }
 .bookmark-input { flex: 1; min-width: 260px; font-size: 13px; }
 
 
+/* expandable extraction detail in the jobs table */
+.row-expand { border: none; background: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0 6px 0 0; }
+.detail-row td { background: var(--surface); padding: 12px 16px 14px 28px !important; }
+.job-detail-summary { margin: 0 0 8px; font-size: 13px; line-height: 1.55; color: var(--ink); max-width: 720px; }
+.job-detail-block { margin-top: 6px; font-size: 12.5px; }
+.job-detail-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 700; }
+.job-detail-block ul { margin: 4px 0 0; padding-left: 18px; }
+.job-detail-block li { line-height: 1.55; }
+.vec-grid { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.vec-chip { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); cursor: default; }
+.vec-chip b { color: var(--ink); }
+
 /* live inference progress */
 .infer-progress { margin-top: 12px; }
 .infer-progress-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
