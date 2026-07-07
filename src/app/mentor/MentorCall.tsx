@@ -61,7 +61,8 @@ export default function MentorCall({ userId }: { userId: string }) {
   // while it speaks (the mic analyser reacts to the user's voice otherwise)
   const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
   const voiceDataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
-  const voiceSrcRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const voiceSrcRef = useRef<AudioNode | null>(null);
+  const lastAudioErrRef = useRef<string>(""); // surfaced in the debug panel
   const orbRef = useRef<HTMLDivElement | null>(null); // drive --orb-level without re-rendering
   const vadTimerRef = useRef<number | null>(null);
   // adaptive thresholds — calibrated to the room's noise floor at call start
@@ -108,6 +109,32 @@ export default function MentorCall({ userId }: { userId: string }) {
   const [brain, setBrain] = useState<"ollama" | "anthropic">("ollama");
   const brainRef = useRef(brain);
   brainRef.current = brain;
+  // debug panel: live health of every voice-stack component (dev-only UI)
+  type Health = {
+    config: { liveModel: string; mentorProvider: string };
+    voicebox: { up?: boolean; modelLoaded?: boolean; gpu?: string; vramMb?: number; error?: string };
+    ollama: { up?: boolean; liveModelPulled?: boolean; models?: number; error?: string };
+    generation: { ok?: boolean; latencyMs?: number; reply?: string; error?: string };
+    checkedAt: string;
+  };
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [healthBusy, setHealthBusy] = useState(false);
+  async function checkHealth() {
+    setHealthBusy(true);
+    try {
+      const r = await fetch("/api/voice/health", { cache: "no-store" });
+      setHealth(await r.json());
+    } catch {
+      setHealth(null);
+    } finally {
+      setHealthBusy(false);
+    }
+  }
+  function testSpeaker() {
+    lastAudioErrRef.current = "";
+    playText("Testing, one two three. If you can hear this, the speaker path works end to end.");
+  }
 
   function enter(p: Phase) {
     setPhase(p);
@@ -207,28 +234,35 @@ export default function MentorCall({ userId }: { userId: string }) {
     }
     const audio = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}`);
     audioRef.current = audio;
-    // tap the mentor's voice for the reactive orb (route through the context so we
-    // can read its amplitude); falls back to plain playback if the graph refuses.
-    const ctx = ctxRef.current;
-    if (ctx) {
-      try {
-        void ctx.resume();
-        voiceSrcRef.current?.disconnect();
-        const src = ctx.createMediaElementSource(audio);
-        if (!voiceAnalyserRef.current) {
-          const va = ctx.createAnalyser();
-          va.fftSize = 512;
-          va.smoothingTimeConstant = 0.6;
-          voiceAnalyserRef.current = va;
-          voiceDataRef.current = new Float32Array(va.fftSize);
-          va.connect(ctx.destination);
+    // Tap the mentor's voice for the reactive orb via captureStream(): a COPY of
+    // the audio, so playback stays on the element's own output path. (The old
+    // createMediaElementSource approach REROUTED playback through the AudioContext
+    // — any graph hiccup meant total silence with no error. Never again.)
+    audio.addEventListener(
+      "playing",
+      () => {
+        const ctx = ctxRef.current;
+        const cap = (audio as HTMLAudioElement & { captureStream?: () => MediaStream }).captureStream?.();
+        if (!ctx || !cap || cap.getAudioTracks().length === 0) return;
+        try {
+          voiceSrcRef.current?.disconnect();
+          const src = ctx.createMediaStreamSource(cap);
+          if (!voiceAnalyserRef.current) {
+            const va = ctx.createAnalyser();
+            va.fftSize = 512;
+            va.smoothingTimeConstant = 0.6;
+            voiceAnalyserRef.current = va;
+            voiceDataRef.current = new Float32Array(va.fftSize);
+            // analysis only — NEVER connected to ctx.destination
+          }
+          src.connect(voiceAnalyserRef.current);
+          voiceSrcRef.current = src;
+        } catch {
+          /* no orb reactivity this turn — audio is unaffected */
         }
-        src.connect(voiceAnalyserRef.current);
-        voiceSrcRef.current = src;
-      } catch {
-        /* couldn't tap — audio still plays through the element itself */
-      }
-    }
+      },
+      { once: true },
+    );
     setSpokenText(text);
     setRevealFrac(0);
     enter("speaking");
@@ -251,8 +285,14 @@ export default function MentorCall({ userId }: { userId: string }) {
       }
     };
     audio.onended = done;
-    audio.onerror = done;
-    void audio.play().catch(done);
+    audio.onerror = () => {
+      lastAudioErrRef.current = `audio element error (code ${audio.error?.code ?? "?"}: ${audio.error?.message || "unknown"}) at ${new Date().toLocaleTimeString()}`;
+      done();
+    };
+    void audio.play().catch((e) => {
+      lastAudioErrRef.current = `play() rejected: ${e instanceof Error ? e.message : String(e)} at ${new Date().toLocaleTimeString()}`;
+      done();
+    });
   }
 
   // ---- signal helpers ----
@@ -715,13 +755,25 @@ export default function MentorCall({ userId }: { userId: string }) {
         <span className="brand">drizzle</span>
         <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
           {process.env.NODE_ENV !== "production" && (
-            <button
-              className={`brain-toggle${brain === "anthropic" ? " cloud" : ""}`}
-              onClick={() => setBrain((b) => (b === "ollama" ? "anthropic" : "ollama"))}
-              title="Debug: which model answers the next turn (local Ollama vs Anthropic)"
-            >
-              {brain === "anthropic" ? "🧠 Claude" : "🏠 Local"}
-            </button>
+            <>
+              <button
+                className="brain-toggle"
+                onClick={() => {
+                  setDebugOpen((v) => !v);
+                  if (!health) void checkHealth();
+                }}
+                title="Debug: health of voicebox + Ollama + the client audio path"
+              >
+                🔧
+              </button>
+              <button
+                className={`brain-toggle${brain === "anthropic" ? " cloud" : ""}`}
+                onClick={() => setBrain((b) => (b === "ollama" ? "anthropic" : "ollama"))}
+                title="Debug: which model answers the next turn (local Ollama vs Anthropic)"
+              >
+                {brain === "anthropic" ? "🧠 Claude" : "🏠 Local"}
+              </button>
+            </>
           )}
           {live ? (
             <button className="hangup" onClick={endSession}>
@@ -733,6 +785,41 @@ export default function MentorCall({ userId }: { userId: string }) {
           <UserChip />
         </span>
       </div>
+
+      {debugOpen && process.env.NODE_ENV !== "production" && (
+        <div className="debug-panel">
+          <div className="debug-panel-head">
+            <span>Voice stack health</span>
+            <span className="debug-panel-actions">
+              <button className="tip-add" onClick={() => void checkHealth()} disabled={healthBusy}>
+                {healthBusy ? "Checking…" : "↻ Re-check"}
+              </button>
+              <button className="tip-add" onClick={testSpeaker}>🔊 Test speaker</button>
+            </span>
+          </div>
+          {!health ? (
+            <div className="debug-line">{healthBusy ? "Probing voicebox + Ollama…" : "No data — hit Re-check."}</div>
+          ) : (
+            <>
+              <div className={`debug-line ${health.voicebox.up ? "ok" : "bad"}`}>
+                {health.voicebox.up ? "●" : "○"} voicebox (STT+TTS): {health.voicebox.error ?? `healthy · ${health.voicebox.gpu} · ${health.voicebox.vramMb}MB VRAM`}
+              </div>
+              <div className={`debug-line ${health.ollama.up && health.ollama.liveModelPulled ? "ok" : "bad"}`}>
+                {health.ollama.up ? "●" : "○"} ollama: {health.ollama.error ?? `up · ${health.ollama.models} models · ${health.config.liveModel} ${health.ollama.liveModelPulled ? "pulled" : "MISSING"}`}
+              </div>
+              <div className={`debug-line ${health.generation.ok ? "ok" : "bad"}`}>
+                {health.generation.ok ? "●" : "○"} live turn ({health.config.liveModel}):{" "}
+                {health.generation.error ?? `${health.generation.latencyMs}ms → “${health.generation.reply}”`}
+                {(health.generation.latencyMs ?? 0) > 5000 && !health.generation.error && " — SLOW: model may be cold or thinking"}
+              </div>
+              <div className="debug-line">
+                mentor brain: {brain === "anthropic" ? "anthropic (toggle)" : health.config.mentorProvider} · client audio:{" "}
+                {lastAudioErrRef.current || "no errors this session"}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {!live && !review && (
         <div className="call-hero">
