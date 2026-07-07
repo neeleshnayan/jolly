@@ -110,7 +110,7 @@ export const ollamaProvider: LLMProvider = {
       model: req.model ?? MODEL,
       stream: false,
       keep_alive: req.keepAlive ?? EXTRACT_KEEP_ALIVE, // default: free VRAM after this call
-      ...(THINK === undefined ? {} : { think: THINK }),
+      ...(req.think !== undefined ? { think: req.think } : THINK === undefined ? {} : { think: THINK }),
       format: req.jsonSchema, // structured outputs: constrain to the schema
       options: ollamaOptions({
         temperature: 0,

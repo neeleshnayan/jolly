@@ -22,6 +22,10 @@ export interface StructuredRequest {
   keepAlive?: string | number;
   /** override which model runs this call (e.g. a faster one for interactive edits) */
   model?: string;
+  /** force thinking on/off for models that support it (Ollama). Interactive
+   *  extractions on think-capable models (gemma4/qwen3) want false — hidden
+   *  reasoning turns a sub-second call into a 15s stall. */
+  think?: boolean;
 }
 
 export interface StructuredResponse {

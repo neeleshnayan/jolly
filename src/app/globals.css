@@ -1177,6 +1177,31 @@ a.start-tile:hover { border-color: var(--accent); }
 .preset-chip.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .preset-dot { width: 10px; height: 10px; border-radius: 999px; flex: 0 0 auto; }
 
+/* ATS keyword check */
+.ats-result { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px; }
+.ats-score-row { display: flex; align-items: baseline; gap: 8px; }
+.ats-score { font-size: 22px; font-weight: 750; }
+.ats-score.good { color: #15803d; }
+.ats-score.mid { color: #b45309; }
+.ats-score.low { color: #b91c1c; }
+.ats-score-label { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.ats-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.ats-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.ats-chip.hit { color: #15803d; background: color-mix(in srgb, #16a34a 10%, var(--paper)); border-color: color-mix(in srgb, #16a34a 30%, var(--paper)); }
+.ats-chip.miss { color: #b91c1c; background: color-mix(in srgb, #dc2626 8%, var(--paper)); border-color: color-mix(in srgb, #dc2626 25%, var(--paper)); }
+.ats-chip.pref { opacity: 0.75; }
+.ats-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+/* bookmark-a-job row on the dashboard */
+.bookmark-row { display: flex; gap: 8px; align-items: center; margin: 2px 0 14px; flex-wrap: wrap; }
+.bookmark-input { flex: 1; min-width: 260px; font-size: 13px; }
+
 /* mentor tips in the editor's AI rail */
 .tips-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .tip { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--surface); }

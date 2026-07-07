@@ -153,10 +153,17 @@ export async function runInference(opts?: {
     for (const row of batch) {
       try {
         const { output } = await runAgent(opportunityVectorizer, { jd: row.rawText ?? "" }, { userId: "worker" });
-        // the board's own fields are authoritative for title/company/location
-        output.facts.title = row.title || output.facts.title;
-        output.facts.company = row.company || output.facts.company;
-        output.facts.location = row.location ?? output.facts.location;
+        // Board rows: the ATS's own fields are authoritative. Bookmarked rows
+        // (source "other") only have placeholder title/hostname-company — there
+        // the model's extraction from the JD is the better source.
+        if (row.source !== "other") {
+          output.facts.title = row.title || output.facts.title;
+          output.facts.company = row.company || output.facts.company;
+          output.facts.location = row.location ?? output.facts.location;
+        } else {
+          output.facts.title = output.facts.title || row.title || "";
+          output.facts.company = output.facts.company || row.company || "";
+        }
         await db
           .update(opportunities)
           .set({
@@ -168,6 +175,10 @@ export async function runInference(opts?: {
             companyStage: output.facts.company_stage,
             domain: output.facts.domain || null,
             vectorizedAt: sql`now()`,
+            // bookmarks upgrade their placeholder title/company to the extraction
+            ...(row.source === "other"
+              ? { title: output.facts.title || row.title, company: output.facts.company || row.company }
+              : {}),
           })
           .where(eq(opportunities.id, row.id));
         vectorized++;

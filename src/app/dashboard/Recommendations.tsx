@@ -88,6 +88,32 @@ export default function Recommendations({ userId }: { userId: string }) {
     }
   }
 
+  // bookmark any job from the wild: paste a URL → saved into the pipeline,
+  // vectorized by the next inference batch, ranked like any fetched role
+  const [bookmarkUrl, setBookmarkUrl] = useState("");
+  const [bookmarkMsg, setBookmarkMsg] = useState("");
+  const [bookmarking, setBookmarking] = useState(false);
+  async function bookmark() {
+    if (!bookmarkUrl.trim()) return;
+    setBookmarking(true);
+    setBookmarkMsg("");
+    try {
+      const r = await fetch("/api/opportunities/bookmark", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, url: bookmarkUrl.trim() }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Couldn't save");
+      setBookmarkMsg(j.already ? "Already saved ✓" : `Saved “${j.title}” ✓ — it'll be analyzed & ranked shortly`);
+      setBookmarkUrl("");
+    } catch (e) {
+      setBookmarkMsg(e instanceof Error ? e.message : "Couldn't save");
+    } finally {
+      setBookmarking(false);
+    }
+  }
+
   // application tracking: clicking "View & apply" opens the posting AND asks
   // for a one-tap confirm — honest data (no phantom applications from bounces),
   // zero forms. Confirmed rows feed the outcome funnel on this same dashboard.
@@ -147,6 +173,19 @@ export default function Recommendations({ userId }: { userId: string }) {
         </button>
       </div>
       {showRefine && <RefinePanel prefs={prefs} saving={savingPrefs} onSave={savePrefs} />}
+      <div className="bookmark-row">
+        <input
+          className="f-box bookmark-input"
+          value={bookmarkUrl}
+          placeholder="Found a job elsewhere? Paste its URL to rank it against you…"
+          onChange={(e) => setBookmarkUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void bookmark()}
+        />
+        <button className="refine-toggle" onClick={() => void bookmark()} disabled={bookmarking || !bookmarkUrl.trim()}>
+          {bookmarking ? "Saving…" : "+ Save job"}
+        </button>
+        {bookmarkMsg && <span className="dash-hint">{bookmarkMsg}</span>}
+      </div>
       <div className="rec-list">
         {top.map((j) => (
           <div className="rec-card" key={j.id}>

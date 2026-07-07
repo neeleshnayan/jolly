@@ -214,6 +214,28 @@ export default function ResumeEditor({
   const [letter, setLetter] = useState<{ text: string; hooks: string[] } | null>(null);
   const [letterBusy, setLetterBusy] = useState(false);
   const [letterErr, setLetterErr] = useState("");
+  // ATS keyword screen: JD keywords vs the résumé, matched deterministically
+  type AtsResult = { score: number; required: { term: string; hit: boolean }[]; preferred: { term: string; hit: boolean }[] };
+  const [ats, setAts] = useState<AtsResult | null>(null);
+  const [atsBusy, setAtsBusy] = useState(false);
+  async function checkAts() {
+    setAtsBusy(true);
+    setLetterErr("");
+    try {
+      const r = await fetch("/api/resume/ats-check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, jd }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Check failed");
+      setAts(j);
+    } catch (e) {
+      setLetterErr(e instanceof Error ? e.message : "Check failed");
+    } finally {
+      setAtsBusy(false);
+    }
+  }
   async function generateLetter() {
     setLetterBusy(true);
     setLetterErr("");
@@ -1298,8 +1320,41 @@ export default function ResumeEditor({
                       >
                         {redesigning ? "Tailoring…" : "📄 Tailor résumé"}
                       </button>
+                      <button
+                        className="tip-add"
+                        onClick={() => void checkAts()}
+                        disabled={atsBusy || !jd.trim()}
+                        title={jd.trim() ? "Which of this job's keywords does your résumé already pass?" : "Paste a JD first"}
+                      >
+                        {atsBusy ? "Checking…" : "🛡 ATS check"}
+                      </button>
                     </div>
                     {letterErr && <div className="ai-err">{letterErr}</div>}
+                    {ats && (
+                      <div className="ats-result">
+                        <div className="ats-score-row">
+                          <span className={`ats-score ${ats.score >= 70 ? "good" : ats.score >= 45 ? "mid" : "low"}`}>{ats.score}%</span>
+                          <span className="ats-score-label">keyword match — what a screen sees, not what you&apos;re worth</span>
+                        </div>
+                        <div className="ats-chips">
+                          {ats.required.map((k, i) => (
+                            <span key={`r${i}`} className={`ats-chip ${k.hit ? "hit" : "miss"}`} title={k.hit ? "on your résumé" : "missing — add it if it's true"}>
+                              {k.hit ? "✓" : "✗"} {k.term}
+                            </span>
+                          ))}
+                          {ats.preferred.map((k, i) => (
+                            <span key={`p${i}`} className={`ats-chip pref ${k.hit ? "hit" : "miss"}`} title="nice-to-have">
+                              {k.hit ? "✓" : "○"} {k.term}
+                            </span>
+                          ))}
+                        </div>
+                        {ats.required.some((k) => !k.hit) && (
+                          <div className="ats-note">
+                            Missing something you actually have? Add it to your résumé (or ask the mentor tips) — never claim what isn&apos;t true.
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
   
