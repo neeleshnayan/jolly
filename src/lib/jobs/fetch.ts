@@ -169,11 +169,18 @@ export async function runInference(opts?: {
     opts?.log?.(s);
   };
 
+  // Round-robin across companies instead of oldest-first: oldest-first spent
+  // whole runs on one board's batch, so every user's top matches were from a
+  // single company until it drained. Interleaving diversifies the ranked pool
+  // with every run.
   const pending = await db
     .select()
     .from(opportunities)
     .where(isNull(opportunities.vectorizedAt))
-    .orderBy(asc(opportunities.createdAt))
+    .orderBy(
+      sql`row_number() over (partition by ${opportunities.company} order by ${opportunities.createdAt} asc)`,
+      asc(opportunities.createdAt),
+    )
     .limit(limit);
 
   if (!pending.length) {

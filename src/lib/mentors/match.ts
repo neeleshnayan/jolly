@@ -58,6 +58,8 @@ export async function deriveSeekerEdge(userId: string): Promise<SeekerEdge | nul
 
 export type MentorMatch = {
   id: string;
+  name: string | null;
+  avatarUrl: string | null;
   headline: string | null;
   journey: string | null;
   expertise: string[];
@@ -74,9 +76,15 @@ export type MentorMatch = {
 export async function matchMentors(userId: string, edge: SeekerEdge): Promise<MentorMatch[]> {
   const [me] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   const rows = await db
-    .select()
+    .select({
+      m: mentorProfiles,
+      name: profiles.fullName,
+      avatarUrl: profiles.avatarUrl,
+    })
     .from(mentorProfiles)
-    .where(me ? and(eq(mentorProfiles.active, true), ne(mentorProfiles.profileId, me.id)) : eq(mentorProfiles.active, true));
+    .innerJoin(profiles, eq(profiles.id, mentorProfiles.profileId))
+    .where(me ? and(eq(mentorProfiles.active, true), ne(mentorProfiles.profileId, me.id)) : eq(mentorProfiles.active, true))
+    .then((rs) => rs.map((r) => ({ ...r.m, name: r.name, avatarUrl: r.avatarUrl })));
 
   const fromW = words(edge.from);
   const toW = [...words(edge.to), ...edge.targetWords];
@@ -100,6 +108,8 @@ export async function matchMentors(userId: string, edge: SeekerEdge): Promise<Me
       const score = Math.min(1, best * 0.75 + exp * 0.2 + avail);
       return {
         id: m.id,
+        name: m.name,
+        avatarUrl: m.avatarUrl,
         headline: m.headline,
         journey: m.journey,
         expertise: m.expertise ?? [],

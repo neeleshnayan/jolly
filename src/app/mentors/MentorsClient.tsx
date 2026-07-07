@@ -18,6 +18,8 @@ type MentorMe = {
 } | null;
 type Match = {
   id: string;
+  name: string | null;
+  avatarUrl: string | null;
   headline: string | null;
   journey: string | null;
   expertise: string[];
@@ -28,6 +30,7 @@ type Match = {
   why: string[];
 };
 type Edge = { from: string; to: string } | null;
+type Suggested = { headline: string; journey: string; expertise: string[]; transitions: Transition[]; timezone: string } | null;
 
 const AVAIL_LABEL: Record<string, string> = { occasionally: "Occasionally", "part-time": "Part-time", open: "Open to many sessions" };
 
@@ -36,6 +39,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [edge, setEdge] = useState<Edge>(null);
   const [prebrief, setPrebrief] = useState("");
+  const [suggested, setSuggested] = useState<Suggested>(null);
   const [loaded, setLoaded] = useState(false);
   const [showPrebrief, setShowPrebrief] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -49,6 +53,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
         setMatches(j.matches ?? []);
         setEdge(j.edge);
         setPrebrief(j.prebriefPreview ?? "");
+        setSuggested(j.suggested ?? null);
       }
     } finally {
       setLoaded(true);
@@ -118,8 +123,15 @@ export default function MentorsClient({ userId }: { userId: string }) {
             {matches.map((m) => (
               <div className="mentor-card" key={m.id}>
                 <div className="mentor-card-head">
-                  <div>
-                    <div className="mentor-headline">{m.headline ?? "Mentor"}</div>
+                  {m.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="mentor-avatar" src={m.avatarUrl} alt="" />
+                  ) : (
+                    <span className="mentor-avatar mentor-avatar-fallback">{(m.name ?? "?").slice(0, 1)}</span>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="mentor-name">{m.name ?? "Mentor"}</div>
+                    <div className="mentor-headline">{m.headline ?? ""}</div>
                     <div className="mentor-meta">
                       {AVAIL_LABEL[m.availability] ?? m.availability} · {m.feeHr ? `₹${m.feeHr.toLocaleString()}/hr` : "Free (founding mentor)"}
                     </div>
@@ -180,13 +192,30 @@ export default function MentorsClient({ userId }: { userId: string }) {
         {!showForm && !me && (
           <button className="btn-primary" onClick={() => setShowForm(true)}>I&apos;d like to mentor →</button>
         )}
-        {(showForm || me) && <MentorForm userId={userId} initial={me} onSaved={load} />}
+        {(showForm || me) && (
+          <MentorForm
+            userId={userId}
+            initial={
+              me ??
+              (suggested
+                ? { headline: suggested.headline, journey: suggested.journey, expertise: suggested.expertise, transitions: suggested.transitions, languages: null, timezone: suggested.timezone || null, availability: "occasionally", feeHr: null, active: true }
+                : null)
+            }
+            exists={!!me}
+            onSaved={load}
+          />
+        )}
+        {showForm && !me && suggested && (
+          <p className="dash-hint" style={{ marginTop: 8 }}>
+            Pre-filled from your résumé and calls — edit anything, then join.
+          </p>
+        )}
       </section>
     </main>
   );
 }
 
-function MentorForm({ userId, initial, onSaved }: { userId: string; initial: MentorMe; onSaved: () => Promise<void> }) {
+function MentorForm({ userId, initial, exists, onSaved }: { userId: string; initial: MentorMe; exists: boolean; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(initial?.headline ?? "");
   const [journey, setJourney] = useState(initial?.journey ?? "");
   const [expertise, setExpertise] = useState((initial?.expertise ?? []).join(", "));
@@ -285,7 +314,7 @@ function MentorForm({ userId, initial, onSaved }: { userId: string; initial: Men
         <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {msg && <span className="dash-hint">{msg}</span>}
           <button className="btn-primary" onClick={() => void save()} disabled={saving}>
-            {saving ? "Saving…" : initial ? "Update profile" : "Join as a mentor"}
+            {saving ? "Saving…" : exists ? "Update profile" : "Join as a mentor"}
           </button>
         </span>
       </div>
