@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
         url: url.href,
         title,
         company,
+        visibility: "private", // your find, your rankings — not everyone's
         rawText: text,
         vector: {},
         facts: {},

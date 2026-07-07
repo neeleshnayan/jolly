@@ -242,21 +242,8 @@ export const mentorProbes = pgTable("mentor_probes", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// ------------------------------------- Layer 4 · resume_variants (projection)
-// Aspiration-aligned variants generated from the profile. Stubbed now; the
-// alignment engine fills it once the mentor produces aspirations.
-
-export const resumeVariants = pgTable("resume_variants", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  profileId: uuid("profile_id")
-    .notNull()
-    .references(() => profiles.id, { onDelete: "cascade" }),
-  label: text("label"),
-  aspirationInsightId: uuid("aspiration_insight_id").references(() => insights.id),
-  templateKey: text("template_key").default("default"),
-  content: jsonb("content").$type<Record<string, unknown>>().default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+// (resume_variants — the original Layer 4 stub — was dropped 2026-07-08:
+//  themes → versions took its role and the table never gained a reader.)
 
 // ---------------------------------------- résumé versioning (themes → versions)
 // A THEME is a strategic angle on the same person ("Quant", "Founder", "PM",
@@ -352,6 +339,9 @@ export const opportunities = pgTable(
     companyStage: text("company_stage"), // startup | growth | enterprise | unknown
     domain: text("domain"),
     rawText: text("raw_text"), // the JD
+    // 'global' = everyone's rankings; 'private' = only the profile that added it
+    // (personal bookmarks must not leak into other users' recommendations)
+    visibility: text("visibility").default("global").notNull(),
     vector: jsonb("vector").$type<Record<string, unknown>>().default({}),
     facts: jsonb("facts").$type<Record<string, unknown>>().default({}),
     // null = fetched from a board but not yet vectorized (inference pending).
@@ -368,6 +358,20 @@ export const opportunities = pgTable(
     externalIdUniq: uniqueIndex("opportunities_external_id_uniq").on(t.externalId),
   }),
 );
+
+// ------------------------------------ scoring_snapshots (the evolving self)
+// One row per scoring computation, never overwritten — the diagnosis report
+// can show HOW the mentor's read moved after each call ("your autonomy read
+// went 0.6 → 0.8 today"). profiles.scoring stays the hot cache; this is history.
+
+export const scoringSnapshots = pgTable("scoring_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  vector: jsonb("vector").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 // ------------------------------------------- agent_runs (observability layer)
 // One row per agent invocation: what ran, on whom, how much it cost, how long,

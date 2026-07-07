@@ -5,7 +5,7 @@
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { profiles } from "@/db/schema";
+import { profiles, scoringSnapshots } from "@/db/schema";
 import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
 import { buildProfileText } from "@/lib/scoring/profileText";
@@ -20,6 +20,13 @@ export async function computeAndSaveScoring(userId: string): Promise<Record<stri
   const { output } = await runAgent(profileScorer, { profileText }, { userId });
   const scoring = output as Record<string, unknown>;
   await db.update(profiles).set({ scoring, scoringAt: new Date() }).where(eq(profiles.userId, userId));
+  // history, never overwritten — powers "how the mentor's read of you evolved"
+  try {
+    const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+    if (p) await db.insert(scoringSnapshots).values({ profileId: p.id, vector: scoring });
+  } catch {
+    /* history is best-effort; the hot cache above is what matters */
+  }
   return scoring;
 }
 

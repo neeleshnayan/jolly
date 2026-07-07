@@ -3,9 +3,9 @@
  * and pick a 3-role "spectrum" to prime the mentor before a call. Uses the
  * CACHED scoring vector (recomputed only when missing) so this is cheap.
  */
-import { desc, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { opportunities } from "@/db/schema";
+import { opportunities, profiles } from "@/db/schema";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { scoreMatch } from "./match";
@@ -104,13 +104,18 @@ function locationRefine(pref: Preferences, remote: string | null, location: stri
 export async function rankMatches(userId: string): Promise<RankedJob[]> {
   const vec = await userVector(userId);
   if (!vec) return [];
+  // visibility: global roles for everyone + THIS user's private bookmarks
+  const [me] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const visible = me
+    ? or(eq(opportunities.visibility, "global"), eq(opportunities.addedByProfileId, me.id))
+    : eq(opportunities.visibility, "global");
   const [allRoles, pref] = await Promise.all([
     // only vectorized roles — a pending row's empty vector would fake 0.5 on
     // every axis and rank as a meaningless mid-pack match
     db
       .select()
       .from(opportunities)
-      .where(isNotNull(opportunities.vectorizedAt))
+      .where(and(isNotNull(opportunities.vectorizedAt), visible))
       .orderBy(desc(opportunities.createdAt))
       .limit(100),
     getPreferences(userId),
