@@ -45,12 +45,21 @@ export const coverLetterWriter: Agent<{ profileText: string; jd?: string }, Cove
   name: "cover-letter-writer",
   async run(input) {
     const provider = getProvider("cover_letter");
-    const res = await provider.extractStructured({
-      schemaName: "cover_letter",
-      jsonSchema: jsonSchema(),
-      prompt: prompt(input.profileText, input.jd),
-      maxTokens: 900,
-    });
-    return { output: coverLetterResult.parse(res.data), usage: res.usage };
+    // local models occasionally emit truncated JSON — one retry clears most flakes
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await provider.extractStructured({
+          schemaName: "cover_letter",
+          jsonSchema: jsonSchema(),
+          prompt: prompt(input.profileText, input.jd),
+          maxTokens: 900,
+        });
+        return { output: coverLetterResult.parse(res.data), usage: res.usage };
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr;
   },
 };

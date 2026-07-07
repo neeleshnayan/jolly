@@ -14,6 +14,9 @@ export async function POST(req: Request) {
       company: typeof body.company === "string" ? body.company : undefined,
       role: typeof body.role === "string" ? body.role : undefined,
       resumeVersionId: typeof body.resumeVersionId === "string" ? body.resumeVersionId : undefined,
+      // links the application to the recommended role — this is the seam the
+      // outcome funnel (and later, the "who else interviewed here" graph) hangs off
+      opportunityId: typeof body.opportunityId === "string" ? body.opportunityId : undefined,
     });
     return NextResponse.json({ ok: true, application: app });
   } catch (err) {

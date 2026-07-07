@@ -88,6 +88,27 @@ export default function Recommendations({ userId }: { userId: string }) {
     }
   }
 
+  // application tracking: clicking "View & apply" opens the posting AND asks
+  // for a one-tap confirm — honest data (no phantom applications from bounces),
+  // zero forms. Confirmed rows feed the outcome funnel on this same dashboard.
+  const [confirming, setConfirming] = useState<Record<string, "ask" | "saving" | "done">>({});
+  function onApplyClick(id: string) {
+    setConfirming((c) => (c[id] ? c : { ...c, [id]: "ask" }));
+  }
+  async function confirmApplied(j: Job) {
+    setConfirming((c) => ({ ...c, [j.id]: "saving" }));
+    try {
+      await fetch("/api/track/application", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, company: j.company, role: j.title, opportunityId: j.id }),
+      });
+      setConfirming((c) => ({ ...c, [j.id]: "done" }));
+    } catch {
+      setConfirming((c) => ({ ...c, [j.id]: "ask" })); // let them retry
+    }
+  }
+
   if (loading && !matches) {
     return (
       <section className="dash-section">
@@ -194,9 +215,20 @@ export default function Recommendations({ userId }: { userId: string }) {
                 </div>
               )}
               {j.url && (
-                <a className="rec-apply" href={j.url} target="_blank" rel="noopener noreferrer">
-                  View &amp; apply ↗
-                </a>
+                <div className="rec-apply-row">
+                  <a className="rec-apply" href={j.url} target="_blank" rel="noopener noreferrer" onClick={() => onApplyClick(j.id)}>
+                    View &amp; apply ↗
+                  </a>
+                  {confirming[j.id] === "ask" && (
+                    <span className="apply-confirm">
+                      Did you apply?
+                      <button className="tip-add" onClick={() => void confirmApplied(j)}>✓ Yes, track it</button>
+                      <button className="ai-cancel" onClick={() => setConfirming((c) => ({ ...c, [j.id]: undefined as never }))}>Not yet</button>
+                    </span>
+                  )}
+                  {confirming[j.id] === "saving" && <span className="apply-confirm">Saving…</span>}
+                  {confirming[j.id] === "done" && <span className="apply-confirm done">✓ Tracked — outcomes update below</span>}
+                </div>
               )}
             </div>
           </div>

@@ -135,9 +135,9 @@ export default function DashboardClient({
           <div className="dash-card-title">Talk to your mentor</div>
           <div className="dash-card-desc">A short voice call to go deeper</div>
         </a>
-        <a className="dash-card" href="/debug">
-          <div className="dash-card-title">Mentor&apos;s understanding</div>
-          <div className="dash-card-desc">Your scores &amp; what it&apos;s learned</div>
+        <a className="dash-card" href="/insights">
+          <div className="dash-card-title">Your diagnosis</div>
+          <div className="dash-card-desc">The mentor&apos;s read on you, as a report</div>
         </a>
       </div>
 
