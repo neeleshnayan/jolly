@@ -24,4 +24,10 @@ export function getProvider(task?: string): LLMProvider {
   return provider;
 }
 
+/** Explicit provider selection for A/B testing (e.g. the mentor-call debug
+ *  toggle). Returns null for unknown names — callers fall back to getProvider. */
+export function getProviderByName(name?: string | null): LLMProvider | null {
+  return name ? (PROVIDERS[name.toLowerCase()] ?? null) : null;
+}
+
 export * from "./types";

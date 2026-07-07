@@ -6,11 +6,16 @@
 import { NextResponse } from "next/server";
 import { runAgent } from "@/agents/run";
 import { opportunityVectorizer } from "@/agents/opportunity-vectorizer";
+import { requireAdmin } from "@/lib/auth/admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
 export async function POST(req: Request) {
+  // debug surface: invisible in production except to the admin
+  if (process.env.NODE_ENV === "production" && !(await requireAdmin())) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   try {
     const { jd } = await req.json().catch(() => ({}));
     if (typeof jd !== "string" || jd.trim().length < 40) {

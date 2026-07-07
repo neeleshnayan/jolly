@@ -8,7 +8,7 @@ import { coverLetterWriter } from "@/agents/cover-letter";
 import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
 import { buildProfileText } from "@/lib/scoring/profileText";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -16,7 +16,7 @@ export const maxDuration = 180;
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as { userId?: string; jd?: string };
-    const userId = (await getSessionUserId()) ?? body.userId;
+    const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
     const [full, map] = await Promise.all([getFullProfile(userId), getMentorMap(userId)]);

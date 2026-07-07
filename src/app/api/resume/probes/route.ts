@@ -7,12 +7,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { profiles, mentorProbes, agentRuns } from "@/db/schema";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("u");
-  if (!userId) return NextResponse.json({ error: "Missing ?u=" }, { status: 400 });
+  const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
+  if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const [profile] = await db
     .select({ id: profiles.id })

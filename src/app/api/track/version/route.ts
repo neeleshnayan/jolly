@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 import { createVersion, getThemesWithVersions } from "@/lib/track/persist";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url).searchParams.get("u");
-    const userId = (await getSessionUserId()) ?? u;
+    const userId = await resolveUserId(u);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     return NextResponse.json(await getThemesWithVersions(userId));
   } catch (err) {
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const userId = (await getSessionUserId()) ?? body.userId;
+    const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const version = await createVersion(userId, {
       themeId: typeof body.themeId === "string" ? body.themeId : undefined,

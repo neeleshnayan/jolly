@@ -12,7 +12,7 @@ import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
 import { buildProfileText } from "@/lib/scoring/profileText";
 import { toStyleConfig } from "@/lib/redesign/schema";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -26,8 +26,9 @@ const strip = (s: string) =>
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const userId = (await getSessionUserId()) ?? body.userId;
-    if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    const resolved = await resolveUserId(body.userId);
+    if (!resolved) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    const userId: string = resolved;
 
     const [full, map] = await Promise.all([getFullProfile(userId), getMentorMap(userId)]);
     if (!full) return NextResponse.json({ error: "Profile not found" }, { status: 404 });

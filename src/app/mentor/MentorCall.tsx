@@ -100,6 +100,11 @@ export default function MentorCall({ userId }: { userId: string }) {
   type CallRole = { kind: string; title: string; company: string; why: string };
   const spectrumRef = useRef<CallRole[]>([]);
   const [roleCards, setRoleCards] = useState<CallRole[] | null>(null);
+  // debug A/B: which brain answers — local Ollama or Anthropic. Dev-only UI;
+  // the server independently gates the override, so this is safe to render.
+  const [brain, setBrain] = useState<"ollama" | "anthropic">("ollama");
+  const brainRef = useRef(brain);
+  brainRef.current = brain;
 
   function enter(p: Phase) {
     setPhase(p);
@@ -384,6 +389,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       );
       const secondsLeft = Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000));
       fd.append("secondsLeft", String(secondsLeft));
+      fd.append("brain", brainRef.current); // debug A/B — server ignores unless dev/admin
       const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Turn failed");
@@ -681,6 +687,15 @@ export default function MentorCall({ userId }: { userId: string }) {
       <div className="call-topbar">
         <span className="brand">drizzle</span>
         <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          {process.env.NODE_ENV !== "production" && (
+            <button
+              className={`brain-toggle${brain === "anthropic" ? " cloud" : ""}`}
+              onClick={() => setBrain((b) => (b === "ollama" ? "anthropic" : "ollama"))}
+              title="Debug: which model answers the next turn (local Ollama vs Anthropic)"
+            >
+              {brain === "anthropic" ? "🧠 Claude" : "🏠 Local"}
+            </button>
+          )}
           {live ? (
             <button className="hangup" onClick={endSession}>
               End call

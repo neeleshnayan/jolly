@@ -5,14 +5,19 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getMentorMap } from "@/lib/profile/map";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
+import { requireAdmin } from "@/lib/auth/admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
 export async function GET(req: NextRequest) {
-  const userId = (await getSessionUserId()) ?? req.nextUrl.searchParams.get("u");
+  // debug surface: invisible in production except to the admin
+  if (process.env.NODE_ENV === "production" && !(await requireAdmin())) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const map = await getMentorMap(userId);

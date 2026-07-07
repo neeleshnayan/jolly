@@ -6,14 +6,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 import { getFullProfile } from "@/lib/profile/read";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const u = req.nextUrl.searchParams.get("u");
-  const userId = (await getSessionUserId()) ?? u;
+  const userId = await resolveUserId(u);
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const full = await getFullProfile(userId);

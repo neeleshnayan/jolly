@@ -7,7 +7,15 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 
-const SECRET = process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me";
+// In production a missing secret means forgeable sessions — refuse to run.
+// The dev fallback keeps local hacking friction-free.
+const SECRET = (() => {
+  const s = process.env.SESSION_SECRET;
+  if (!s && process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set in production — sessions would be forgeable without it.");
+  }
+  return s ?? "dev-insecure-secret-change-me";
+})();
 export const SESSION_COOKIE = "jolly_session";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 days (seconds)
 

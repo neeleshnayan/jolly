@@ -8,6 +8,8 @@
 import { NextResponse } from "next/server";
 import { transcribe } from "@/lib/voice/voicebox";
 import { mentorTurn } from "@/agents/mentor/turn";
+import { requireAdmin } from "@/lib/auth/admin";
+import { resolveUserId } from "@/lib/auth/user";
 import type { ChatMessage } from "@/llm";
 
 export const runtime = "nodejs";
@@ -23,11 +25,23 @@ export async function POST(req: Request) {
     const secondsLeft =
       typeof secondsLeftRaw === "string" && secondsLeftRaw !== "" ? Number(secondsLeftRaw) : undefined;
 
+    // debug A/B: which brain answers this turn. Client requests are untrusted —
+    // honor the override only in dev, or for a signed-in admin in production
+    // (anyone else silently gets the configured default; no cloud-credit burning).
+    const brainRaw = form.get("brain");
+    let brain: string | undefined;
+    if (typeof brainRaw === "string" && ["ollama", "anthropic"].includes(brainRaw)) {
+      const allowed = process.env.NODE_ENV !== "production" || (await requireAdmin()) !== null;
+      if (allowed) brain = brainRaw;
+    }
+
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "Missing 'audio'" }, { status: 400 });
     }
-    if (typeof userId !== "string" || !userId) {
-      return NextResponse.json({ error: "Missing 'userId'" }, { status: 400 });
+    // session decides whose mentor this is — the form field is dev-only fallback
+    const resolvedUserId = await resolveUserId(typeof userId === "string" ? userId : null);
+    if (!resolvedUserId) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
     const history: ChatMessage[] =
       typeof historyRaw === "string" ? safeParse(historyRaw) : [];
@@ -44,7 +58,7 @@ export async function POST(req: Request) {
     // is ready, instead of waiting for the whole clip.
     const messages: ChatMessage[] = [...history, { role: "user", content: userText }];
     let replyText = "";
-    for await (const delta of mentorTurn({ userId, messages, secondsLeft })) replyText += delta;
+    for await (const delta of mentorTurn({ userId: resolvedUserId, messages, secondsLeft, brain })) replyText += delta;
     replyText = replyText.trim();
 
     // the mentor signals it's wrapping up with a marker — strip it, flag it

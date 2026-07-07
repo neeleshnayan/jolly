@@ -13,7 +13,7 @@ import { resumeSuggester } from "@/agents/resume-suggester";
 import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
 import { buildProfileText } from "@/lib/scoring/profileText";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -58,7 +58,7 @@ const hasPlaceholder = (s: string) => /\[[^\]]{1,30}\]/.test(s); // "[timeframe]
  * needed. Returns { suggestions: [], noCall: true } if they've never talked.
  */
 export async function GET(req: NextRequest) {
-  const userId = (await getSessionUserId()) ?? req.nextUrl.searchParams.get("u");
+  const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const userId = (await getSessionUserId()) ?? body.userId;
+    const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const transcript = typeof body.transcript === "string" ? body.transcript : "";
     if (transcript.trim().length < 20) return NextResponse.json({ ok: true, suggestions: [] });

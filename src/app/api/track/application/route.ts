@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 import { createApplication, setApplicationStatus } from "@/lib/track/persist";
 
 export const runtime = "nodejs";
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const userId = (await getSessionUserId()) ?? body.userId;
+    const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const app = await createApplication(userId, {
       company: typeof body.company === "string" ? body.company : undefined,
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const userId = (await getSessionUserId()) ?? body.userId;
+    const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     if (typeof body.applicationId !== "string" || typeof body.stage !== "string") {
       return NextResponse.json({ error: "applicationId and stage required" }, { status: 400 });

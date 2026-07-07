@@ -5,7 +5,7 @@
  * Insight extraction (the SLOW PATH) is a separate agent that runs post-call.
  */
 import type { ChatMessage } from "@/llm";
-import { getProvider } from "@/llm";
+import { getProvider, getProviderByName } from "@/llm";
 import { getMentorMap } from "@/lib/profile/map";
 import { getCallSpectrum } from "@/lib/opportunities/recommend";
 import { buildMentorSystemPrompt } from "./prompt";
@@ -24,6 +24,9 @@ export async function* mentorTurn(input: {
   userId: string;
   messages: ChatMessage[];
   secondsLeft?: number;
+  // A/B override from the in-call debug toggle ("ollama" | "anthropic").
+  // Callers are responsible for gating WHO may set this (see /api/voice/turn).
+  brain?: string;
 }): AsyncIterable<string> {
   const map = await getMentorMap(input.userId);
   const spectrum = await getCallSpectrum(input.userId).catch(() => []);
@@ -32,7 +35,7 @@ export async function* mentorTurn(input: {
     index: turnIndex,
     asked: askedQuestions(input.messages),
   });
-  const provider = getProvider("mentor");
+  const provider = getProviderByName(input.brain) ?? getProvider("mentor");
   yield* provider.streamChat({
     system,
     messages: input.messages,

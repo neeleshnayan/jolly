@@ -11,11 +11,16 @@ import { runAgent } from "@/agents/run";
 import { profileScorer } from "@/agents/profile-scorer";
 import { opportunityVectorizer } from "@/agents/opportunity-vectorizer";
 import { scoreMatch } from "@/lib/opportunities/match";
+import { requireAdmin } from "@/lib/auth/admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
 export async function POST(req: Request) {
+  // debug surface: invisible in production except to the admin
+  if (process.env.NODE_ENV === "production" && !(await requireAdmin())) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   try {
     const { userId, jd } = await req.json().catch(() => ({}));
     if (typeof userId !== "string" || !userId) {

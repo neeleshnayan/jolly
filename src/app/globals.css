@@ -49,6 +49,19 @@
 }
 .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
+/* debug brain toggle (mentor call, dev builds only) */
+.brain-toggle {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.brain-toggle.cloud { border-color: #d97706; color: #d97706; background: transparent; }
+
 /* drizzle wordmark — lowercase, quiet confidence */
 .brand { text-transform: lowercase; }
 .brand-mark {

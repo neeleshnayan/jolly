@@ -4,14 +4,14 @@
  * cached scoring vector, so it's cheap to poll from the dashboard.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUserId } from "@/lib/auth/session";
+import { resolveUserId } from "@/lib/auth/user";
 import { rankMatches, pickSpectrum } from "@/lib/opportunities/recommend";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
 export async function GET(req: NextRequest) {
-  const userId = (await getSessionUserId()) ?? req.nextUrl.searchParams.get("u");
+  const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const ranked = await rankMatches(userId);
