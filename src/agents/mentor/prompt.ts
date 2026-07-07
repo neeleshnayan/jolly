@@ -42,7 +42,13 @@ export function buildMentorSystemPrompt(
         : secondsLeft > 60
           ? `\n\nUnder ${Math.max(1, Math.round(secondsLeft / 60))} minutes left — land the most important thread and start steering toward a close.`
           : `\n\nTime is basically up. Close now.`;
-  const closingBlock = `\n\nENDING THE CALL — end it YOURSELF the moment you have a real read on who they are and where they should aim; don't drag it out. To close: two warm, energising sentences — name one genuine strength you actually saw, and one concrete, hopeful next move — then put [[END_CALL]] on its very own at the end. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing. Inspire confidence and send them off with energy.`;
+  // a small model will happily "wrap up" three turns in — hard-forbid closing
+  // while most of the call remains, unless the user asks to stop
+  const earlyGuard =
+    secondsLeft != null && secondsLeft > 600
+      ? ` IMPORTANT: it is still EARLY in this call (over ${Math.round(secondsLeft / 60)} minutes remain). Do NOT close yet — there is more of them to understand. Only close this early if THEY say they need to go.`
+      : "";
+  const closingBlock = `\n\nENDING THE CALL — end it YOURSELF the moment you have a real read on who they are and where they should aim; don't drag it out. To close: two warm, energising sentences — name one genuine strength you actually saw, and one concrete, hopeful next move — then put [[END_CALL]] on its very own at the end. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing. Inspire confidence and send them off with energy.${earlyGuard}`;
 
   const name = map.profile?.fullName ?? "the person";
   const headline = map.profile?.headline ? ` (${map.profile.headline})` : "";

@@ -74,6 +74,24 @@ function parseJsonLoose(content: string): unknown {
   }
 }
 
+/**
+ * Evict the live voice model from VRAM (keep_alive: 0). Call BEFORE loading the
+ * big extraction model: qwen (~5GB) + voicebox (~3.5GB) + gemma3:27b (16.5GB)
+ * don't fit in 24GB together — post-call insight extraction and job inference
+ * were OOMing exactly this way. Best-effort; never throws.
+ */
+export async function releaseLiveModel(): Promise<void> {
+  try {
+    await fetch(`${BASE}/api/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: LIVE_MODEL, keep_alive: 0 }),
+    });
+  } catch {
+    /* ollama down or model not loaded — nothing to release */
+  }
+}
+
 export const ollamaProvider: LLMProvider = {
   name: "ollama",
 

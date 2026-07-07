@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Recommendations from "./Recommendations";
+import Brand from "../Brand";
 
 type Version = {
   id: string;
@@ -115,7 +116,7 @@ export default function DashboardClient({
   return (
     <main className="dash">
       <header className="dash-top">
-        <span className="brand">drizzle</span>
+        <Brand />
         <span className="dash-user">
           {avatarUrl && <img className="dash-avatar" src={avatarUrl} alt="" />}
           <span>{name ?? "You"}</span>

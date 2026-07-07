@@ -5,6 +5,11 @@ import ThemeToggle from "./ThemeToggle";
 export const metadata: Metadata = {
   title: "drizzle — your career co-pilot",
   description: "Understood once, working for you everywhere: résumé, mentor, opportunities.",
+  openGraph: {
+    title: "drizzle — your career co-pilot",
+    description: "The first rain after the drought — action over inaction.",
+    images: ["/brand/drizzle-og.png"],
+  },
 };
 
 // Runs before paint: applies the saved (or OS-preferred) theme so there's no

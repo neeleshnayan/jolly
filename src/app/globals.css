@@ -186,6 +186,13 @@
 
 /* drizzle wordmark — lowercase, quiet confidence */
 .brand { text-transform: lowercase; }
+/* the real lockup: light/dark variants both render, CSS shows one (no JS flash) */
+.brand-lockup { display: inline-flex; align-items: center; }
+.brand-lockup img { display: block; height: 100%; width: auto; }
+.brand-lockup .brand-dark { display: none; }
+[data-theme="dark"] .brand-lockup .brand-light { display: none; }
+[data-theme="dark"] .brand-lockup .brand-dark { display: block; }
+.auth-lockup { height: 44px; margin-bottom: 6px; }
 .brand-mark {
   margin: 0;
   font-size: 34px;

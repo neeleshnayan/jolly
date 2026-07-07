@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 // crashes SSR (no AudioWorkletNode in Node). Browser-only, loaded on demand.
 import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
+import Brand from "../Brand";
 
 type Phase = "idle" | "recording" | "thinking" | "speaking";
 type Turn = { role: "user" | "assistant"; text: string };
@@ -35,7 +36,7 @@ const DIMENSIONS = [
 // --- voice-activity tuning (all in one place; adjust to taste) ---
 const SPEECH_RMS = 0.018; // floor for "counts as speech" (raised by calibration)
 const BARGE_RMS = 0.05; // floor to interrupt the mentor mid-sentence
-const SILENCE_HANG_MS = 1400; // this much quiet ends your turn (room for pauses)
+const SILENCE_HANG_MS = 2000; // quiet needed to end your turn — 1.4s clipped people mid-thought at natural pauses
 const MIN_SPEECH_MS = 350; // ignore blips shorter than this
 const POLL_MS = 60;
 const CALIBRATION_MS = 700; // sample the room's noise floor at call start
@@ -752,7 +753,7 @@ export default function MentorCall({ userId }: { userId: string }) {
   return (
     <div className="call">
       <div className="call-topbar">
-        <span className="brand">drizzle</span>
+        <Brand />
         <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
           {process.env.NODE_ENV !== "production" && (
             <>

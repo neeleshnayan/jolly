@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { opportunities } from "@/db/schema";
 import { runAgent } from "@/agents/run";
 import { opportunityVectorizer } from "@/agents/opportunity-vectorizer";
+import { releaseLiveModel } from "@/llm/ollama";
 import { COMPANIES } from "./companies";
 import { fetchBoard } from "./ats";
 
@@ -140,6 +141,8 @@ export async function runInference(opts?: {
     log("Nothing pending — all fetched jobs are already vectorized.");
     return { vectorized: 0, failed: 0, remaining: 0, log: lines };
   }
+  // free the voice model's VRAM first — the 27B extractor doesn't fit beside it
+  await releaseLiveModel();
   log(`Vectorizing ${pending.length} job(s), ${batchSize} at a time, ${Math.round(sleepMs / 1000)}s cooldown between batches.`);
 
   let vectorized = 0;

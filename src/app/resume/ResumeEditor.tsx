@@ -10,6 +10,7 @@ import { SortableItem } from "./SortableItem";
 import VersionBar from "./VersionBar";
 import ResumeSheet from "./ResumeSheet";
 import UserChip from "../UserChip";
+import Brand from "../Brand";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
@@ -712,7 +713,7 @@ export default function ResumeEditor({
   return (
     <>
       <div className="topbar no-print">
-        <span className="brand">drizzle</span>
+        <Brand />
         <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <span className="status">{status}</span>
           <a className="ghost-btn" href="/dashboard">← Dashboard</a>

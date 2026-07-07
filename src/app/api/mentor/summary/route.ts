@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { runAgent } from "@/agents/run";
 import { insightExtractor } from "@/agents/insight-extractor";
 import { summarizeCall } from "@/lib/mentor/summarize";
+import { releaseLiveModel } from "@/llm/ollama";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,6 +46,9 @@ export async function POST(req: Request) {
     // (gemma3:27b) use different models — loading both at once OOMs the GPU on a
     // long call. One at a time keeps VRAM in budget.
     const summary = await summarizeCall(capped);
+    // evict the live model BEFORE the 27B loads — its 5m keep_alive otherwise
+    // holds VRAM and the big model OOMs ("cudaMalloc failed" post-call)
+    await releaseLiveModel();
     const extraction = (
       await runAgent(insightExtractor, { transcript: capped }, { userId: userId ?? "anon" })
     ).output;

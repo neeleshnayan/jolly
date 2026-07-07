@@ -13,7 +13,12 @@ export default async function LoginPage({
   return (
     <main className="auth-wrap">
       <div className="auth-card">
-        <h1 className="brand-mark">drizzle</h1>
+        <span className="brand-lockup auth-lockup">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/drizzle-lockup.svg" alt="drizzle" className="brand-light" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/drizzle-lockup-white.svg" alt="" aria-hidden className="brand-dark" />
+        </span>
         <p className="brand-tag">the first rain after the drought — action over inaction</p>
         <p className="sub">
           Sign in to pick up your résumé, your mentor&apos;s understanding of you, and your job matches.
