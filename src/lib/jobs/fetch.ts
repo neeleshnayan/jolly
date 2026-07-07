@@ -128,6 +128,27 @@ export async function fetchRawJobs(opts?: { log?: (line: string) => void }): Pro
 
 export type InferenceResult = { vectorized: number; failed: number; remaining: number; log: string[] };
 
+// Live progress for the admin UI (single-instance dev server — in-memory is
+// exactly right). Also acts as a mutex: one inference run at a time, because
+// two concurrent runs on a 15GB-RAM box is how systems crash.
+export type InferenceProgress = {
+  running: boolean;
+  total: number;
+  done: number;
+  failed: number;
+  current: string | null;
+  startedAt: number | null;
+};
+const progress: InferenceProgress = { running: false, total: 0, done: 0, failed: 0, current: null, startedAt: null };
+export function inferenceProgress(): InferenceProgress {
+  return { ...progress };
+}
+/** Unjam the mutex if a run dies mid-flight (route catch calls this). */
+export function resetInferenceProgress(): void {
+  progress.running = false;
+  progress.current = null;
+}
+
 /**
  * Phase 2 — vectorize pending rows on the local model. Processes `limit` rows in
  * batches of `batchSize`, sleeping `sleepMs` between batches so the GPU gets
@@ -159,7 +180,17 @@ export async function runInference(opts?: {
     log("Nothing pending — all fetched jobs are already vectorized.");
     return { vectorized: 0, failed: 0, remaining: 0, log: lines };
   }
-  // free the voice model's VRAM first — the 27B extractor doesn't fit beside it
+  if (progress.running) {
+    log("An inference run is already in progress — not starting another.");
+    return { vectorized: 0, failed: 0, remaining: pending.length, log: lines };
+  }
+  progress.running = true;
+  progress.total = pending.length;
+  progress.done = 0;
+  progress.failed = 0;
+  progress.current = null;
+  progress.startedAt = Date.now();
+  // free the voice model's VRAM first — no-op when live == extract model
   await releaseLiveModel();
   log(`Vectorizing ${pending.length} job(s), ${batchSize} at a time, ${Math.round(sleepMs / 1000)}s cooldown between batches.`);
 
@@ -169,6 +200,7 @@ export async function runInference(opts?: {
     const batch = pending.slice(i, i + batchSize);
     log(`Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(pending.length / batchSize)}:`);
     for (const row of batch) {
+      progress.current = row.title;
       try {
         const { output } = await runAgent(opportunityVectorizer, { jd: row.rawText ?? "" }, { userId: "worker" });
         // Board rows: the ATS's own fields are authoritative. Bookmarked rows
@@ -200,9 +232,11 @@ export async function runInference(opts?: {
           })
           .where(eq(opportunities.id, row.id));
         vectorized++;
+        progress.done = vectorized;
         log(`  + ${row.title}`);
       } catch (e) {
         failed++;
+        progress.failed = failed;
         log(`  ! ${row.title} — ${(e as Error).message}`);
       }
     }
@@ -213,6 +247,8 @@ export async function runInference(opts?: {
     }
   }
 
+  progress.running = false;
+  progress.current = null;
   const [{ n: remaining }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(opportunities)

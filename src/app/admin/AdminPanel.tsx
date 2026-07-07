@@ -73,6 +73,20 @@ export default function AdminPanel() {
   const [inferCount, setInferCount] = useState("10");
   const [inferBatch, setInferBatch] = useState("5");
   const [inferPause, setInferPause] = useState("30");
+  type Progress = { running: boolean; total: number; done: number; failed: number; current: string | null };
+  const [prog, setProg] = useState<Progress | null>(null);
+  // poll live progress while a run is active
+  useEffect(() => {
+    if (!inferring) return;
+    const id = setInterval(async () => {
+      try {
+        const r = await fetch("/api/admin/run-inference", { cache: "no-store" });
+        const j = await r.json();
+        if (r.ok) setProg(j.progress);
+      } catch {}
+    }, 2500);
+    return () => clearInterval(id);
+  }, [inferring]);
   const [fetchLog, setFetchLog] = useState<string[] | null>(null);
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [pending, setPending] = useState(0);
@@ -172,6 +186,7 @@ export default function AdminPanel() {
       setFetchLog([`Failed: ${e instanceof Error ? e.message : "unknown error"}`]);
     } finally {
       setInferring(false);
+      setProg(null);
     }
   }
 
@@ -349,6 +364,18 @@ export default function AdminPanel() {
             Vectorized roles rank for every user on their next dashboard load. Heads-up: inference competes with live mentor
             calls for the GPU — run it between calls.
           </p>
+
+          {inferring && prog && prog.total > 0 && (
+            <div className="infer-progress">
+              <div className="infer-progress-bar">
+                <div className="infer-progress-fill" style={{ width: `${Math.round(((prog.done + prog.failed) / prog.total) * 100)}%` }} />
+              </div>
+              <div className="infer-progress-text">
+                {prog.done + prog.failed} of {prog.total} · {prog.done} ✓{prog.failed ? ` · ${prog.failed} ✗` : ""}
+                {prog.current ? ` — now: ${prog.current}` : ""} · {pending - prog.done} still pending overall
+              </div>
+            </div>
+          )}
 
           {fetchLog && <pre className="admin-log">{fetchLog.join("\n")}</pre>}
 
