@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RnnoiseWorkletNode, loadRnnoise } from "@sapphi-red/web-noise-suppressor";
+// type-only: the runtime import happens inside startSession — the module's
+// RnnoiseWorkletNode extends AudioWorkletNode at class-definition time, which
+// crashes SSR (no AudioWorkletNode in Node). Browser-only, loaded on demand.
+import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
 
 type Phase = "idle" | "recording" | "thinking" | "speaking";
@@ -438,6 +441,8 @@ export default function MentorCall({ userId }: { userId: string }) {
     analyser.fftSize = 1024;
     const source = ctx.createMediaStreamSource(streamRef.current);
     try {
+      // browser-only module — see the type-only import note at the top
+      const { RnnoiseWorkletNode, loadRnnoise } = await import("@sapphi-red/web-noise-suppressor");
       await ctx.audioWorklet.addModule("/rnnoise/workletProcessor.js");
       const wasmBinary = await loadRnnoise({
         url: "/rnnoise/rnnoise.wasm",
