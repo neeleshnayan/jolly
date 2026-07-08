@@ -244,6 +244,8 @@ export function sampleExtraction(j: SampleJob): OpportunityExtraction {
       comp_min: j.compMin,
       comp_max: j.compMax,
       comp_currency: "INR", // curated samples are written in ₹
+      min_years_experience: null,
+      required_credentials: [],
 
       company_stage: j.stage,
       domain: j.domain,

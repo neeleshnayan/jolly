@@ -5,7 +5,8 @@
  */
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { opportunities, profiles, rankingSignals } from "@/db/schema";
+import { education, experiences, opportunities, profiles, rankingSignals } from "@/db/schema";
+import { deriveCandidateQuals, hardGate } from "./gates";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
@@ -117,6 +118,14 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
   // rank-time COPY of the vector toward what they actually choose (±0.15 max)
   const drift: LearnedDrift | null = me ? await learnDrift(me.id) : null;
   const vec = applyDrift(base, drift);
+  // hard requirements are pass/fail — derive what this candidate can prove
+  const [candExps, candEdu] = me
+    ? await Promise.all([
+        db.select({ startDate: experiences.startDate }).from(experiences).where(eq(experiences.profileId, me.id)),
+        db.select({ degree: education.degree }).from(education).where(eq(education.profileId, me.id)),
+      ])
+    : [[], []];
+  const quals = deriveCandidateQuals({ experiences: candExps, education: candEdu });
   const visible = me
     ? or(eq(opportunities.visibility, "global"), eq(opportunities.addedByProfileId, me.id))
     : eq(opportunities.visibility, "global");
@@ -152,12 +161,16 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
     .map((r) => {
       const v = (r.vector ?? {}) as OpportunityVector;
       const f = (r.facts ?? {}) as Partial<OpportunityFacts>;
+      // hard requirements first: a missed credential or a big years shortfall
+      // is a FILTER — no similarity score buys it back
+      const gate = hardGate({ facts: f }, quals);
+      if (!gate.pass) return null;
       const m = scoreMatch(vec, v);
       const c = compRefine(pref, r.compMin, r.compMax);
       const l = locationRefine(pref, r.remote, r.location);
       // concrete notes lead — they're the explicit knobs the user just set
       const reasons = [c.reason, l.reason, ...m.reasons].filter(Boolean) as string[];
-      const gaps = [c.gap, l.gap, ...m.gaps].filter(Boolean) as string[];
+      const gaps = [gate.marginal?.gap, c.gap, l.gap, ...m.gaps].filter(Boolean) as string[];
       // older rows predate the summary/core_requirements fields — fall back to
       // a trimmed JD slice so the card never shows a blank description
       const summary = f.summary?.trim() || (r.rawText ?? "").replace(/\s+/g, " ").trim().slice(0, 220);
@@ -176,7 +189,7 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         source: r.source,
         summary,
         coreRequirements,
-        fit: m.fit * c.factor * l.factor,
+        fit: m.fit * c.factor * l.factor * (gate.marginal?.penalty ?? 1),
         qualification: m.qualification,
         desire: m.desire,
         novelty: v.off_domain_novelty?.score ?? 0.3,
@@ -187,6 +200,7 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         why: whySummary(m),
       };
     })
+    .filter((j): j is NonNullable<typeof j> => j !== null)
     .sort((a, b) => b.fit - a.fit);
 
   // Diversity guard: scores compress at the top (several 95-97% roles), so

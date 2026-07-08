@@ -27,6 +27,12 @@ FACTS:
 - comp_min / comp_max (only if the JD states a range; else null)
 - comp_currency: ISO code of that range ("USD","INR","GBP","EUR") if the JD or
   its location makes it clear; else null. Never guess a symbol from habit.
+- min_years_experience: the years REQUIRED (e.g. "8+ years" → 8); null if not
+  stated. Use the overall/headline requirement, not per-skill sub-requirements.
+- required_credentials: degrees/licenses the JD makes MANDATORY, normalized to
+  "phd" | "md" | "jd" | "masters" | "bachelors". "PhD preferred", "PhD a plus",
+  or "PhD or equivalent experience" do NOT count — required means the screen
+  would reject without it. Usually an empty list.
 - company_stage (startup/growth/enterprise/unknown — infer from the company & language)
 - domain (e.g. "fintech backend", "AI infra", "growth marketing")
 - summary: 2-3 plain-English sentences on what the person would actually DO day

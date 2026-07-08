@@ -40,6 +40,11 @@ export const opportunityFacts = z.object({
   // ISO code ("USD"/"INR"/"GBP"/"EUR") when the JD makes it clear — a raw number
   // can't distinguish ₹35,00,000 from $350,000, so display needs this
   comp_currency: z.string().nullable().default(null),
+  // hard requirements — FILTERS, not similarity axes. Only what the JD states
+  // as REQUIRED ("PhD preferred" or "or equivalent experience" must NOT land
+  // here). Credentials normalized: "phd" | "md" | "jd" | "masters" | "bachelors"
+  min_years_experience: z.number().nullable().default(null),
+  required_credentials: z.array(z.string()).default([]),
   company_stage: z.enum(["startup", "growth", "enterprise", "unknown"]).default("unknown"),
   domain: z.string().default(""),
   // a comprehensible plain-English read of the role — what the person would
