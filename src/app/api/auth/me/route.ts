@@ -10,9 +10,9 @@ export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ userId: null });
   const [p] = await db
-    .select({ fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+    .select({ fullName: profiles.fullName, email: profiles.email, avatarUrl: profiles.avatarUrl })
     .from(profiles)
     .where(eq(profiles.userId, userId))
     .limit(1);
-  return NextResponse.json({ userId, name: p?.fullName ?? null, avatarUrl: p?.avatarUrl ?? null });
+  return NextResponse.json({ userId, name: p?.fullName ?? null, email: p?.email ?? null, avatarUrl: p?.avatarUrl ?? null });
 }

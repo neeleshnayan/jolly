@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 // type-only: the runtime import happens inside startSession — the module's
 // RnnoiseWorkletNode extends AudioWorkletNode at class-definition time, which
 // crashes SSR (no AudioWorkletNode in Node). Browser-only, loaded on demand.
@@ -475,8 +475,70 @@ export default function MentorCall({ userId }: { userId: string }) {
     }
   }
 
+  // ---- the call lane: ONE live call per GPU. Join; if the mentor is busy,
+  // wait with an honest position and auto-start when the lane frees. ----
+  const [queuePos, setQueuePos] = useState<number | null>(null);
+  const queuePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const beatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const laneCall = useCallback(
+    (action: "join" | "beat" | "leave") =>
+      fetch("/api/voice/queue", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, action }),
+      }).then((r) => r.json()),
+    [userId],
+  );
+
+  function stopQueuePolling() {
+    if (queuePollRef.current) clearInterval(queuePollRef.current);
+    queuePollRef.current = null;
+  }
+
+  // navigating away releases the lane (the 30s heartbeat eviction is the backstop)
+  useEffect(
+    () => () => {
+      if (queuePollRef.current) clearInterval(queuePollRef.current);
+      if (beatRef.current) clearInterval(beatRef.current);
+      void laneCall("leave").catch(() => {});
+    },
+    [laneCall],
+  );
+
   async function startSession() {
     setError(null);
+    try {
+      const lane = await laneCall("join");
+      if (lane.state === "waiting") {
+        setQueuePos(lane.position);
+        setStatus(`Your mentor is with someone right now — you're #${lane.position} in line.`);
+        stopQueuePolling();
+        queuePollRef.current = setInterval(async () => {
+          const s = await laneCall("join").catch(() => null);
+          if (!s) return;
+          if (s.state === "live") {
+            stopQueuePolling();
+            setQueuePos(null);
+            void beginCall(); // the lane is ours — start for real
+          } else {
+            setQueuePos(s.position);
+          }
+        }, 5000);
+        return;
+      }
+    } catch {
+      /* queue endpoint unreachable — don't block the call over telemetry */
+    }
+    setQueuePos(null);
+    await beginCall();
+  }
+
+  async function beginCall() {
+    setError(null);
+    // hold the lane with a heartbeat for the whole call
+    if (beatRef.current) clearInterval(beatRef.current);
+    beatRef.current = setInterval(() => void laneCall("beat").catch(() => {}), 10000);
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({
         // Keep AGC + noiseSuppression on so the voice stays LOUD and steady fan
@@ -586,6 +648,11 @@ export default function MentorCall({ userId }: { userId: string }) {
 
   function endSession() {
     liveRef.current = false;
+    // free the lane for whoever's waiting
+    if (beatRef.current) clearInterval(beatRef.current);
+    beatRef.current = null;
+    stopQueuePolling();
+    void laneCall("leave").catch(() => {});
     if (vadTimerRef.current) clearInterval(vadTimerRef.current);
     const mr = recorderRef.current;
     if (mr) {
@@ -848,9 +915,28 @@ export default function MentorCall({ userId }: { userId: string }) {
             No buttons, no forms — just a conversation. Your mentor already knows
             your résumé; it listens for who you&apos;re becoming.
           </p>
-          <button className="btn call-cta" onClick={startSession}>
-            Start the call
-          </button>
+          {queuePos !== null ? (
+            <div className="call-queue">
+              <div className="call-queue-pulse" />
+              <div className="call-queue-line">Your mentor is with someone right now.</div>
+              <div className="call-queue-pos">You&apos;re <b>#{queuePos}</b> in line — the call starts automatically.</div>
+              <button
+                className="ghost-btn"
+                onClick={() => {
+                  stopQueuePolling();
+                  setQueuePos(null);
+                  void laneCall("leave").catch(() => {});
+                  setStatus("");
+                }}
+              >
+                Leave the line
+              </button>
+            </div>
+          ) : (
+            <button className="btn call-cta" onClick={startSession}>
+              Start the call
+            </button>
+          )}
           <div className="call-facts">
             <span>🎙 voice only</span>
             <span>⏱ 20 minutes</span>
