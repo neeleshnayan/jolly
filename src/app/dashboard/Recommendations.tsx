@@ -230,11 +230,14 @@ export default function Recommendations({ userId }: { userId: string }) {
             <span title="Your applies and dismissals tune this ranking — it sharpens with every choice."> · learning from your choices ✓</span>
           )}
         </span>
-        {process.env.NODE_ENV !== "production" && (
-          <button className="refine-toggle" onClick={() => void load()} disabled={loading} title="Debug only — force a fresh fetch, bypassing any cache">
-            {loading ? "Refreshing…" : "⟳ Refresh (debug)"}
-          </button>
-        )}
+        <button
+          className="refine-toggle"
+          onClick={() => void load()}
+          disabled={loading}
+          title="Re-rank now — pulls in roles vectorized since this page loaded (your bookmarks show up here once analyzed)"
+        >
+          {loading ? "Refreshing…" : "⟳ Refresh"}
+        </button>
         <button className="refine-toggle" onClick={() => setShowRefine((v) => !v)}>
           {showRefine ? "Close" : "Refine ⚙"}
         </button>
