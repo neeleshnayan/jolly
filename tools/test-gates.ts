@@ -39,4 +39,31 @@ assert("asks yrs+3 → gated out", g({ min_years_experience: yrs + 3 }).pass ===
 assert("no years on résumé → never year-gated", hardGate({ facts: { min_years_experience: 15 } }, { yearsExperience: null, credentials: new Set() }).pass === true);
 assert("pre-gate-era row (no fields) → passes untouched", g({}).pass === true);
 
+// ---- expanded taxonomy: licenses + new degrees ----
+const lawyer = deriveCandidateQuals({
+  experiences: [{ startDate: "2018" }],
+  education: [{ degree: "LL.B, National Law School" }],
+  certifications: [{ name: "Bar Council of India — admitted" }],
+});
+assert("LLB reads as jd", lawyer.credentials.has("jd"));
+assert("bar admission detected from certifications", lawyer.credentials.has("bar"));
+assert("lawyer passes a bar-required role", hardGate({ facts: { required_credentials: ["bar"] } }, lawyer).pass === true);
+assert("engineer gated from bar-required role", g({ required_credentials: ["bar"] }).pass === false);
+
+const accountant = deriveCandidateQuals({
+  experiences: [],
+  education: [{ degree: "B.Com" }],
+  certifications: [{ name: "CPA", issuer: "AICPA" }, { name: "CFA Level II candidate" }],
+});
+assert("CPA detected", accountant.credentials.has("cpa"));
+assert("CFA Level II candidate is NOT a charterholder", !accountant.credentials.has("cfa"));
+assert("B.Com reads as bachelors", accountant.credentials.has("bachelors"));
+
+const mbaHolder = deriveCandidateQuals({ experiences: [], education: [{ degree: "MBA, IIM Bangalore" }] });
+assert("MBA satisfies masters requirement", hardGate({ facts: { required_credentials: ["masters"] } }, mbaHolder).pass === true);
+assert("generic masters does NOT satisfy MBA requirement", hardGate({ facts: { required_credentials: ["mba"] } }, deriveCandidateQuals({ experiences: [], education: [{ degree: "M.Sc Physics" }] })).pass === false);
+assert("MBBS reads as md", deriveCandidateQuals({ experiences: [], education: [{ degree: "MBBS" }] }).credentials.has("md"));
+assert("nurse passes rn gate", hardGate({ facts: { required_credentials: ["rn"] } }, deriveCandidateQuals({ experiences: [], education: [], certifications: [{ name: "Registered Nurse license, State of NY" }] })).pass === true);
+assert("alias 'bachelor's' resolves via ALIASES", g({ required_credentials: ["bachelor's"] }).pass === true);
+
 console.log("\nall assertions passed ✓");

@@ -12,7 +12,7 @@ import type { AboutOverrides } from "@/lib/profile/about";
 
 export const runtime = "nodejs";
 
-const DEGREES = new Set(["phd", "md", "jd", "masters", "bachelors", "none"]);
+const DEGREES = new Set(["phd", "md", "jd", "mba", "masters", "bachelors", "associate", "none"]);
 
 export async function PATCH(req: NextRequest) {
   try {

@@ -95,7 +95,7 @@ export const profiles = pgTable("profiles", {
   aboutOverrides: jsonb("about_overrides")
     .$type<{
       yearsExperience?: number;
-      highestDegree?: "phd" | "md" | "jd" | "masters" | "bachelors" | "none";
+      highestDegree?: "phd" | "md" | "jd" | "mba" | "masters" | "bachelors" | "associate" | "none";
       currentEmployer?: string;
       trajectory?: string; // one-line career arc, e.g. "Foodlabs → Goldman → founder"
     }>()

@@ -270,7 +270,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
   );
 }
 
-const DEGREE_LABEL: Record<string, string> = { phd: "PhD", md: "MD", jd: "JD", masters: "Master's", bachelors: "Bachelor's", none: "No degree" };
+const DEGREE_LABEL: Record<string, string> = { phd: "PhD", md: "MD / MBBS", jd: "JD / LLB", mba: "MBA", masters: "Master's", bachelors: "Bachelor's", associate: "Associate / Diploma", none: "No degree" };
 
 /**
  * The at-a-glance facts. Derived from the résumé by default; click ✎ to pin a

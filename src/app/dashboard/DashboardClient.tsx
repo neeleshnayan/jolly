@@ -59,31 +59,12 @@ export default function DashboardClient({
   untagged: Version[];
   applications: Application[];
 }) {
-  const [themes] = useState<Theme[]>(initialThemes);
-  const [newTheme, setNewTheme] = useState("");
-  const [themeMsg, setThemeMsg] = useState("");
   const [apps, setApps] = useState<Application[]>(initialApps);
   const [appForm, setAppForm] = useState({ company: "", role: "", resumeVersionId: "" });
   const [appMsg, setAppMsg] = useState("");
 
-  const allVersions = [...themes.flatMap((t) => t.versions.map((v) => ({ ...v, theme: t.name }))), ...untagged.map((v) => ({ ...v, theme: null as string | null }))];
+  const allVersions = [...initialThemes.flatMap((t) => t.versions.map((v) => ({ ...v, theme: t.name }))), ...untagged.map((v) => ({ ...v, theme: null as string | null }))];
   const first = (name ?? "there").split(" ")[0];
-
-  async function addTheme() {
-    if (!newTheme.trim()) return;
-    setThemeMsg("Adding…");
-    const res = await fetch("/api/track/theme", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ userId, name: newTheme.trim() }),
-    });
-    if (res.ok) {
-      setThemeMsg("Added ✓ — reload to see it");
-      setNewTheme("");
-    } else {
-      setThemeMsg("Couldn't add theme");
-    }
-  }
 
   async function logApplication() {
     if (!appForm.company.trim() && !appForm.role.trim()) {
@@ -188,56 +169,8 @@ export default function DashboardClient({
 
       <Recommendations userId={userId} />
 
-      <section className="dash-section">
-        <div className="dash-section-head">
-          <h2>Themes &amp; versions</h2>
-          <span className="dash-hint">Save versions from the résumé editor</span>
-        </div>
-        <div className="theme-new">
-          <input
-            className="f-box"
-            value={newTheme}
-            placeholder="New theme — e.g. Quant, Founder, PM, AI"
-            onChange={(e) => setNewTheme(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTheme()}
-          />
-          <button className="ghost-btn" onClick={addTheme}>+ Add theme</button>
-          {themeMsg && <span className="dash-hint">{themeMsg}</span>}
-        </div>
-        {themes.length === 0 && untagged.length === 0 ? (
-          <p className="dash-empty">No versions yet. Open your résumé, tune it for an angle, and hit “Save version”.</p>
-        ) : (
-          <div className="theme-grid">
-            {themes.map((t) => (
-              <div className="theme-card" key={t.id}>
-                <div className="theme-name">{t.name}</div>
-                {t.versions.length === 0 ? (
-                  <div className="dash-empty small">No versions saved under this theme yet.</div>
-                ) : (
-                  t.versions.map((v) => (
-                    <div className="ver-row" key={v.id}>
-                      <span className="ver-date">{fmtDate(v.createdAt)}</span>
-                      <span className="ver-hyp">{v.hypothesis || v.label || "Snapshot"}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            ))}
-            {untagged.length > 0 && (
-              <div className="theme-card">
-                <div className="theme-name muted">Untagged</div>
-                {untagged.map((v) => (
-                  <div className="ver-row" key={v.id}>
-                    <span className="ver-date">{fmtDate(v.createdAt)}</span>
-                    <span className="ver-hyp">{v.hypothesis || v.label || "Snapshot"}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
+      {/* themes & versions live in the résumé editor's version bar — the
+          dashboard keeps only the version PICKER on the log form below */}
       <section className="dash-section">
         <div className="dash-section-head">
           <h2>Applications</h2>

@@ -7,11 +7,11 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { education, experiences, profiles } from "@/db/schema";
-import { deriveCandidateQuals, type CandidateQuals, type Credential } from "@/lib/opportunities/gates";
+import { deriveCandidateQuals, DEGREES, type CandidateQuals, type Credential, type Degree } from "@/lib/opportunities/gates";
 
 export type AboutOverrides = {
   yearsExperience?: number;
-  highestDegree?: Credential | "none";
+  highestDegree?: Degree | "none"; // licenses (CPA, bar…) come from certifications, not this pin
   currentEmployer?: string;
   trajectory?: string;
 };
@@ -19,30 +19,29 @@ export type AboutOverrides = {
 export type AboutFacts = {
   currentEmployer: { value: string | null; pinned: boolean };
   yearsExperience: { value: number | null; pinned: boolean };
-  highestDegree: { value: Credential | "none" | null; pinned: boolean };
+  highestDegree: { value: Degree | "none" | null; pinned: boolean };
   trajectory: { value: string | null; pinned: boolean };
 };
 
-const DEGREE_ORDER: (Credential | "none")[] = ["phd", "md", "jd", "masters", "bachelors", "none"];
-export const highestOf = (creds: Set<Credential>): Credential | "none" =>
-  DEGREE_ORDER.find((d) => d !== "none" && creds.has(d)) ?? "none";
+// highest-first display order (SATISFIES in gates.ts already encodes what a
+// degree unlocks; this list only picks which one to SHOW)
+const DEGREE_ORDER: (Degree | "none")[] = ["phd", "md", "jd", "mba", "masters", "bachelors", "associate", "none"];
+export const highestOf = (creds: Set<Credential>): Degree | "none" =>
+  DEGREE_ORDER.find((d): d is Degree => d !== "none" && creds.has(d)) ?? "none";
 
-// a pinned degree implies the ones beneath it (a masters holder has a bachelors)
-const IMPLIES: Record<string, Credential[]> = {
-  phd: ["phd", "masters", "bachelors"],
-  md: ["md", "masters", "bachelors"],
-  jd: ["jd", "masters", "bachelors"],
-  masters: ["masters", "bachelors"],
-  bachelors: ["bachelors"],
-  none: [],
-};
-
-/** The quals the ranking gates should use: derivation with pins applied. */
+/** The quals the ranking gates should use: derivation with pins applied.
+ *  A pinned degree replaces the DEGREES only — licenses (CPA, bar, RN…) come
+ *  from the certifications rail and survive the pin. */
 export function applyQualOverrides(derived: CandidateQuals, o: AboutOverrides | null): CandidateQuals {
   if (!o) return derived;
+  let credentials = derived.credentials;
+  if (o.highestDegree !== undefined) {
+    credentials = new Set([...derived.credentials].filter((c) => !(DEGREES as readonly string[]).includes(c)));
+    if (o.highestDegree !== "none") credentials.add(o.highestDegree);
+  }
   return {
     yearsExperience: o.yearsExperience ?? derived.yearsExperience,
-    credentials: o.highestDegree !== undefined ? new Set(IMPLIES[o.highestDegree] ?? []) : derived.credentials,
+    credentials,
   };
 }
 

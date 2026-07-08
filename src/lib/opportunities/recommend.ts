@@ -5,7 +5,7 @@
  */
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { education, experiences, opportunities, profiles, rankingSignals } from "@/db/schema";
+import { certifications, education, experiences, opportunities, profiles, rankingSignals } from "@/db/schema";
 import { deriveCandidateQuals, hardGate } from "./gates";
 import { applyQualOverrides } from "@/lib/profile/about";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
@@ -121,15 +121,16 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
   const vec = applyDrift(base, drift);
   // hard requirements are pass/fail — derive what this candidate can prove,
   // then apply any facts they've pinned on the About page (the user knows)
-  const [candExps, candEdu, candProfile] = me
+  const [candExps, candEdu, candCerts, candProfile] = me
     ? await Promise.all([
         db.select({ startDate: experiences.startDate }).from(experiences).where(eq(experiences.profileId, me.id)),
         db.select({ degree: education.degree }).from(education).where(eq(education.profileId, me.id)),
+        db.select({ name: certifications.name, issuer: certifications.issuer }).from(certifications).where(eq(certifications.profileId, me.id)),
         db.select({ aboutOverrides: profiles.aboutOverrides }).from(profiles).where(eq(profiles.id, me.id)).limit(1),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   const quals = applyQualOverrides(
-    deriveCandidateQuals({ experiences: candExps, education: candEdu }),
+    deriveCandidateQuals({ experiences: candExps, education: candEdu, certifications: candCerts }),
     (candProfile[0]?.aboutOverrides ?? null) as Parameters<typeof applyQualOverrides>[1],
   );
   const visible = me

@@ -30,9 +30,19 @@ FACTS:
 - min_years_experience: the years REQUIRED (e.g. "8+ years" → 8); null if not
   stated. Use the overall/headline requirement, not per-skill sub-requirements.
 - required_credentials: degrees/licenses the JD makes MANDATORY, normalized to
-  "phd" | "md" | "jd" | "masters" | "bachelors". "PhD preferred", "PhD a plus",
-  or "PhD or equivalent experience" do NOT count — required means the screen
-  would reject without it. Usually an empty list.
+  exactly one of: "phd","md","jd","mba","masters","bachelors","associate"
+  (degrees — md covers MBBS, jd covers LLB) or "cpa","ca","cfa","frm","cfp",
+  "bar","rn","pe","pmp" (licenses — bar = admitted to practice law, rn =
+  nursing licensure, pe = professional engineer). "PhD preferred", "a plus",
+  or "or equivalent experience" do NOT count — required means the screen
+  would reject without it. Requirements hide in prose ("you should have…",
+  "candidates must hold…", "membership in good standing") — read for meaning,
+  not just the word "required". Examples:
+    "BA required, MS or PhD preferred"                    → ["bachelors"]
+    "must have a J.D. and be a member of a state bar"     → ["jd","bar"]
+    "CPA or CA designation required"                      → []  (an either/or — don't gate)
+    "PhD in ML or equivalent industry experience"         → []
+  Every listed credential must be INDIVIDUALLY mandatory (they combine as AND).
 - company_stage (startup/growth/enterprise/unknown — infer from the company & language)
 - domain (e.g. "fintech backend", "AI infra", "growth marketing")
 - summary: 2-3 plain-English sentences on what the person would actually DO day

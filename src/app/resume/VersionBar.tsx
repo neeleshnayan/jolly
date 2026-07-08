@@ -39,6 +39,31 @@ export default function VersionBar({
   const [versionId, setVersionId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [newThemeOpen, setNewThemeOpen] = useState(false);
+  const [newThemeName, setNewThemeName] = useState("");
+
+  async function createTheme() {
+    const name = newThemeName.trim();
+    if (!name) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/track/theme", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, name }),
+      });
+      const j = await r.json();
+      if (r.ok && j.theme?.id) {
+        setThemes((ts) => [...ts, { id: j.theme.id, name, activeVersionId: null, versions: [] }]);
+        setThemeId(j.theme.id);
+        setNewThemeOpen(false);
+        setNewThemeName("");
+        setMsg(`Theme "${name}" ready — save a version under it`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -124,6 +149,27 @@ export default function VersionBar({
         ))}
         {untagged.length > 0 && <option value="__untagged">Untagged</option>}
       </select>
+      {newThemeOpen ? (
+        <span className="vb-newtheme">
+          <input
+            className="vb-select"
+            value={newThemeName}
+            placeholder="Quant, Founder, PM…"
+            autoFocus
+            onChange={(e) => setNewThemeName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void createTheme();
+              if (e.key === "Escape") setNewThemeOpen(false);
+            }}
+          />
+          <button className="vb-btn" onClick={() => void createTheme()} disabled={busy || !newThemeName.trim()}>✓</button>
+          <button className="vb-btn" onClick={() => setNewThemeOpen(false)}>✕</button>
+        </span>
+      ) : (
+        <button className="vb-btn" onClick={() => setNewThemeOpen(true)} title="A theme is a strategic angle — one résumé direction you're testing">
+          + theme
+        </button>
+      )}
 
       {versions.length > 0 && (
         <>
