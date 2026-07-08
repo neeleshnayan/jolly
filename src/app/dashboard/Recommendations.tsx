@@ -12,6 +12,7 @@ type Job = {
   remote: string | null;
   compMin: number | null;
   compMax: number | null;
+  compCurrency: string | null;
   stage: string | null;
   url: string | null;
   source: string | null;
@@ -243,10 +244,10 @@ export default function Recommendations({ userId }: { userId: string }) {
               </div>
 
               <div className="rec-facts">
-                {formatComp(j.compMin, j.compMax, j.location) && (
+                {formatComp(j.compMin, j.compMax, j.location, j.compCurrency) && (
                   <div className="rec-fact">
                     <span className="rec-fact-label">Comp</span>
-                    <span className="rec-fact-value">{formatComp(j.compMin, j.compMax, j.location)}</span>
+                    <span className="rec-fact-value">{formatComp(j.compMin, j.compMax, j.location, j.compCurrency)}</span>
                   </div>
                 )}
                 {j.location && (

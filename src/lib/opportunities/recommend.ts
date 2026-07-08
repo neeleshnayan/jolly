@@ -23,6 +23,7 @@ export type RankedJob = {
   remote: string | null;
   compMin: number | null;
   compMax: number | null;
+  compCurrency: string | null;
   stage: string | null;
   domain: string | null;
   url: string | null;
@@ -190,6 +191,7 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         remote: r.remote,
         compMin: r.compMin,
         compMax: r.compMax,
+        compCurrency: f.comp_currency ?? null, // extraction wins; display falls back to location inference
         stage: r.companyStage,
         domain: r.domain,
         url: r.url,
