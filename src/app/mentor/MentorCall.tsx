@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
+import SlotPicker from "./SlotPicker";
 import { displayCompany } from "@/lib/format/company";
 
 type Phase = "idle" | "recording" | "thinking" | "speaking";
@@ -783,7 +784,14 @@ export default function MentorCall({ userId }: { userId: string }) {
       const res = await fetch("/api/mentor/review", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, transcript: buildTranscript(turnsRef.current), insights }),
+        body: JSON.stringify({
+          userId,
+          transcript: buildTranscript(turnsRef.current),
+          insights,
+          // the approved recap = what the mentor remembers next call
+          summary: review.summary,
+          durationSec: callStartRef.current ? Math.round((Date.now() - callStartRef.current) / 1000) : undefined,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
@@ -933,9 +941,12 @@ export default function MentorCall({ userId }: { userId: string }) {
               </button>
             </div>
           ) : (
-            <button className="btn call-cta" onClick={startSession}>
-              Start the call
-            </button>
+            <>
+              <button className="btn call-cta" onClick={startSession}>
+                Start the call
+              </button>
+              <SlotPicker userId={userId} />
+            </>
           )}
           <div className="call-facts">
             <span>🎙 voice only</span>

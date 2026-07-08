@@ -9,6 +9,7 @@ import { getProvider, getProviderByName } from "@/llm";
 import { getMentorMap } from "@/lib/profile/map";
 import { getCallSpectrum } from "@/lib/opportunities/recommend";
 import { buildMentorSystemPrompt } from "./prompt";
+import { capabilityBrief } from "./capabilities";
 
 // Per-call context cache: the map + spectrum barely change between turns, but
 // rebuilding them cost ~8-10 DB round trips PER SPOKEN TURN — pure latency on
@@ -48,10 +49,14 @@ export async function* mentorTurn(input: {
 }): AsyncIterable<string> {
   const { map, spectrum } = await callContext(input.userId);
   const turnIndex = input.messages.filter((m) => m.role === "assistant").length;
-  const system = buildMentorSystemPrompt(map, spectrum, input.secondsLeft, {
-    index: turnIndex,
-    asked: askedQuestions(input.messages),
-  });
+  // capabilities: when the user names a role from their world, this turn's
+  // prompt gains a focused dossier (deterministic detection, cheap, cached)
+  const brief = await capabilityBrief(input.userId, input.messages);
+  const system =
+    buildMentorSystemPrompt(map, spectrum, input.secondsLeft, {
+      index: turnIndex,
+      asked: askedQuestions(input.messages),
+    }) + brief;
   const provider = getProviderByName(input.brain) ?? getProvider("mentor");
   yield* provider.streamChat({
     system,

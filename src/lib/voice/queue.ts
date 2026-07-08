@@ -30,8 +30,10 @@ function prune() {
 
 export type QueueState = { state: "live" | "waiting"; position: number; waitingCount: number };
 
-/** Join the queue (idempotent) or refresh your heartbeat. */
-export function joinOrBeat(userId: string): QueueState {
+/** Join the queue (idempotent) or refresh your heartbeat. `priority` (a
+ *  booked slot happening NOW) goes to the FRONT of the line — a reservation
+ *  is a promise; it still never interrupts a live call. */
+export function joinOrBeat(userId: string, priority = false): QueueState {
   prune();
   const now = Date.now();
   if (holder?.userId === userId) {
@@ -41,9 +43,14 @@ export function joinOrBeat(userId: string): QueueState {
   const mine = waiting.find((w) => w.userId === userId);
   if (mine) {
     mine.lastBeat = now;
+    if (priority && waiting[0]?.userId !== userId) {
+      waiting = [mine, ...waiting.filter((w) => w.userId !== userId)];
+    }
   } else if (!holder) {
     holder = { userId, since: now, lastBeat: now };
     return { state: "live", position: 0, waitingCount: 0 };
+  } else if (priority) {
+    waiting.unshift({ userId, since: now, lastBeat: now });
   } else {
     waiting.push({ userId, since: now, lastBeat: now });
   }

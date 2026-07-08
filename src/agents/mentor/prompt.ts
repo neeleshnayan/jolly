@@ -91,6 +91,32 @@ If time has fully run out mid-thread, bounce politely: acknowledge the thread is
         .join("\n")
     : "(nothing yet — this is an early conversation)";
 
+  // continuity: this is a RELATIONSHIP. Past-call recaps + what they've DONE
+  // since (applications, outcomes) are part of the closed world — reference
+  // them naturally, never re-ask what's already known.
+  const ago = (d: Date) => {
+    const days = Math.round((Date.now() - new Date(d).getTime()) / 86400000);
+    return days <= 0 ? "earlier today" : days === 1 ? "yesterday" : `${days} days ago`;
+  };
+  const prevCallsBlock = map.previousCalls.length
+    ? `\n\nYOUR PREVIOUS CALLS WITH THEM (you remember these — this is call ${map.previousCalls.length + 1}, a continuing relationship, NOT a first meeting. Pick up threads naturally: "last time you mentioned…". Never re-ask what these already answer, and never greet them like a stranger):\n${map.previousCalls
+        .map((c) => `- (${ago(c.createdAt)}) ${c.summary}`)
+        .join("\n")}`
+    : "";
+  const STATUS_LINE: Record<string, string> = {
+    applied: "applied, waiting to hear back",
+    screening: "in screening",
+    interview: "interviewing",
+    offer: "GOT THE OFFER",
+    rejected: "didn't work out",
+    ghosted: "no response",
+  };
+  const activityBlock = map.activity.length
+    ? `\n\nWHAT THEY'VE DONE SINCE YOU LAST SPOKE (their live applications — you're their mentor through the PROCESS too. Ask how it's going where it's natural; celebrate offers properly; treat rejections as data, not failure; coach concretely on prep, follow-ups, and negotiation when they want it):\n${map.activity
+        .map((a) => `- ${a.role ?? "a role"}${a.company ? ` at ${a.company}` : ""} — ${STATUS_LINE[a.status] ?? a.status}${a.lastResult ? ` (${a.lastResult.toLowerCase()})` : ""}, ${ago(a.appliedAt)}`)
+        .join("\n")}`
+    : "";
+
   const coveredDims = new Set(map.insights.map((i) => i.dimension));
   const thin = DIMENSIONS.filter(
     (d) => !coveredDims.has(d.split(" ")[0]),
@@ -149,7 +175,7 @@ Résumé history:
 ${history}
 
 Understanding so far:
-${known}
+${known}${prevCallsBlock}${activityBlock}
 
 WHERE YOUR CURIOSITY IS THIN (drift here when it feels natural — never interrogate):
 ${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${askedBlock}${turnBlock}${closingBlock}${timeHint}

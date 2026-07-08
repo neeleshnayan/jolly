@@ -981,6 +981,20 @@ a { color: var(--accent); }
   .about-fact.wide { grid-column: span 1; }
 }
 
+/* slot picker — the mentor's diary */
+.slot-picker { margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.slot-panel { width: min(420px, 92vw); border: 1px solid var(--glass-border); border-radius: 14px; padding: 12px; background: var(--glass); backdrop-filter: blur(16px) saturate(1.5); -webkit-backdrop-filter: blur(16px) saturate(1.5); }
+.slot-days { display: flex; gap: 6px; margin-bottom: 10px; }
+.slot-day { font: inherit; font-size: 12px; font-weight: 650; border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+.slot-day.on { border-color: var(--accent); color: var(--accent); }
+.slot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; max-height: 210px; overflow-y: auto; }
+.slot-chip { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--glass-strong); color: var(--ink); border-radius: 8px; padding: 5px 4px; cursor: pointer; }
+.slot-chip.free:hover { border-color: var(--accent); color: var(--accent); }
+.slot-chip.taken { opacity: 0.35; cursor: default; text-decoration: line-through; }
+.slot-chip.yours { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.slot-hint { font-size: 11px; color: var(--muted); margin-top: 9px; line-height: 1.5; }
+.slot-mine { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; border: 1px solid var(--glass-border); background: var(--glass); border-radius: 999px; padding: 6px 14px; }
+
 /* call queue — one live call per GPU; waiting is honest, not degraded */
 .call-queue { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0 2px; }
 .call-queue-pulse { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); animation: queue-pulse 1.6s ease-in-out infinite; }

@@ -12,6 +12,7 @@
  *
  * See career-copilot-brief.md §11, §13 for the why.
  */
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -371,6 +372,43 @@ export const opportunities = pgTable(
     // nulls stay distinct, so pasted/sample rows (external_id null) never collide;
     // board rows dedup on their ATS id. Blocks double-inserts from racing fetches.
     externalIdUniq: uniqueIndex("opportunities_external_id_uniq").on(t.externalId),
+  }),
+);
+
+// ---------------------------------------------- mentor_calls (call continuity)
+// One row per completed mentor call: the recap the user approved. The NEXT
+// call's prompt gets these ("last time we spoke about…") so call two continues
+// the relationship instead of restarting it — understand once, never re-ask.
+
+export const mentorCalls = pgTable("mentor_calls", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profileId: uuid("profile_id")
+    .notNull()
+    .references(() => profiles.id, { onDelete: "cascade" }),
+  summary: text("summary").notNull(),
+  durationSec: integer("duration_sec"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ------------------------------------------- call_bookings (the mentor's diary)
+// 30-minute slots anyone can pre-book. The slot's start is unique — one person
+// per slot, mirroring the one-live-call GPU lane. Status: booked | done |
+// cancelled (missed slots just age out).
+
+export const callBookings = pgTable(
+  "call_bookings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    slotAt: timestamp("slot_at", { withTimezone: true }).notNull(),
+    status: text("status").default("booked").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    // partial: cancelled rows release the slot for rebooking
+    slotUniq: uniqueIndex("call_bookings_slot_uniq").on(t.slotAt).where(sql`status = 'booked'`),
   }),
 );
 

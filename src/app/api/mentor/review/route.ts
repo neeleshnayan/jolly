@@ -16,6 +16,9 @@ import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
 import { buildProfileText } from "@/lib/scoring/profileText";
 import { resolveUserId } from "@/lib/auth/user";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { mentorCalls, profiles } from "@/db/schema";
 
 export const runtime = "nodejs";
 
@@ -23,12 +26,14 @@ const bodySchema = z.object({
   userId: z.string().min(1).optional(),
   transcript: z.string().default(""),
   insights: z.array(extractedInsight).default([]),
+  summary: z.string().default(""), // the user-approved recap — call continuity's raw material
+  durationSec: z.number().int().min(0).max(7200).optional(),
 });
 
 export async function POST(req: Request) {
   try {
     const parsed = bodySchema.parse(await req.json());
-    const { transcript, insights } = parsed;
+    const { transcript, insights, summary, durationSec } = parsed;
     // session-first — this route WRITES to the insight map; a raw body userId
     // must never pick whose map in production
     const userId = await resolveUserId(parsed.userId);
@@ -38,6 +43,13 @@ export async function POST(req: Request) {
       extraction: { insights },
       transcript,
     });
+    // continuity: the approved recap becomes what the mentor "remembers" next call
+    if (summary.trim().length >= 30) {
+      const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+      if (p) {
+        await db.insert(mentorCalls).values({ profileId: p.id, summary: summary.trim().slice(0, 2000), durationSec: durationSec ?? null });
+      }
+    }
     // in the background: refresh the cached scoring AND fill the TBD target-role
     // theme from what the call revealed. Sequential (shared local GPU).
     after(async () => {

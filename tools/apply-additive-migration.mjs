@@ -32,6 +32,22 @@ if (!url) {
 const sql = postgres(url, { max: 1, connect_timeout: 15 });
 
 const statements = [
+  `CREATE TABLE IF NOT EXISTS mentor_calls (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+     profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+     summary text NOT NULL,
+     duration_sec integer,
+     created_at timestamp with time zone DEFAULT now() NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS call_bookings (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+     profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+     slot_at timestamp with time zone NOT NULL,
+     status text DEFAULT 'booked' NOT NULL,
+     created_at timestamp with time zone DEFAULT now() NOT NULL
+   )`,
+  `DROP INDEX IF EXISTS call_bookings_slot_uniq`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS call_bookings_slot_uniq ON call_bookings (slot_at) WHERE status = 'booked'`,
   `ALTER TYPE opportunity_source ADD VALUE IF NOT EXISTS 'consider'`,
   `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS about_overrides jsonb DEFAULT '{}'`,
   `ALTER TABLE applications ADD COLUMN IF NOT EXISTS notes text`,
