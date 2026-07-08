@@ -11,6 +11,7 @@ import VersionBar from "./VersionBar";
 import ResumeSheet from "./ResumeSheet";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
+import SkillMap, { type SkillMapEntry } from "../SkillMap";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
@@ -664,6 +665,37 @@ export default function ResumeEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ---- skill map (AI rail): market demand → one-click add to the sheet ----
+  const [skillRadar, setSkillRadar] = useState<SkillMapEntry[]>([]);
+  const [addingSkill, setAddingSkill] = useState<string | null>(null);
+  const [justAddedSkills] = useState(() => new Set<string>());
+  useEffect(() => {
+    fetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setSkillRadar(j.skillRadar ?? []))
+      .catch(() => {});
+  }, [userId]);
+  async function addSkillFromMap(name: string) {
+    setAddingSkill(name);
+    try {
+      const res = await fetch("/api/profile/entry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, kind: "skill", action: "create" }),
+      });
+      const json = await res.json();
+      if (!json.id) throw new Error(json.error || "Add failed");
+      setData((d) => ({ ...d, skills: [...d.skills, { id: json.id, name, category: null }] }));
+      save("skill", json.id, { name });
+      justAddedSkills.add(name); // flips to "already on your résumé" instantly
+      setStatus(`Added "${name}" to Skills`);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Add failed");
+    } finally {
+      setAddingSkill(null);
+    }
+  }
 
   async function addEntry(kind: EntryKind) {
     setStatus("Adding…");
@@ -1669,6 +1701,9 @@ export default function ResumeEditor({
                 ) : (
                   <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
                 )}
+
+                {/* the market's skill demand, one click from the sheet */}
+                <SkillMap radar={skillRadar} mode="add" onAdd={(s) => void addSkillFromMap(s)} adding={addingSkill} justAdded={justAddedSkills} />
               </div>
             </div>
         </aside>

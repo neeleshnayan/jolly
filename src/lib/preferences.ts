@@ -10,8 +10,9 @@ import { profiles } from "@/db/schema";
 export type CompCurrency = "INR" | "USD" | "GBP" | "EUR";
 
 export type Preferences = {
-  currentComp?: number; // annual, in compCurrency
-  expectedComp?: number;
+  currentComp?: number; // legacy — superseded by acceptMin (kept for old rows)
+  acceptMin?: number; // the floor they'd accept, annual, in compCurrency
+  expectedComp?: number; // the target
   compCurrency?: CompCurrency;
   locations?: string[];
   remote?: "remote" | "hybrid" | "onsite" | "any";
@@ -31,7 +32,10 @@ export async function savePreferences(userId: string, prefs: Preferences): Promi
   const clean: Preferences = {};
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) && v > 0 ? Math.round(v) : undefined);
   clean.currentComp = n(prefs.currentComp);
+  clean.acceptMin = n(prefs.acceptMin);
   clean.expectedComp = n(prefs.expectedComp);
+  // the floor can't sit above the target
+  if (clean.acceptMin && clean.expectedComp && clean.acceptMin > clean.expectedComp) clean.acceptMin = clean.expectedComp;
   if (prefs.compCurrency && ["INR", "USD", "GBP", "EUR"].includes(prefs.compCurrency)) clean.compCurrency = prefs.compCurrency;
   if (Array.isArray(prefs.locations)) {
     const locs = prefs.locations.map((s) => String(s).trim()).filter(Boolean).slice(0, 6);

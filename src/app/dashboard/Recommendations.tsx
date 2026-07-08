@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { formatComp } from "@/lib/format/comp";
 import { displayCompany } from "@/lib/format/company";
 import ApplyKit from "./ApplyKit";
+import SkillMap from "../SkillMap";
 
 type Job = {
   id: string;
@@ -30,7 +31,8 @@ const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: 
 const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
 
 type Prefs = {
-  currentComp?: number;
+  currentComp?: number; // legacy
+  acceptMin?: number;
   expectedComp?: number;
   compCurrency?: "INR" | "USD" | "GBP" | "EUR";
   locations?: string[];
@@ -243,36 +245,7 @@ export default function Recommendations({ userId }: { userId: string }) {
         </button>
       </div>
       {showRefine && <RefinePanel prefs={prefs} saving={savingPrefs} onSave={savePrefs} />}
-      <div className="bookmark-row">
-        <input
-          className="f-box bookmark-input"
-          value={bookmarkUrl}
-          placeholder="Found a job elsewhere? Paste its URL to rank it against you…"
-          onChange={(e) => setBookmarkUrl(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void bookmark()}
-        />
-        <button className="refine-toggle" onClick={() => void bookmark()} disabled={bookmarking || !bookmarkUrl.trim()}>
-          {bookmarking ? "Saving…" : "+ Save job"}
-        </button>
-        {bookmarkMsg && <span className="dash-hint">{bookmarkMsg}</span>}
-      </div>
-      {radar.length > 0 && (
-        <div className="skill-radar">
-          <span className="skill-radar-label" title="Skills your aligned roles keep asking for — green you have, amber the market wants and your résumé doesn't show. Click to filter.">
-            skills across your matches
-          </span>
-          {radar.map((r) => (
-            <button
-              key={r.skill}
-              className={`skill-chip ${r.have ? "have" : "missing"}${skillFilter === r.skill ? " on" : ""}`}
-              onClick={() => setSkillFilter((f) => (f === r.skill ? null : r.skill))}
-              title={r.have ? `${r.demand} aligned roles ask for this — you have it` : `${r.demand} aligned roles ask for this — not on your résumé yet`}
-            >
-              {r.have ? "✓" : "⚡"} {r.skill} <span className="skill-n">×{r.demand}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <SkillMap radar={radar} mode="filter" selected={skillFilter} onSelect={setSkillFilter} />
       {skillFilter && (
         <div className="skill-callout">
           {activeRadar && !activeRadar.have ? (
@@ -380,6 +353,21 @@ export default function Recommendations({ userId }: { userId: string }) {
           </div>
         ))}
       </div>
+      {/* the escape hatch closes the section: seen everything and still have a
+          role from elsewhere? bring it into the pipeline */}
+      <div className="bookmark-row">
+        <input
+          className="f-box bookmark-input"
+          value={bookmarkUrl}
+          placeholder="Found a job elsewhere? Paste its URL to rank it against you…"
+          onChange={(e) => setBookmarkUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void bookmark()}
+        />
+        <button className="refine-toggle" onClick={() => void bookmark()} disabled={bookmarking || !bookmarkUrl.trim()}>
+          {bookmarking ? "Saving…" : "+ Save job"}
+        </button>
+        {bookmarkMsg && <span className="dash-hint">{bookmarkMsg}</span>}
+      </div>
       {kitFor && <ApplyKit userId={userId} opportunityId={kitFor.id} jobTitle={kitFor.title} onClose={() => setKitFor(null)} />}
     </section>
   );
@@ -387,7 +375,7 @@ export default function Recommendations({ userId }: { userId: string }) {
 
 function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean; onSave: (p: Prefs) => void }) {
   const [currency, setCurrency] = useState<NonNullable<Prefs["compCurrency"]>>(prefs.compCurrency ?? "INR");
-  const [current, setCurrent] = useState<number | undefined>(prefs.currentComp);
+  const [floor, setFloor] = useState<number | undefined>(prefs.acceptMin ?? prefs.currentComp);
   const [expected, setExpected] = useState<number | undefined>(prefs.expectedComp);
   const [locations, setLocations] = useState((prefs.locations ?? []).join(", "));
   const [remote, setRemote] = useState<Prefs["remote"]>(prefs.remote ?? "any");
@@ -396,19 +384,23 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
   function pickCurrency(cur: NonNullable<Prefs["compCurrency"]>) {
     // numbers don't survive a currency switch — ₹60L is not $60k
     setCurrency(cur);
-    setCurrent(undefined);
+    setFloor(undefined);
     setExpected(undefined);
   }
 
   function submit() {
     onSave({
-      currentComp: current,
+      acceptMin: floor,
       expectedComp: expected,
       compCurrency: currency,
       locations: locations.split(",").map((s) => s.trim()).filter(Boolean),
       remote,
     });
   }
+
+  const lo = floor ?? min;
+  const hi = expected ?? Math.min(max, min + (max - min) * 0.4);
+  const pct = (v: number) => ((v - min) / (max - min)) * 100;
 
   return (
     <div className="refine-panel">
@@ -422,14 +414,35 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
             <option value="EUR">€ EUR</option>
           </select>
         </label>
-        <label className="refine-field refine-slider">
-          <span>Current comp · <b>{compLabel(current, currency)}</b></span>
-          <input type="range" min={min} max={max} step={step} value={current ?? min} onChange={(e) => setCurrent(Number(e.target.value))} />
-        </label>
-        <label className="refine-field refine-slider">
-          <span>Expected comp · <b>{compLabel(expected, currency)}</b></span>
-          <input type="range" min={min} max={max} step={step} value={expected ?? min} onChange={(e) => setExpected(Number(e.target.value))} />
-        </label>
+        <div className="refine-field refine-wide refine-comp">
+          <span>
+            Comp range — would accept from <b>{compLabel(lo, currency)}</b>, aiming for <b>{compLabel(hi, currency)}</b>
+          </span>
+          <div className="range-dual">
+            <div className="range-track">
+              <i style={{ left: `${pct(lo)}%`, width: `${Math.max(0, pct(hi) - pct(lo))}%` }} />
+            </div>
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={lo}
+              aria-label="Floor you would accept"
+              onChange={(e) => setFloor(Math.min(Number(e.target.value), hi))}
+            />
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={hi}
+              aria-label="Target compensation"
+              onChange={(e) => setExpected(Math.max(Number(e.target.value), lo))}
+            />
+          </div>
+          <span className="range-hint">Roles at your target rank clean · inside the range barely dip · below the floor sink hard.</span>
+        </div>
         <label className="refine-field">
           <span>How you want to work</span>
           <select value={remote} onChange={(e) => setRemote(e.target.value as Prefs["remote"])}>

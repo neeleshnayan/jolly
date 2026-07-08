@@ -72,9 +72,10 @@ const compFmt = (n: number, cur: string) =>
       : `₹${Math.round(n / 1000)}k`
     : `${cur === "USD" ? "$" : cur === "GBP" ? "£" : "€"}${Math.round(n / 1000)}k`;
 
-/** How well the role's stated pay meets the user's expectation — compared in
- *  USD via rough FX. Unknown job comp OR unknown job currency is NEUTRAL
- *  (a confident cross-currency penalty would be worse than none). */
+/** The user states a RANGE: a floor they'd accept and a target they're aiming
+ *  for. Roles at/above target rank clean; inside the range get a whisper of a
+ *  penalty (they said they'd take it); below the floor sink hard. Compared in
+ *  USD via rough FX; unknown job comp OR currency is NEUTRAL. */
 function compRefine(pref: Preferences, compMin: number | null, compMax: number | null, jobCurrency: string | null) {
   const exp = pref.expectedComp;
   if (!exp) return { factor: 1 } as { factor: number; reason?: string; gap?: string };
@@ -83,9 +84,12 @@ function compRefine(pref: Preferences, compMin: number | null, compMax: number |
   if (!top || !jobCurrency || !TO_USD[jobCurrency] || !TO_USD[userCur]) return { factor: 1 };
   const topUsd = top * TO_USD[jobCurrency];
   const expUsd = exp * TO_USD[userCur];
+  // floor: stated acceptMin, else legacy currentComp, else 15% wiggle under target
+  const floorUsd = (pref.acceptMin ?? pref.currentComp ?? exp * 0.85) * TO_USD[userCur];
   if (topUsd >= expUsd) return { factor: 1, reason: `Comp clears your ${compFmt(exp, userCur)} target` };
+  if (topUsd >= floorUsd) return { factor: 0.95, reason: `Comp inside your acceptable range` };
   const ratio = topUsd / expUsd;
-  return { factor: Math.max(0.6, 0.6 + 0.4 * ratio), gap: `Comp ~${Math.round((1 - ratio) * 100)}% under your target` };
+  return { factor: Math.max(0.6, 0.6 + 0.4 * ratio), gap: `Comp below the floor you'd accept` };
 }
 
 /** Location / remote compatibility — soft factors so nothing is hidden, just

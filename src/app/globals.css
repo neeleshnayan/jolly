@@ -1156,30 +1156,147 @@ a { color: var(--accent); }
   border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 0 0 18px; text-align: left;
 }
 
-/* skill radar — the overlap lens over aligned roles */
-.skill-radar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
-.skill-radar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-right: 4px; cursor: help; }
-.skill-chip {
-  font: inherit; font-size: 11.5px; font-weight: 600;
-  border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer;
-  background: var(--glass-strong); color: var(--ink);
+/* skill map — the overlap lens, designed to feel warm not clinical */
+.skillmap {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow);
+  padding: 16px 18px 14px;
+  margin-bottom: 14px;
 }
-.skill-chip.have { color: #15803d; border-color: color-mix(in srgb, #16a34a 35%, transparent); }
-[data-theme="dark"] .skill-chip.have { color: #6ee7a0; }
-.skill-chip.missing { color: #b45309; border-color: color-mix(in srgb, #d97706 40%, transparent); }
-[data-theme="dark"] .skill-chip.missing { color: #fbbf24; }
-.skill-chip.on { outline: 2px solid var(--accent); outline-offset: 1px; }
-.skill-n { opacity: 0.65; font-weight: 700; }
+.skillmap-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.skillmap-title { font-size: 14px; font-weight: 750; letter-spacing: -0.01em; }
+.skillmap-sub { font-size: 11.5px; color: var(--muted); }
+.skillmap-group {
+  font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.07em;
+  color: #b45309; margin: 12px 0 7px;
+}
+[data-theme="dark"] .skillmap-group { color: #fbbf24; }
+.skillmap-group.have { color: #15803d; }
+[data-theme="dark"] .skillmap-group.have { color: #6ee7a0; }
+.skillmap-rows { display: flex; flex-direction: column; gap: 5px; }
+.skillmap-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.skillmap-row.clickable { cursor: pointer; }
+.skillmap-row:hover { background: color-mix(in srgb, #d97706 7%, transparent); }
+.skillmap-row.on { border-color: color-mix(in srgb, #d97706 45%, transparent); background: color-mix(in srgb, #d97706 10%, transparent); }
+.skillmap-skill { flex: 0 0 30%; min-width: 110px; font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skillmap-bar { flex: 1; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 14%, transparent); overflow: hidden; }
+.skillmap-bar i {
+  display: block; height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+  transition: width 0.4s ease;
+}
+.skillmap-count { flex: 0 0 auto; font-size: 11.5px; color: var(--muted); font-weight: 650; min-width: 52px; text-align: right; }
+.skillmap-add {
+  flex: 0 0 auto;
+  font: inherit; font-size: 11.5px; font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border-radius: 999px; padding: 3px 12px; cursor: pointer;
+  transition: background 0.12s;
+}
+.skillmap-add:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.skillmap-add:disabled { opacity: 0.5; cursor: default; }
+.skillmap-haves { display: flex; flex-wrap: wrap; gap: 6px; }
+.skillmap-havechip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 12px; font-weight: 600;
+  color: #15803d;
+  border: 1px solid color-mix(in srgb, #16a34a 30%, transparent);
+  background: color-mix(in srgb, #16a34a 8%, transparent);
+  border-radius: 999px; padding: 4px 12px;
+  cursor: pointer;
+}
+.skillmap-havechip:disabled { cursor: default; }
+[data-theme="dark"] .skillmap-havechip { color: #6ee7a0; }
+.skillmap-havechip.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.skillmap-haven { font-size: 10.5px; opacity: 0.7; font-weight: 750; }
+.skillmap-honesty { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 12px; line-height: 1.5; }
 .skill-callout {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
   font-size: 12.5px; line-height: 1.5; color: var(--ink);
-  border: 1px solid var(--glass-border); background: var(--glass); border-radius: 12px;
-  padding: 9px 13px; margin-bottom: 12px;
+  border: 1px solid var(--glass-border); background: var(--glass); border-radius: 14px;
+  padding: 10px 14px; margin-bottom: 12px;
 }
+/* compact skill map inside the narrow editor rail: rows become a 2-line grid */
+.editor-rail .skillmap { padding: 13px 14px 12px; margin: 10px 0 0; }
+.editor-rail .skillmap-sub { display: none; }
+.editor-rail .skillmap-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "skill add" "bar count";
+  row-gap: 6px;
+  column-gap: 8px;
+  padding: 8px 10px;
+}
+.editor-rail .skillmap-skill { grid-area: skill; flex: none; min-width: 0; }
+.editor-rail .skillmap-add { grid-area: add; }
+.editor-rail .skillmap-bar { grid-area: bar; }
+.editor-rail .skillmap-count { grid-area: count; min-width: 0; }
 
-/* refine panel sliders */
-.refine-slider input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; margin-top: 8px; }
-.refine-slider span b { color: var(--accent); font-weight: 700; }
+/* refine panel: one comp range, two thumbs (floor → target) */
+.refine-comp span b { color: var(--accent); font-weight: 700; }
+.range-dual { position: relative; height: 30px; margin-top: 10px; }
+.range-dual input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none; /* the track is dead; only thumbs are live */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-dual input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 3px solid var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+  margin-top: 5px;
+}
+.range-dual input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 3px solid var(--accent);
+  cursor: grab;
+}
+.range-track {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+}
+.range-track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent));
+}
+.range-hint { display: block; font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
 
 /* recommendation card: dismiss */
 .rec-title-side { display: flex; align-items: center; gap: 6px; }
