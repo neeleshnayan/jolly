@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveUserId } from "@/lib/auth/user";
-import { createApplication, setApplicationStatus } from "@/lib/track/persist";
+import { createApplication, setApplicationStatus, updateApplication } from "@/lib/track/persist";
 
 export const runtime = "nodejs";
 
@@ -24,16 +24,26 @@ export async function POST(req: Request) {
   }
 }
 
-// PATCH — advance an application's stage
+// PATCH — advance an application's stage, and/or edit its kanban card
+// (notes / follow-up date). Stage changes append to the funnel timeline;
+// card edits are plain updates.
 export async function PATCH(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-    if (typeof body.applicationId !== "string" || typeof body.stage !== "string") {
-      return NextResponse.json({ error: "applicationId and stage required" }, { status: 400 });
+    if (typeof body.applicationId !== "string") {
+      return NextResponse.json({ error: "applicationId required" }, { status: 400 });
     }
-    await setApplicationStatus(userId, body.applicationId, body.stage, body.result);
+    if (typeof body.stage === "string") {
+      await setApplicationStatus(userId, body.applicationId, body.stage, body.result);
+    }
+    if ("notes" in body || "followUpAt" in body) {
+      await updateApplication(userId, body.applicationId, {
+        ...("notes" in body ? { notes: typeof body.notes === "string" && body.notes.trim() ? body.notes.slice(0, 2000) : null } : {}),
+        ...("followUpAt" in body ? { followUpAt: body.followUpAt ? new Date(body.followUpAt) : null } : {}),
+      });
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });

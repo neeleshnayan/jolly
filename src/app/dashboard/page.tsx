@@ -26,10 +26,11 @@ export default async function DashboardPage({
   const applications = await listApplications(userId);
 
   // serialize dates for the client boundary
-  const s = <T extends { createdAt?: Date; appliedAt?: Date }>(row: T) => ({
+  const s = <T extends { createdAt?: Date; appliedAt?: Date; followUpAt?: Date | null }>(row: T) => ({
     ...row,
     ...(row.createdAt ? { createdAt: row.createdAt.toISOString() } : {}),
     ...(row.appliedAt ? { appliedAt: row.appliedAt.toISOString() } : {}),
+    ...(row.followUpAt ? { followUpAt: row.followUpAt.toISOString() } : {}),
   });
 
   return (

@@ -23,6 +23,7 @@ import {
   jsonb,
   timestamp,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------- enums
@@ -292,6 +293,8 @@ export const applications = pgTable("applications", {
   }),
   coverLetterId: uuid("cover_letter_id"), // future
   status: text("status").default("applied").notNull(), // latest stage (denormalized)
+  notes: text("notes"), // the user's own scratchpad per application (kanban card)
+  followUpAt: timestamp("follow_up_at", { withTimezone: true }), // nudge date; overdue = surfaced on the card
   appliedAt: timestamp("applied_at", { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -356,6 +359,30 @@ export const opportunities = pgTable(
     // nulls stay distinct, so pasted/sample rows (external_id null) never collide;
     // board rows dedup on their ATS id. Blocks double-inserts from racing fetches.
     externalIdUniq: uniqueIndex("opportunities_external_id_uniq").on(t.externalId),
+  }),
+);
+
+// ------------------------------------------ ranking_signals (implicit feedback)
+// One row per user↔role interaction: impression | apply_click | applied |
+// dismiss. This log is the raw material for learned per-user ranking weights —
+// it must start accumulating BEFORE the learning ships, so it's written from
+// day one. Dismiss also acts immediately: dismissed roles leave the ranking.
+
+export const rankingSignals = pgTable(
+  "ranking_signals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    profileId: uuid("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    opportunityId: uuid("opportunity_id")
+      .notNull()
+      .references(() => opportunities.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // impression | apply_click | applied | dismiss
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    byProfileKind: index("ranking_signals_profile_kind_idx").on(t.profileId, t.kind),
   }),
 );
 

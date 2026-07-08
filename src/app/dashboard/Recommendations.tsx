@@ -111,11 +111,41 @@ export default function Recommendations({ userId }: { userId: string }) {
     }
   }
 
+  // implicit-feedback signals: fire-and-forget writes that train the future
+  // per-user ranker. Never block or error the UI over telemetry.
+  const signal = useCallback(
+    (kind: string, ids: string | string[]) => {
+      const opportunityIds = Array.isArray(ids) ? ids : [ids];
+      void fetch("/api/opportunities/signal", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, kind, opportunityIds }),
+      }).catch(() => {});
+    },
+    [userId],
+  );
+  // one impression batch per set of visible cards (not per render)
+  const impressionsSent = useState(() => new Set<string>())[0];
+  useEffect(() => {
+    const top5 = (matches ?? []).slice(0, 5).map((j) => j.id).filter((id) => !impressionsSent.has(id));
+    if (!top5.length) return;
+    top5.forEach((id) => impressionsSent.add(id));
+    signal("impression", top5);
+  }, [matches, signal, impressionsSent]);
+
+  // "Not for me": drops the card immediately AND permanently removes the role
+  // from this user's ranking (strongest negative signal we can collect)
+  function dismiss(id: string) {
+    setMatches((m) => (m ? m.filter((j) => j.id !== id) : m));
+    signal("dismiss", id);
+  }
+
   // application tracking: clicking "View & apply" opens the posting AND asks
   // for a one-tap confirm — honest data (no phantom applications from bounces),
   // zero forms. Confirmed rows feed the outcome funnel on this same dashboard.
   const [confirming, setConfirming] = useState<Record<string, "ask" | "saving" | "done">>({});
   function onApplyClick(id: string) {
+    signal("apply_click", id);
     setConfirming((c) => (c[id] ? c : { ...c, [id]: "ask" }));
   }
   async function confirmApplied(j: Job) {
@@ -126,6 +156,7 @@ export default function Recommendations({ userId }: { userId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId, company: j.company, role: j.title, opportunityId: j.id }),
       });
+      signal("applied", j.id);
       setConfirming((c) => ({ ...c, [j.id]: "done" }));
     } catch {
       setConfirming((c) => ({ ...c, [j.id]: "ask" })); // let them retry
@@ -196,7 +227,12 @@ export default function Recommendations({ userId }: { userId: string }) {
                   <div className="rec-title">{j.title}</div>
                   <div className="rec-co">{displayCompany(j.company)}</div>
                 </div>
-                {j.source && <span className="rec-source">{SOURCE_LABEL[j.source] ?? j.source}</span>}
+                <span className="rec-title-side">
+                  {j.source && <span className="rec-source">{SOURCE_LABEL[j.source] ?? j.source}</span>}
+                  <button className="rec-dismiss" onClick={() => dismiss(j.id)} title="Not for me — never rank this role for me again (and teach the ranking what to avoid)">
+                    ✕
+                  </button>
+                </span>
               </div>
 
               <div className="rec-facts">

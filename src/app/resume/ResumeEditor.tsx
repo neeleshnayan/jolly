@@ -38,6 +38,22 @@ const DEFAULT_STYLE: StyleConfig = {
   fontFamily: "",
   template: "clean",
 };
+
+/** ATS score as a ring — the same number reads as progress, not a grade. */
+function AtsRing({ score }: { score: number }) {
+  const r = 24;
+  const c = 2 * Math.PI * r;
+  const cls = score >= 70 ? "good" : score >= 45 ? "mid" : "low";
+  return (
+    <svg className={`ats-ring ${cls}`} viewBox="0 0 60 60" width="60" height="60" role="img" aria-label={`${score}% keyword match`}>
+      <circle className="ats-ring-track" cx="30" cy="30" r={r} />
+      <circle className="ats-ring-fill" cx="30" cy="30" r={r} strokeDasharray={`${(score / 100) * c} ${c}`} transform="rotate(-90 30 30)" />
+      <text x="30" y="35" textAnchor="middle" className="ats-ring-num">
+        {score}%
+      </text>
+    </svg>
+  );
+}
 const TEMPLATE_OPTIONS = [
   { key: "clean", label: "Clean", hint: "Understated, left-aligned — the safe default" },
   { key: "accent-name", label: "Accent", hint: "Your name in the accent color — modern & warm" },
@@ -222,6 +238,14 @@ export default function ResumeEditor({
   type AtsResult = { score: number; required: { term: string; hit: boolean }[]; preferred: { term: string; hit: boolean }[] };
   const [ats, setAts] = useState<AtsResult | null>(null);
   const [atsBusy, setAtsBusy] = useState(false);
+  // previous run for THIS JD (localStorage) — the before/after is the payoff
+  // of the weave→re-check loop, so it must survive reloads
+  const [atsPrev, setAtsPrev] = useState<{ score: number; at: number } | null>(null);
+  const atsRunKey = (jdText: string) => {
+    let h = 5381;
+    for (const ch of jdText.trim().toLowerCase()) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+    return `drizzle:ats:${userId.slice(0, 8)}:${h.toString(36)}`;
+  };
   // the cover letter is a first-class document beside the résumé: same theme,
   // its own version history (cover_letters table)
   const [docTab, setDocTab] = useState<"resume" | "letter">("resume");
@@ -273,6 +297,13 @@ export default function ResumeEditor({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Check failed");
       setAts(j);
+      try {
+        const key = atsRunKey(jd);
+        setAtsPrev(JSON.parse(localStorage.getItem(key) ?? "null"));
+        localStorage.setItem(key, JSON.stringify({ score: j.score, at: Date.now() }));
+      } catch {
+        setAtsPrev(null);
+      }
     } catch (e) {
       setLetterErr(e instanceof Error ? e.message : "Check failed");
     } finally {
@@ -364,13 +395,14 @@ export default function ResumeEditor({
       .catch(() => {});
   }, [userId]);
   const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
-  async function redesign(jd?: string) {
+  async function redesign(jd?: string, onlyKeywords?: string[]) {
     setRedesigning(true);
     setRedesignErr("");
     try {
       // the ATS check's missing keywords feed the rewrite: rephrase what's
-      // truthfully there into the JD's vocabulary (never invent)
-      const missing = ats ? [...ats.required, ...ats.preferred].filter((k) => !k.hit).map((k) => k.term) : [];
+      // truthfully there into the JD's vocabulary (never invent). A chip's ✎
+      // narrows the rewrite to that one term.
+      const missing = onlyKeywords ?? (ats ? [...ats.required, ...ats.preferred].filter((k) => !k.hit).map((k) => k.term) : []);
       const res = await fetch("/api/resume/redesign", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1508,26 +1540,57 @@ export default function ResumeEditor({
                     {ats && (
                       <div className="ats-result">
                         <div className="ats-score-row">
-                          <span className={`ats-score ${ats.score >= 70 ? "good" : ats.score >= 45 ? "mid" : "low"}`}>{ats.score}%</span>
-                          <span className="ats-score-label">keyword match — what a screen sees, not what you&apos;re worth</span>
+                          <AtsRing score={ats.score} />
+                          <span className="ats-score-side">
+                            <span className="ats-score-label">keyword match — what a screen sees, not what you&apos;re worth</span>
+                            {atsPrev && (
+                              <span className={`ats-delta ${ats.score > atsPrev.score ? "up" : ats.score < atsPrev.score ? "down" : ""}`}>
+                                {ats.score === atsPrev.score
+                                  ? `unchanged since last check`
+                                  : `${atsPrev.score}% last check → ${ats.score > atsPrev.score ? "+" : ""}${ats.score - atsPrev.score}`}
+                              </span>
+                            )}
+                          </span>
                         </div>
                         <div className="ats-chips">
                           {ats.required.map((k, i) => (
                             <span key={`r${i}`} className={`ats-chip ${k.hit ? "hit" : "miss"}`} title={k.hit ? "on your résumé" : "missing — add it if it's true"}>
                               {k.hit ? "✓" : "✗"} {k.term}
+                              {!k.hit && (
+                                <button
+                                  className="ats-weave"
+                                  onClick={() => void redesign(jd, [k.term])}
+                                  disabled={redesigning}
+                                  title={`Weave "${k.term}" in — rephrase bullets that truthfully show it to use this exact term. Never invents.`}
+                                >
+                                  ✎
+                                </button>
+                              )}
                             </span>
                           ))}
                           {ats.preferred.map((k, i) => (
                             <span key={`p${i}`} className={`ats-chip pref ${k.hit ? "hit" : "miss"}`} title="nice-to-have">
                               {k.hit ? "✓" : "○"} {k.term}
+                              {!k.hit && (
+                                <button
+                                  className="ats-weave"
+                                  onClick={() => void redesign(jd, [k.term])}
+                                  disabled={redesigning}
+                                  title={`Weave "${k.term}" in — rephrase bullets that truthfully show it to use this exact term. Never invents.`}
+                                >
+                                  ✎
+                                </button>
+                              )}
                             </span>
                           ))}
                         </div>
                         {ats.required.some((k) => !k.hit) && (
                           <div className="ats-note">
-                            Missing something you actually have? Add it to your résumé (or ask the mentor tips) — never claim what isn&apos;t true.
+                            ✎ weaves one term into bullets that already prove it; <b>Tailor résumé</b> weaves all of them.
+                            Missing something you actually have? Add it — never claim what isn&apos;t true.
                           </div>
                         )}
+                        <div className="ats-recheck-hint">After applying a rewrite, run the check again to see the score move.</div>
                       </div>
                     )}
                   </div>

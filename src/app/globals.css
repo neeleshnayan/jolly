@@ -839,6 +839,40 @@ a { color: var(--accent); }
 .app-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .app-table th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .app-table td { padding: 8px; border-bottom: 1px solid var(--line); }
+
+/* applications kanban */
+.kanban { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; }
+.kanban-col { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; min-height: 120px; transition: border-color 0.15s, background 0.15s; }
+.kanban-col.drop-target { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.kanban-col-head { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 2px 4px 8px; display: flex; align-items: center; gap: 6px; }
+.kanban-count { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; font-size: 10.5px; }
+.kanban-card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; cursor: grab; }
+.kanban-card.dragging { opacity: 0.45; }
+.kanban-card:active { cursor: grabbing; }
+.kanban-card-co { font-size: 13px; font-weight: 700; }
+.kanban-card-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.kanban-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
+.kanban-chip { font-size: 10px; font-weight: 650; border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--muted); }
+.kanban-age { font-size: 10.5px; color: var(--muted); }
+.kanban-overdue { font-size: 10px; font-weight: 750; color: #b91c1c; background: color-mix(in srgb, #dc2626 10%, var(--paper)); border-radius: 999px; padding: 1px 7px; }
+[data-theme="dark"] .kanban-overdue { color: #f28b82; }
+.kanban-closed-kind { display: flex; gap: 4px; margin-top: 6px; }
+.kanban-kind { font-size: 10px; border: 1px solid var(--line); background: none; border-radius: 999px; padding: 1px 7px; color: var(--muted); cursor: pointer; }
+.kanban-kind.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.kanban-card-actions { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.kanban-follow { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+.kanban-follow input { font: inherit; font-size: 10.5px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); padding: 1px 4px; max-width: 108px; }
+.kanban-notes-toggle { border: none; background: none; cursor: pointer; font-size: 13px; opacity: 0.5; padding: 0 2px; }
+.kanban-notes-toggle.has { opacity: 1; }
+.kanban-notes-toggle:hover { opacity: 1; }
+.kanban-notes { width: 100%; margin-top: 6px; font: inherit; font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 6px 8px; resize: vertical; }
+.kanban-empty { color: var(--line); text-align: center; font-size: 16px; padding: 10px 0; }
+
+/* recommendation card: dismiss */
+.rec-title-side { display: flex; align-items: center; gap: 6px; }
+.rec-dismiss { border: none; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 5px; border-radius: 6px; opacity: 0.55; }
+.rec-dismiss:hover { opacity: 1; background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
+[data-theme="dark"] .rec-dismiss:hover { color: #f28b82; }
 .stage { font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; background: #f8fafc; }
 .stage-interview, .stage-offer { border-color: #16a34a; color: #15803d; background: #f0fdf4; }
 .stage-rejected, .stage-ghosted { border-color: #e5e7eb; color: var(--muted); }
@@ -1199,14 +1233,24 @@ a.start-tile:hover { border-color: var(--accent); }
 
 /* ATS keyword check */
 .ats-result { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px; }
-.ats-score-row { display: flex; align-items: baseline; gap: 8px; }
-.ats-score { font-size: 22px; font-weight: 750; }
-.ats-score.good { color: #15803d; }
-.ats-score.mid { color: #b45309; }
-.ats-score.low { color: #b91c1c; }
+.ats-score-row { display: flex; align-items: center; gap: 10px; }
+.ats-score-side { display: flex; flex-direction: column; gap: 4px; }
 .ats-score-label { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.ats-ring { flex: 0 0 auto; }
+.ats-ring-track { fill: none; stroke: var(--line); stroke-width: 5; }
+.ats-ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dasharray 0.5s ease; }
+.ats-ring.good .ats-ring-fill { stroke: #16a34a; }
+.ats-ring.mid .ats-ring-fill { stroke: #d97706; }
+.ats-ring.low .ats-ring-fill { stroke: #dc2626; }
+.ats-ring-num { font-size: 14px; font-weight: 750; fill: var(--ink); }
+.ats-delta { font-size: 11px; font-weight: 650; color: var(--muted); }
+.ats-delta.up { color: #16a34a; }
+.ats-delta.down { color: #dc2626; }
 .ats-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .ats-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   font-weight: 600;
   padding: 3px 9px;
@@ -1215,8 +1259,24 @@ a.start-tile:hover { border-color: var(--accent); }
 }
 .ats-chip.hit { color: #15803d; background: color-mix(in srgb, #16a34a 10%, var(--paper)); border-color: color-mix(in srgb, #16a34a 30%, var(--paper)); }
 .ats-chip.miss { color: #b91c1c; background: color-mix(in srgb, #dc2626 8%, var(--paper)); border-color: color-mix(in srgb, #dc2626 25%, var(--paper)); }
+[data-theme="dark"] .ats-chip.hit { color: #6ee7a0; }
+[data-theme="dark"] .ats-chip.miss { color: #f28b82; }
 .ats-chip.pref { opacity: 0.75; }
+.ats-weave {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 4px;
+  color: inherit;
+  opacity: 0.7;
+}
+.ats-weave:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+.ats-weave:disabled { opacity: 0.35; cursor: default; }
 .ats-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+.ats-recheck-hint { font-size: 10.5px; color: var(--muted); margin-top: 6px; font-style: italic; }
 
 /* bookmark-a-job row on the dashboard */
 .bookmark-row { display: flex; gap: 8px; align-items: center; margin: 2px 0 14px; flex-wrap: wrap; }

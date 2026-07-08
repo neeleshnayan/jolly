@@ -17,16 +17,30 @@ type Application = {
   company: string | null;
   role: string | null;
   status: string;
+  notes: string | null;
+  followUpAt: string | Date | null;
   appliedAt: string;
   resumeVersionId: string | null;
   themeName: string | null;
 };
 
-const STAGES = ["applied", "screening", "interview", "offer", "rejected", "ghosted"];
+// kanban columns; rejected & ghosted share "Closed" (they're both endings —
+// the distinction lives on the card, not in board real estate)
+const COLUMNS = [
+  { key: "applied", label: "Applied" },
+  { key: "screening", label: "Screening" },
+  { key: "interview", label: "Interview" },
+  { key: "offer", label: "Offer" },
+  { key: "closed", label: "Closed" },
+] as const;
+const colFor = (status: string) => (status === "rejected" || status === "ghosted" ? "closed" : COLUMNS.some((c) => c.key === status) ? status : "applied");
 
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
+const daysSince = (s: string) => Math.max(0, Math.floor((Date.now() - new Date(s).getTime()) / 86400000));
+const toDateInput = (d: string | Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+const overdue = (a: Application) => !!a.followUpAt && colFor(a.status) !== "closed" && new Date(a.followUpAt).getTime() < Date.now();
 
 export default function DashboardClient({
   userId,
@@ -91,6 +105,8 @@ export default function DashboardClient({
           company: appForm.company || null,
           role: appForm.role || null,
           status: "applied",
+          notes: null,
+          followUpAt: null,
           appliedAt: new Date().toISOString(),
           resumeVersionId: appForm.resumeVersionId || null,
           themeName: v?.theme ?? null,
@@ -112,6 +128,30 @@ export default function DashboardClient({
       body: JSON.stringify({ userId, applicationId: id, stage }),
     });
   }
+
+  // notes / follow-up edits — optimistic, saved per field
+  async function saveCard(id: string, patch: { notes?: string | null; followUpAt?: string | null }) {
+    setApps((a) => a.map((x) => (x.id === id ? { ...x, ...("notes" in patch ? { notes: patch.notes ?? null } : {}), ...("followUpAt" in patch ? { followUpAt: patch.followUpAt ?? null } : {}) } : x)));
+    await fetch("/api/track/application", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, applicationId: id, ...patch }),
+    });
+  }
+
+  // drag & drop between columns (native HTML5 — a card is one draggable)
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  function dropOn(colKey: string) {
+    if (!dragId) return;
+    const app = apps.find((a) => a.id === dragId);
+    setDragId(null);
+    setDragOver(null);
+    if (!app || colFor(app.status) === colKey) return;
+    // landing in Closed defaults to "rejected"; the card's toggle flips it to ghosted
+    void setStatus(app.id, colKey === "closed" ? "rejected" : colKey);
+  }
+  const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
 
   return (
     <main className="dash">
@@ -218,29 +258,85 @@ export default function DashboardClient({
           {appMsg && <span className="dash-hint">{appMsg}</span>}
         </div>
         {apps.length === 0 ? (
-          <p className="dash-empty">No applications logged yet.</p>
+          <p className="dash-empty">No applications logged yet — confirm one from a recommendation card, or log it above.</p>
         ) : (
-          <table className="app-table">
-            <thead>
-              <tr><th>Company</th><th>Role</th><th>Version</th><th>Stage</th></tr>
-            </thead>
-            <tbody>
-              {apps.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.company || "—"}</td>
-                  <td>{a.role || "—"}</td>
-                  <td>{a.themeName || (a.resumeVersionId ? "Snapshot" : "—")}</td>
-                  <td>
-                    <select className={`stage stage-${a.status}`} value={a.status} onChange={(e) => setStatus(a.id, e.target.value)}>
-                      {STAGES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="kanban">
+            {COLUMNS.map((col) => {
+              const cards = apps.filter((a) => colFor(a.status) === col.key);
+              return (
+                <div
+                  key={col.key}
+                  className={`kanban-col${dragOver === col.key ? " drop-target" : ""}`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(col.key);
+                  }}
+                  onDragLeave={() => setDragOver((v) => (v === col.key ? null : v))}
+                  onDrop={() => dropOn(col.key)}
+                >
+                  <div className="kanban-col-head">
+                    {col.label} <span className="kanban-count">{cards.length}</span>
+                  </div>
+                  {cards.map((a) => (
+                    <div
+                      key={a.id}
+                      className={`kanban-card${dragId === a.id ? " dragging" : ""}`}
+                      draggable
+                      onDragStart={() => setDragId(a.id)}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDragOver(null);
+                      }}
+                    >
+                      <div className="kanban-card-co">{a.company || "—"}</div>
+                      {a.role && <div className="kanban-card-role">{a.role}</div>}
+                      <div className="kanban-card-meta">
+                        {a.themeName && <span className="kanban-chip">{a.themeName}</span>}
+                        <span className="kanban-age" title={`Logged ${fmtDate(a.appliedAt)}`}>{daysSince(a.appliedAt)}d</span>
+                        {overdue(a) && <span className="kanban-overdue" title="Follow-up date has passed">follow up!</span>}
+                      </div>
+                      {col.key === "closed" && (
+                        <div className="kanban-closed-kind">
+                          {(["rejected", "ghosted"] as const).map((s) => (
+                            <button key={s} className={`kanban-kind${a.status === s ? " on" : ""}`} onClick={() => void setStatus(a.id, s)}>
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="kanban-card-actions">
+                        <label className="kanban-follow" title="Follow-up date — the card flags itself when this passes">
+                          ⏰
+                          <input
+                            type="date"
+                            value={toDateInput(a.followUpAt)}
+                            onChange={(e) => void saveCard(a.id, { followUpAt: e.target.value || null })}
+                          />
+                        </label>
+                        <button
+                          className={`kanban-notes-toggle${a.notes ? " has" : ""}`}
+                          onClick={() => setNotesOpen((o) => ({ ...o, [a.id]: !o[a.id] }))}
+                          title={a.notes ? "Notes" : "Add a note"}
+                        >
+                          🗒
+                        </button>
+                      </div>
+                      {notesOpen[a.id] && (
+                        <textarea
+                          className="kanban-notes"
+                          defaultValue={a.notes ?? ""}
+                          placeholder="Recruiter name, next step, links…"
+                          rows={3}
+                          onBlur={(e) => void saveCard(a.id, { notes: e.target.value })}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {cards.length === 0 && <div className="kanban-empty">—</div>}
+                </div>
+              );
+            })}
+          </div>
         )}
       </section>
     </main>

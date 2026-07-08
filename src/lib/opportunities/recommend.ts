@@ -5,7 +5,7 @@
  */
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { opportunities, profiles } from "@/db/schema";
+import { opportunities, profiles, rankingSignals } from "@/db/schema";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { scoreMatch } from "./match";
@@ -120,11 +120,23 @@ export async function rankMatches(userId: string): Promise<RankedJob[]> {
       .limit(100),
     getPreferences(userId),
   ]);
+  // "Not for me" is a promise: dismissed roles never rank again for this user.
+  const dismissed = me
+    ? new Set(
+        (
+          await db
+            .select({ opportunityId: rankingSignals.opportunityId })
+            .from(rankingSignals)
+            .where(and(eq(rankingSignals.profileId, me.id), eq(rankingSignals.kind, "dismiss")))
+        ).map((r) => r.opportunityId),
+      )
+    : new Set<string>();
   // Curated fixtures are a FALLBACK, not content: the moment real ATS-fetched
   // roles exist, only real ones are ranked. (Samples stay in the DB so an empty
   // deployment still demos, but users should never see them next to real jobs.)
-  const real = allRoles.filter((r) => r.source !== "sample");
-  const roles = real.length ? real : allRoles;
+  const undismissed = allRoles.filter((r) => !dismissed.has(r.id));
+  const real = undismissed.filter((r) => r.source !== "sample");
+  const roles = real.length ? real : undismissed;
   const ranked = roles
     .map((r) => {
       const v = (r.vector ?? {}) as OpportunityVector;

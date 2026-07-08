@@ -289,6 +289,8 @@ export async function listApplications(userId: string) {
       company: applications.company,
       role: applications.role,
       status: applications.status,
+      notes: applications.notes,
+      followUpAt: applications.followUpAt,
       appliedAt: applications.appliedAt,
       resumeVersionId: applications.resumeVersionId,
       themeName: resumeThemes.name,
@@ -298,6 +300,26 @@ export async function listApplications(userId: string) {
     .leftJoin(resumeThemes, eq(resumeVersions.themeId, resumeThemes.id))
     .where(eq(applications.profileId, pid))
     .orderBy(desc(applications.appliedAt));
+}
+
+/** Kanban card edits — notes and the follow-up nudge date. */
+export async function updateApplication(
+  userId: string,
+  applicationId: string,
+  patch: { notes?: string | null; followUpAt?: Date | null },
+) {
+  const pid = await profileIdFor(userId);
+  const [app] = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.id, applicationId), eq(applications.profileId, pid)))
+    .limit(1);
+  if (!app) throw new Error("Application not found");
+  const set: Record<string, unknown> = {};
+  if ("notes" in patch) set.notes = patch.notes;
+  if ("followUpAt" in patch) set.followUpAt = patch.followUpAt;
+  if (Object.keys(set).length) await db.update(applications).set(set).where(eq(applications.id, applicationId));
+  return { ok: true as const };
 }
 
 /** Advance an application to a new stage, recording the funnel event. */
