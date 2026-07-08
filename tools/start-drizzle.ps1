@@ -6,6 +6,22 @@ function Test-Port($port) {
   (Test-NetConnection 127.0.0.1 -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded
 }
 
+# 0. Evict the STOCK Ollama if it auto-started (tray autostart / auto-update
+#    relaunch). Two servers sharing the GPU = model-reload thrash, and stock
+#    0.31.1 still carries the gemma4 CUDA crash. Its autostart shortcut is
+#    parked in ~\.drizzle\disabled-autostart — an app update may recreate it.
+if (Test-Port 11434) {
+  Get-Process "ollama app" -ErrorAction SilentlyContinue | Stop-Process -Force
+  $stock = Get-NetTCPConnection -LocalPort 11434 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($stock) { Stop-Process -Id $stock.OwningProcess -Force -ErrorAction SilentlyContinue }
+  Write-Host "evicted stock Ollama from :11434 (drizzle uses the rc build on :11500)"
+}
+$lnk = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Ollama.lnk"
+if (Test-Path $lnk) {
+  Move-Item $lnk "$env:USERPROFILE\.drizzle\disabled-autostart\Ollama.lnk" -Force
+  Write-Host "re-parked the stock Ollama autostart shortcut"
+}
+
 # 1. Ollama rc (voice + extraction brain) on :11500 — temporary until the
 #    gemma4 CUDA fix ships in a stable Ollama; then delete ~/.drizzle/ollama-rc
 #    and revert OLLAMA_BASE_URL to 11434.
