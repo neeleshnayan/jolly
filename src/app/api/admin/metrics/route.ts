@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { requireAdmin } from "@/lib/auth/admin";
+import { queueStatus } from "@/lib/voice/queue";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ export async function GET() {
     for (const q of qs) out.push(await q());
     return out;
   };
-  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel] = await run<unknown>([
+  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel, bookings, pastCalls] = await run<unknown>([
     () => db.execute(sql`select count(*)::int as n from sources where kind = 'mentor_call'`),
     () => db.execute(sql`
       select coalesce(p.full_name, p.email, 'unknown') as who, count(*)::int as n, max(s.created_at) as last_at
@@ -70,6 +71,18 @@ export async function GET() {
              coalesce(sum(output_tokens), 0)::int as tokens_out
       from agent_runs
       group by 1 order by runs desc`),
+    // the mentor's diary: who's booked (upcoming) …
+    () => db.execute(sql`
+      select b.slot_at, coalesce(p.full_name, p.email, 'unknown') as who
+      from call_bookings b join profiles p on p.id = b.profile_id
+      where b.status = 'booked' and b.slot_at > now() - interval '30 minutes'
+      order by b.slot_at asc limit 20`),
+    // … and what calls already happened (continuity recaps)
+    () => db.execute(sql`
+      select c.created_at, c.duration_sec, left(c.summary, 140) as summary,
+             coalesce(p.full_name, p.email, 'unknown') as who
+      from mentor_calls c join profiles p on p.id = c.profile_id
+      order by c.created_at desc limit 15`),
   ]);
 
   return NextResponse.json({
@@ -81,5 +94,6 @@ export async function GET() {
     byModel,
     agents,
     recentRuns,
+    mentorDiary: { lane: queueStatus(), bookings, pastCalls },
   });
 }

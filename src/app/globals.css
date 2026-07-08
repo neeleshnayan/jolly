@@ -1124,6 +1124,43 @@ a { color: var(--accent); }
 .applykit-missing:hover { text-decoration: underline; }
 .applykit-note { font-size: 11px; color: var(--muted); margin-top: 12px; font-style: italic; line-height: 1.5; }
 
+/* admin mentor diary */
+.diary-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 18px; }
+.diary-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
+@media (max-width: 720px) { .diary-grid { grid-template-columns: 1fr; } }
+
+/* signup — the ethos, minimally */
+.auth-thesis { font-size: 15.5px; line-height: 1.55; margin: 14px 0 16px; letter-spacing: -0.005em; }
+.auth-ethos { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 11px; text-align: left; }
+.auth-ethos li { display: flex; gap: 10px; font-size: 13px; line-height: 1.55; color: var(--ink); }
+.auth-ethos-icon { flex: 0 0 auto; font-size: 15px; margin-top: 1px; }
+.auth-ethos b { font-weight: 700; }
+.auth-mission {
+  font-size: 12px; line-height: 1.6; color: var(--muted);
+  border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 0 0 18px; text-align: left;
+}
+
+/* skill radar — the overlap lens over aligned roles */
+.skill-radar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.skill-radar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-right: 4px; cursor: help; }
+.skill-chip {
+  font: inherit; font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer;
+  background: var(--glass-strong); color: var(--ink);
+}
+.skill-chip.have { color: #15803d; border-color: color-mix(in srgb, #16a34a 35%, transparent); }
+[data-theme="dark"] .skill-chip.have { color: #6ee7a0; }
+.skill-chip.missing { color: #b45309; border-color: color-mix(in srgb, #d97706 40%, transparent); }
+[data-theme="dark"] .skill-chip.missing { color: #fbbf24; }
+.skill-chip.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.skill-n { opacity: 0.65; font-weight: 700; }
+.skill-callout {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  font-size: 12.5px; line-height: 1.5; color: var(--ink);
+  border: 1px solid var(--glass-border); background: var(--glass); border-radius: 12px;
+  padding: 9px 13px; margin-bottom: 12px;
+}
+
 /* refine panel sliders */
 .refine-slider input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; margin-top: 8px; }
 .refine-slider span b { color: var(--accent); font-weight: 700; }
@@ -1593,7 +1630,20 @@ a.start-tile:hover { border-color: var(--accent); }
 .letter-bar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
 .letter-bar .design-font { max-width: 240px; }
 .letter-sheet { min-height: 297mm; }
-.letter-sheet .contact { margin-bottom: 26px; }
+/* The letter COORDINATES with the résumé design: same template personality,
+   scaled to a LETTERHEAD (not a CV header). The accent always shows up —
+   underline by default, band for banner/mono — so template + accent never
+   fight on this page. */
+.letter-sheet .name { font-size: calc(26px * var(--r-name-scale, 1)); }
+.letter-sheet .contact {
+  border-bottom: 2px solid var(--r-accent, var(--accent));
+  padding-bottom: 10px;
+  margin-bottom: 26px;
+}
+.resume.letter-sheet[data-template="banner"] .contact,
+.resume.letter-sheet[data-template="mono"] .contact { border-bottom: none; margin-bottom: 26px; }
+.resume.letter-sheet[data-template="bold"] .name { font-size: calc(32px * var(--r-name-scale, 1)); }
+.resume.letter-sheet[data-template="serif-center"] .name { text-align: center; }
 .letter-edit {
   width: 100%;
   min-height: 180mm;

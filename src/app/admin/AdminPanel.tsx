@@ -19,6 +19,11 @@ type Metrics = {
     last_at: string;
   }[];
   recentRuns: { agent: string; status: string; model: string | null; duration_ms: number | null; error: string | null; created_at: string }[];
+  mentorDiary?: {
+    lane: { holder: { userId: string; forSec: number } | null; waitingCount: number };
+    bookings: { slot_at: string; who: string }[];
+    pastCalls: { created_at: string; duration_sec: number | null; summary: string; who: string }[];
+  };
 };
 
 const fmtMs = (ms: number | null) => (ms == null ? "—" : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
@@ -283,6 +288,57 @@ export default function AdminPanel() {
                 </tbody>
               </table>
             )}
+          </section>
+
+          <section className="admin-section">
+            <h2>Mentor diary</h2>
+            <p className="admin-note" style={{ marginTop: 0 }}>
+              Lane:{" "}
+              {m.mentorDiary?.lane?.holder
+                ? `🔴 live call in progress (${Math.round((m.mentorDiary.lane.holder.forSec ?? 0) / 60)} min)`
+                : "🟢 free"}
+              {m.mentorDiary?.lane?.waitingCount ? ` · ${m.mentorDiary.lane.waitingCount} waiting` : ""}
+            </p>
+            <div className="diary-grid">
+              <div>
+                <h3 className="diary-h">Booked slots</h3>
+                {!m.mentorDiary?.bookings?.length ? (
+                  <p className="dash-empty">No upcoming bookings.</p>
+                ) : (
+                  <table className="admin-table">
+                    <thead><tr><th>When</th><th>Who</th></tr></thead>
+                    <tbody>
+                      {m.mentorDiary.bookings.map((b, i) => (
+                        <tr key={i}>
+                          <td>{new Date(b.slot_at).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                          <td>{b.who}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div>
+                <h3 className="diary-h">Calls that happened</h3>
+                {!m.mentorDiary?.pastCalls?.length ? (
+                  <p className="dash-empty">No recapped calls yet (recaps persist at review-save).</p>
+                ) : (
+                  <table className="admin-table">
+                    <thead><tr><th>When</th><th>Who</th><th>Len</th><th>Recap</th></tr></thead>
+                    <tbody>
+                      {m.mentorDiary.pastCalls.map((c, i) => (
+                        <tr key={i}>
+                          <td>{fmtAgo(c.created_at)}</td>
+                          <td>{c.who}</td>
+                          <td>{c.duration_sec ? `${Math.round(c.duration_sec / 60)}m` : "—"}</td>
+                          <td className="admin-dim">{c.summary}…</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
           </section>
         </>
       )}

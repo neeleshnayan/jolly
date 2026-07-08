@@ -19,11 +19,13 @@ type Job = {
   source: string | null;
   summary: string;
   coreRequirements: string[];
+  skills: string[];
   fit: number;
   reasons: string[];
   gaps: string[];
   why: string;
 };
+type RadarEntry = { skill: string; demand: number; have: boolean; avgFit: number };
 const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", consider: "a16z portfolio", sample: "Curated JD", pasted: "Curated JD" };
 const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
 
@@ -52,6 +54,8 @@ const compLabel = (n: number | undefined, cur: string) => {
 export default function Recommendations({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Job[] | null>(null);
   const [learning, setLearning] = useState<{ active: boolean; events: number } | null>(null);
+  const [radar, setRadar] = useState<RadarEntry[]>([]);
+  const [skillFilter, setSkillFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
@@ -68,6 +72,7 @@ export default function Recommendations({ userId }: { userId: string }) {
       const j = await r.json();
       setMatches(j.matches ?? []);
       setLearning(j.learning ?? null);
+      setRadar(j.skillRadar ?? []);
     } catch {
       setMatches([]);
     } finally {
@@ -211,7 +216,9 @@ export default function Recommendations({ userId }: { userId: string }) {
     );
   }
 
-  const top = matches.slice(0, 5);
+  const filtered = skillFilter ? matches.filter((m) => m.skills?.some((s) => s === skillFilter || s.includes(skillFilter) || skillFilter.includes(s))) : matches;
+  const top = filtered.slice(0, skillFilter ? 8 : 5);
+  const activeRadar = skillFilter ? radar.find((r) => r.skill === skillFilter) : null;
 
   return (
     <section className="dash-section">
@@ -246,6 +253,38 @@ export default function Recommendations({ userId }: { userId: string }) {
         </button>
         {bookmarkMsg && <span className="dash-hint">{bookmarkMsg}</span>}
       </div>
+      {radar.length > 0 && (
+        <div className="skill-radar">
+          <span className="skill-radar-label" title="Skills your aligned roles keep asking for — green you have, amber the market wants and your résumé doesn't show. Click to filter.">
+            skills across your matches
+          </span>
+          {radar.map((r) => (
+            <button
+              key={r.skill}
+              className={`skill-chip ${r.have ? "have" : "missing"}${skillFilter === r.skill ? " on" : ""}`}
+              onClick={() => setSkillFilter((f) => (f === r.skill ? null : r.skill))}
+              title={r.have ? `${r.demand} aligned roles ask for this — you have it` : `${r.demand} aligned roles ask for this — not on your résumé yet`}
+            >
+              {r.have ? "✓" : "⚡"} {r.skill} <span className="skill-n">×{r.demand}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {skillFilter && (
+        <div className="skill-callout">
+          {activeRadar && !activeRadar.have ? (
+            <>
+              <b>{activeRadar.demand} roles aligned with you ask for {skillFilter}</b> — it&apos;s not on your résumé yet. If you have it,
+              add it (it changes your ATS hits too); if you don&apos;t, that&apos;s a conversation worth having with your mentor.
+            </>
+          ) : (
+            <>
+              Showing roles asking for <b>{skillFilter}</b> — a strength of yours worth leading with.
+            </>
+          )}
+          <button className="ai-cancel" onClick={() => setSkillFilter(null)}>clear filter</button>
+        </div>
+      )}
       <div className="rec-list">
         {top.map((j) => (
           <div className="rec-card" key={j.id}>

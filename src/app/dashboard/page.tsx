@@ -37,7 +37,6 @@ export default async function DashboardPage({
     <DashboardClient
       userId={userId}
       name={full?.profile.fullName ?? null}
-      avatarUrl={(full?.profile as { avatarUrl?: string | null } | undefined)?.avatarUrl ?? null}
       hasResume={hasResume}
       themes={themes.map((t) => ({ ...t, versions: t.versions.map(s) }))}
       untagged={untagged.map(s)}

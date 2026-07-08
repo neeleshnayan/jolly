@@ -31,6 +31,7 @@ export type RankedJob = {
   source: string | null;
   summary: string;
   coreRequirements: string[];
+  skills: string[]; // must+nice from extraction, normalized lowercase — the overlap lens
   fit: number;
   qualification: number;
   desire: number;
@@ -210,6 +211,7 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         source: r.source,
         summary,
         coreRequirements,
+        skills: [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map((s) => String(s).toLowerCase().trim()).filter(Boolean))],
         fit: m.fit * c.factor * l.factor * (gate.marginal?.penalty ?? 1),
         qualification: m.qualification,
         desire: m.desire,

@@ -56,7 +56,6 @@ const overdue = (a: Application) => !!a.followUpAt && colFor(a.status) !== "clos
 export default function DashboardClient({
   userId,
   name,
-  avatarUrl,
   hasResume,
   themes: initialThemes,
   untagged,
@@ -64,7 +63,6 @@ export default function DashboardClient({
 }: {
   userId: string;
   name: string | null;
-  avatarUrl: string | null;
   hasResume: boolean;
   themes: Theme[];
   untagged: Version[];
@@ -197,8 +195,13 @@ export default function DashboardClient({
         <div className="app-new">
           <input className="f-box" value={appForm.company} placeholder="Company" onChange={(e) => setAppForm((f) => ({ ...f, company: e.target.value }))} />
           <input className="f-box" value={appForm.role} placeholder="Role" onChange={(e) => setAppForm((f) => ({ ...f, role: e.target.value }))} />
-          <select className="f-box" value={appForm.resumeVersionId} onChange={(e) => setAppForm((f) => ({ ...f, resumeVersionId: e.target.value }))}>
-            <option value="">Which version?</option>
+          <select
+            className="f-box"
+            value={appForm.resumeVersionId}
+            onChange={(e) => setAppForm((f) => ({ ...f, resumeVersionId: e.target.value }))}
+            title="Optional — which résumé version you sent. Linking versions to outcomes is how drizzle learns which framing of you actually lands interviews."
+          >
+            <option value="">Résumé version sent (optional)</option>
             {allVersions.map((v) => (
               <option key={v.id} value={v.id}>
                 {(v.theme ? `${v.theme} · ` : "") + fmtDate(v.createdAt)}
