@@ -16,6 +16,7 @@ import { persistProbes } from "@/lib/probes/persist";
 import { computeAndSaveScoring } from "@/lib/scoring/persist";
 import { ensureStarterThemes } from "@/lib/track/persist";
 import { getProvider } from "@/llm";
+import { resolveUserId } from "@/lib/auth/user";
 import type { ResumeExtraction } from "@/lib/extraction/schema";
 
 export const runtime = "nodejs";
@@ -57,14 +58,16 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
-    const userId = form.get("userId");
+    const suppliedUserId = form.get("userId");
     const shouldPersist = form.get("persist") !== "false";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Missing 'file'" }, { status: 400 });
     }
-    if (typeof userId !== "string" || !userId) {
-      return NextResponse.json({ error: "Missing 'userId'" }, { status: 400 });
+    // session-first — the form userId is only honored in development
+    const userId = await resolveUserId(typeof suppliedUserId === "string" ? suppliedUserId : null);
+    if (!userId) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
 
     // Start loading the extraction model now, in parallel with parsing/rendering,

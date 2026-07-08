@@ -4,6 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { reorderEntries, type EntryKind } from "@/lib/profile/update";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
@@ -11,9 +12,11 @@ const KINDS: EntryKind[] = ["experience", "education", "skill", "project", "cert
 
 export async function POST(req: Request) {
   try {
-    const { userId, kind, ids } = (await req.json()) ?? {};
-    if (typeof userId !== "string" || !userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    const body = (await req.json()) ?? {};
+    const { kind, ids } = body;
+    const userId = await resolveUserId(body.userId); // session-first
+    if (!userId) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
     if (!KINDS.includes(kind)) {
       return NextResponse.json({ error: "Invalid kind" }, { status: 400 });

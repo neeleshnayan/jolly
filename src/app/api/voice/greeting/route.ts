@@ -4,15 +4,18 @@
  */
 import { NextResponse } from "next/server";
 import { mentorOpener } from "@/agents/mentor/opener";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await req.json().catch(() => ({}));
-    if (typeof userId !== "string" || !userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    // reads the user's map — session-first, dev param only outside production
+    const userId = await resolveUserId(typeof body.userId === "string" ? body.userId : null);
+    if (!userId) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
     const text = await mentorOpener(userId);
     return NextResponse.json({ ok: true, text });

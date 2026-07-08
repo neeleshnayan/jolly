@@ -4,12 +4,15 @@
  */
 import { NextResponse } from "next/server";
 import { synthesize } from "@/lib/voice/voicebox";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
   try {
+    // TTS burns the local GPU — signed-in users only
+    if (!(await resolveUserId(null))) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const { text } = await req.json().catch(() => ({}));
     if (typeof text !== "string" || !text.trim()) {
       return NextResponse.json({ error: "Missing text" }, { status: 400 });

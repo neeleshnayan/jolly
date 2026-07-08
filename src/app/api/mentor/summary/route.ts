@@ -9,13 +9,18 @@ import { runAgent } from "@/agents/run";
 import { insightExtractor } from "@/agents/insight-extractor";
 import { summarizeCall } from "@/lib/mentor/summarize";
 import { releaseLiveModel } from "@/llm/ollama";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    const { transcript, userId } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const { transcript } = body;
+    // no writes here, but it burns local GPU — signed-in users only
+    const userId = await resolveUserId(body.userId);
+    if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     if (typeof transcript !== "string" || transcript.trim().length < 20) {
       return NextResponse.json(
         { error: "Transcript too short to summarize" },

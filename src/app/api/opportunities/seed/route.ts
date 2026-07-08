@@ -9,6 +9,7 @@ import { db } from "@/db";
 import { opportunities } from "@/db/schema";
 import { persistOpportunity } from "@/lib/opportunities/persist";
 import { SAMPLE_JOBS, sampleExtraction } from "@/lib/opportunities/samples";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,8 @@ const extId = (title: string, company: string) => `sample:${title}@${company}`;
 
 export async function POST() {
   try {
+    // writes demo rows — signed-in users only
+    if (!(await resolveUserId(null))) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const ids = SAMPLE_JOBS.map((j) => extId(j.title, j.company));
     const existing = await db
       .select({ externalId: opportunities.externalId })

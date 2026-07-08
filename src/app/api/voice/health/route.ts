@@ -7,6 +7,7 @@
  * component can't hang the whole check.
  */
 import { NextResponse } from "next/server";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -27,6 +28,8 @@ async function probe<T>(fn: (signal: AbortSignal) => Promise<T>, timeoutMs: numb
 }
 
 export async function GET() {
+  // internal stack topology — signed-in users only
+  if (!(await resolveUserId(null))) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const liveModel = process.env.OLLAMA_LIVE_MODEL ?? process.env.OLLAMA_MODEL ?? "?";
   const mentorProvider = (process.env.LLM_PROVIDER_MENTOR ?? process.env.LLM_PROVIDER ?? "ollama").toLowerCase();
 

@@ -6,11 +6,14 @@
  */
 import type { NextRequest } from "next/server";
 import { synthesizeStream } from "@/lib/voice/voicebox";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function GET(req: NextRequest) {
+  // <audio> src sends the session cookie same-origin — gate stays invisible
+  if (!(await resolveUserId(null))) return new Response("Not signed in", { status: 401 });
   const text = req.nextUrl.searchParams.get("text");
   if (!text || !text.trim()) {
     return new Response("Missing text", { status: 400 });

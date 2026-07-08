@@ -6,6 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { applyEdits, type EditKind } from "@/lib/profile/update";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
@@ -13,9 +14,13 @@ const KINDS: EditKind[] = ["profile", "experience", "education", "skill", "proje
 
 export async function POST(req: Request) {
   try {
-    const { userId, edits } = (await req.json()) ?? {};
-    if (typeof userId !== "string" || !userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    const body = (await req.json()) ?? {};
+    const { edits } = body;
+    // session-first — a body userId is only honored in development (covers
+    // sendBeacon too: the session cookie rides along with same-origin beacons)
+    const userId = await resolveUserId(body.userId);
+    if (!userId) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     }
     if (!Array.isArray(edits) || edits.length === 0) {
       return NextResponse.json({ error: "No edits" }, { status: 400 });

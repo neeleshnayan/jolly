@@ -7,13 +7,17 @@
 import { NextResponse } from "next/server";
 import { runAgent } from "@/agents/run";
 import { bulletRefiner } from "@/agents/bullet-refiner";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    const { instruction, bullets, role, userId } = await req.json().catch(() => ({}));
+    const { instruction, bullets, role, userId: suppliedUserId } = await req.json().catch(() => ({}));
+    // no writes, but it burns local GPU — signed-in users only
+    const userId = await resolveUserId(typeof suppliedUserId === "string" ? suppliedUserId : null);
+    if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     if (typeof instruction !== "string" || !instruction.trim()) {
       return NextResponse.json({ error: "Missing instruction" }, { status: 400 });
     }
@@ -27,7 +31,7 @@ export async function POST(req: Request) {
         bullets: bullets.filter((b) => typeof b === "string" && b.trim()),
         role: typeof role === "string" ? role : undefined,
       },
-      { userId: typeof userId === "string" ? userId : "refine" },
+      { userId },
     );
     return NextResponse.json({ ok: true, bullets: output.bullets });
   } catch (err) {

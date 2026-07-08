@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFullProfile } from "@/lib/profile/read";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("userId");
+  // the FULL résumé (email, phone, everything) — session-first, always
+  const userId = await resolveUserId(req.nextUrl.searchParams.get("userId"));
   if (!userId) {
-    return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   const data = await getFullProfile(userId);
   if (!data) {

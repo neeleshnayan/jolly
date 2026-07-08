@@ -5,6 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { warmVoice } from "@/lib/voice/voicebox";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,6 +15,8 @@ const LIVE_MODEL = process.env.OLLAMA_LIVE_MODEL ?? "qwen3:8b";
 const LIVE_KEEP_ALIVE = process.env.OLLAMA_LIVE_KEEP_ALIVE ?? "5m";
 
 export async function POST() {
+  // loads models into VRAM — signed-in users only
+  if (!(await resolveUserId(null))) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   await Promise.allSettled([
     // load the live model without generating (Ollama loads on an empty request)
     fetch(`${OLLAMA}/api/generate`, {

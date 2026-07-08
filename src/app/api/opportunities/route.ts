@@ -8,20 +8,23 @@ import { runAgent } from "@/agents/run";
 import { opportunityVectorizer } from "@/agents/opportunity-vectorizer";
 import { persistOpportunity } from "@/lib/opportunities/persist";
 import { ensureProfile } from "@/lib/profile/ensure";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
 export async function POST(req: Request) {
   try {
-    const { jd, url, source, userId } = await req.json().catch(() => ({}));
+    const { jd, url, source, userId: suppliedUserId } = await req.json().catch(() => ({}));
+    // writes a role + burns GPU — signed-in users only
+    const userId = await resolveUserId(typeof suppliedUserId === "string" ? suppliedUserId : null);
+    if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     if (typeof jd !== "string" || jd.trim().length < 40) {
       return NextResponse.json({ error: "Paste a fuller job description (jd)" }, { status: 400 });
     }
-    const addedByProfileId =
-      typeof userId === "string" && userId ? await ensureProfile(userId) : null;
+    const addedByProfileId = await ensureProfile(userId);
 
-    const { output } = await runAgent(opportunityVectorizer, { jd }, { userId: userId ?? "ingest" });
+    const { output } = await runAgent(opportunityVectorizer, { jd }, { userId });
     const { id } = await persistOpportunity({
       extraction: output,
       jd,

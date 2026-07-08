@@ -6,6 +6,51 @@
  * Shared by the bookmark feature and aggregator boards (a16z/Consider).
  */
 
+/** Public-internet URLs only — the server fetches these, so private ranges
+ *  would be an SSRF hole (fetch a cloud metadata endpoint, an internal admin
+ *  panel…). Checked on the FIRST url and on EVERY redirect hop. */
+export function urlAllowed(raw: string): URL | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const h = u.hostname.toLowerCase();
+  if (
+    h === "localhost" ||
+    h === "0.0.0.0" ||
+    /^127\./.test(h) ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /^169\.254\./.test(h) ||
+    h.endsWith(".local") ||
+    h === "[::1]"
+  )
+    return null;
+  return u;
+}
+
+/** fetch() that validates every redirect hop against urlAllowed (a public URL
+ *  redirecting to 169.254.169.254 is the classic SSRF bypass). */
+export async function fetchPublic(rawUrl: string, init?: RequestInit & { maxHops?: number }): Promise<Response | null> {
+  let url = urlAllowed(rawUrl);
+  const hops = init?.maxHops ?? 5;
+  for (let i = 0; i <= hops && url; i++) {
+    const res = await fetch(url.href, { ...init, redirect: "manual" });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (!loc) return res;
+      url = urlAllowed(new URL(loc, url).href);
+      continue;
+    }
+    return res;
+  }
+  return null; // hop limit or a hop resolved to a private target
+}
+
 export const strip = (html: string) =>
   html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -48,21 +93,16 @@ export async function fetchViaAts(u: URL): Promise<{ title: string; company: str
 
 /** Best-effort JD text from any posting URL; null when nothing readable. */
 export async function fetchJdFromUrl(rawUrl: string): Promise<string | null> {
-  let u: URL;
-  try {
-    u = new URL(rawUrl);
-  } catch {
-    return null;
-  }
+  const u = urlAllowed(rawUrl);
+  if (!u) return null;
   try {
     const ats = await fetchViaAts(u).catch(() => null);
     if (ats && ats.jd.length >= 200) return ats.jd.slice(0, 20_000);
-    const res = await fetch(u.href, {
+    const res = await fetchPublic(u.href, {
       headers: { "user-agent": "Mozilla/5.0 (drizzle job fetch)" },
-      redirect: "follow",
       signal: AbortSignal.timeout(12000),
     });
-    if (!res.ok) return null;
+    if (!res?.ok) return null;
     const text = strip((await res.text()).slice(0, 500_000)).slice(0, 20_000);
     if (text.length < 200 || looksLikeCode(text)) return null;
     return text;

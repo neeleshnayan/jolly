@@ -15,18 +15,24 @@ import { fillTargetTheme } from "@/lib/track/persist";
 import { getFullProfile } from "@/lib/profile/read";
 import { getMentorMap } from "@/lib/profile/map";
 import { buildProfileText } from "@/lib/scoring/profileText";
+import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
 const bodySchema = z.object({
-  userId: z.string().min(1),
+  userId: z.string().min(1).optional(),
   transcript: z.string().default(""),
   insights: z.array(extractedInsight).default([]),
 });
 
 export async function POST(req: Request) {
   try {
-    const { userId, transcript, insights } = bodySchema.parse(await req.json());
+    const parsed = bodySchema.parse(await req.json());
+    const { transcript, insights } = parsed;
+    // session-first — this route WRITES to the insight map; a raw body userId
+    // must never pick whose map in production
+    const userId = await resolveUserId(parsed.userId);
+    if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
     const result = await persistInsights({
       userId,
       extraction: { insights },

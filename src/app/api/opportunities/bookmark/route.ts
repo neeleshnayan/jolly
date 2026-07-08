@@ -10,37 +10,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { opportunities, profiles } from "@/db/schema";
 import { resolveUserId } from "@/lib/auth/user";
-import { strip, looksLikeCode, fetchViaAts } from "@/lib/jobs/jd";
+import { strip, looksLikeCode, fetchViaAts, urlAllowed, fetchPublic } from "@/lib/jobs/jd";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-// user-supplied URL fetched server-side — keep it to public http(s) hosts
-function urlAllowed(raw: string): URL | null {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-  const h = u.hostname.toLowerCase();
-  if (
-    h === "localhost" ||
-    h === "0.0.0.0" ||
-    /^127\./.test(h) ||
-    /^10\./.test(h) ||
-    /^192\.168\./.test(h) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
-    /^169\.254\./.test(h) ||
-    h === "[::1]"
-  )
-    return null;
-  return u;
-}
-
-// strip / looksLikeCode / fetchViaAts moved to @/lib/jobs/jd — shared with the
-// aggregator boards (a16z/Consider), which resolve JDs the same way
+// urlAllowed / strip / looksLikeCode / fetchViaAts live in @/lib/jobs/jd —
+// shared with the aggregator boards; fetchPublic validates every redirect hop
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,12 +46,11 @@ export async function POST(req: NextRequest) {
       company = ats.company;
       text = ats.jd.slice(0, 20_000);
     } else {
-      const res = await fetch(url.href, {
+      const res = await fetchPublic(url.href, {
         headers: { "user-agent": "Mozilla/5.0 (drizzle job bookmark)" },
-        redirect: "follow",
         signal: AbortSignal.timeout(12000),
       });
-      if (!res.ok) return NextResponse.json({ error: `Couldn't fetch that page (${res.status})` }, { status: 422 });
+      if (!res?.ok) return NextResponse.json({ error: `Couldn't fetch that page${res ? ` (${res.status})` : ""}` }, { status: 422 });
       const html = (await res.text()).slice(0, 500_000);
       title = strip(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").slice(0, 120) || "Bookmarked role";
       company = url.hostname.replace(/^www\./, "");
