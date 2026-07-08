@@ -868,6 +868,24 @@ a { color: var(--accent); }
 .kanban-notes { width: 100%; margin-top: 6px; font: inherit; font-size: 11.5px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 6px 8px; resize: vertical; }
 .kanban-empty { color: var(--line); text-align: center; font-size: 16px; padding: 10px 0; }
 
+/* about-me facts panel (top of the About/diagnosis page) */
+.about-facts { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 10px; margin-top: 16px; }
+.about-fact { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.about-fact.wide { grid-column: span 3; }
+.about-fact-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.about-fact-gate { cursor: help; opacity: 0.8; }
+.about-fact-value { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 650; margin-top: 3px; overflow-wrap: anywhere; }
+.about-fact-pen { border: none; background: none; cursor: pointer; font-size: 12px; opacity: 0.45; padding: 0 2px; color: var(--ink); }
+.about-fact-pen:hover { opacity: 1; color: var(--accent); }
+.about-fact-unpin { border: none; background: none; cursor: pointer; font-size: 11px; padding: 0 2px; }
+.about-fact-src { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.about-fact-edit { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+.about-fact-edit .f-box { font-size: 13px; padding: 4px 8px; min-width: 0; flex: 1; }
+@media (max-width: 640px) {
+  .about-facts { grid-template-columns: 1fr; }
+  .about-fact.wide { grid-column: span 1; }
+}
+
 /* recommendation card: dismiss */
 .rec-title-side { display: flex; align-items: center; gap: 6px; }
 .rec-dismiss { border: none; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 5px; border-radius: 6px; opacity: 0.55; }

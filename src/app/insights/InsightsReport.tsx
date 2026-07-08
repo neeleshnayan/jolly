@@ -5,8 +5,16 @@ import UserChip from "../UserChip";
 import { displayCompany } from "@/lib/format/company";
 
 type Param = { score: number; rationale: string };
+type Fact<T> = { value: T | null; pinned: boolean };
+type About = {
+  currentEmployer: Fact<string>;
+  yearsExperience: Fact<number>;
+  highestDegree: Fact<string>;
+  trajectory: Fact<string>;
+};
 type Report = {
   profile: { fullName: string | null; headline: string | null };
+  about: About | null;
   scoring: Record<string, Param> | null;
   scoringAt: string | null;
   insights: { dimension: string; content: string; confidence: number | null }[];
@@ -112,7 +120,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
       </div>
 
       <header className="report-head">
-        <div className="report-kicker">drizzle · career diagnosis</div>
+        <div className="report-kicker">drizzle · about you</div>
         <h1>{r.profile.fullName ?? "You"}</h1>
         {r.profile.headline && <p className="report-headline">{r.profile.headline}</p>}
         <div className="report-meta">
@@ -129,6 +137,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
             ))}
           </div>
         )}
+        {r.about && <AboutFactsPanel userId={userId} about={r.about} onSaved={() => void load()} />}
       </header>
 
       <section className="report-section">
@@ -258,5 +267,95 @@ export default function InsightsReport({ userId }: { userId: string }) {
         )}
       </section>
     </main>
+  );
+}
+
+const DEGREE_LABEL: Record<string, string> = { phd: "PhD", md: "MD", jd: "JD", masters: "Master's", bachelors: "Bachelor's", none: "No degree" };
+
+/**
+ * The at-a-glance facts. Derived from the résumé by default; click ✎ to pin a
+ * precise value — pins win everywhere, including the job-ranking gates
+ * (years + degree decide which roles are even shown).
+ */
+function AboutFactsPanel({ userId, about, onSaved }: { userId: string; about: About; onSaved: () => void }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save(field: string, value: string | number | null) {
+    setBusy(true);
+    try {
+      await fetch("/api/profile/about", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, [field]: value }),
+      });
+      setEditing(null);
+      onSaved();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const facts: { field: string; label: string; fact: Fact<string | number>; render: (v: string | number) => string; input: "text" | "number" | "degree"; gateNote?: string }[] = [
+    { field: "currentEmployer", label: "Current employer", fact: about.currentEmployer, render: String, input: "text" },
+    { field: "yearsExperience", label: "Years of experience", fact: about.yearsExperience, render: (v) => `${v} yrs`, input: "number", gateNote: "filters roles by required experience" },
+    { field: "highestDegree", label: "Highest degree", fact: about.highestDegree, render: (v) => DEGREE_LABEL[v] ?? String(v), input: "degree", gateNote: "filters roles that require a degree you don't hold" },
+    { field: "trajectory", label: "Career trajectory", fact: about.trajectory, render: String, input: "text" },
+  ];
+
+  return (
+    <div className="about-facts">
+      {facts.map((f) => (
+        <div className={`about-fact${f.field === "trajectory" ? " wide" : ""}`} key={f.field}>
+          <div className="about-fact-label">
+            {f.label}
+            {f.gateNote && <span className="about-fact-gate" title={`Used by matching — ${f.gateNote}`}>⛩</span>}
+          </div>
+          {editing === f.field ? (
+            <div className="about-fact-edit">
+              {f.input === "degree" ? (
+                <select className="f-box" value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus>
+                  {Object.entries(DEGREE_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="f-box"
+                  type={f.input}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void save(f.field, f.input === "number" ? Number(draft) : draft)}
+                  autoFocus
+                />
+              )}
+              <button className="tip-add" disabled={busy} onClick={() => void save(f.field, f.input === "number" ? Number(draft) : draft)}>✓</button>
+              <button className="ai-cancel" onClick={() => setEditing(null)}>✕</button>
+            </div>
+          ) : (
+            <div className="about-fact-value">
+              <span>{f.fact.value !== null && f.fact.value !== undefined ? f.render(f.fact.value) : "—"}</span>
+              <button
+                className="about-fact-pen"
+                title={f.fact.pinned ? "Pinned by you — edit" : "From your résumé — click to set precisely"}
+                onClick={() => {
+                  setDraft(String(f.fact.value ?? ""));
+                  setEditing(f.field);
+                }}
+              >
+                ✎
+              </button>
+              {f.fact.pinned && (
+                <button className="about-fact-unpin" title="Unpin — go back to the résumé-derived value" onClick={() => void save(f.field, null)}>
+                  📌
+                </button>
+              )}
+            </div>
+          )}
+          <div className="about-fact-src">{f.fact.pinned ? "pinned by you" : "from your résumé"}</div>
+        </div>
+      ))}
+    </div>
   );
 }

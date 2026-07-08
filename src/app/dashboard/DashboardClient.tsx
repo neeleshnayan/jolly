@@ -177,8 +177,8 @@ export default function DashboardClient({
           <div className="dash-card-desc">A short voice call to go deeper</div>
         </a>
         <a className="dash-card" href="/insights">
-          <div className="dash-card-title">Your diagnosis</div>
-          <div className="dash-card-desc">The mentor&apos;s read on you, as a report</div>
+          <div className="dash-card-title">About you</div>
+          <div className="dash-card-desc">Your profile + the mentor&apos;s diagnosis</div>
         </a>
         <a className="dash-card" href="/mentors">
           <div className="dash-card-title">Mentor Connect</div>

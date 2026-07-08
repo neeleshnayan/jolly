@@ -89,6 +89,17 @@ export const profiles = pgTable("profiles", {
       remote?: "remote" | "hybrid" | "onsite" | "any";
     }>()
     .default({}),
+  // About-me facts: DERIVED from the résumé/calls by default, but the user can
+  // pin precise values here (derivation guesses; the user knows). Set keys win
+  // over derivation everywhere — display AND the ranking gates.
+  aboutOverrides: jsonb("about_overrides")
+    .$type<{
+      yearsExperience?: number;
+      highestDegree?: "phd" | "md" | "jd" | "masters" | "bachelors" | "none";
+      currentEmployer?: string;
+      trajectory?: string; // one-line career arc, e.g. "Foodlabs → Goldman → founder"
+    }>()
+    .default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
