@@ -8,6 +8,11 @@
   --surface: #fafafa; /* subtle inset panels (fact boxes, tips, refine) */
   --sheet: #ffffff; /* the résumé page — a DOCUMENT, never theme-flipped */
   --sheet-ink: #1a1a1a;
+  /* glass tokens — frosted panes over the body aurora */
+  --glass: rgba(255, 255, 255, 0.6);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
 }
 
 /* dark mode — applied pre-paint via html[data-theme] (see layout.tsx) */
@@ -19,6 +24,10 @@
   --bg: #0c0f15;
   --paper: #151a23;
   --surface: #1c2230;
+  --glass: rgba(21, 26, 35, 0.55);
+  --glass-strong: rgba(24, 30, 41, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
 }
 [data-theme="dark"] .upload-card,
 [data-theme="dark"] .rec-card { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
@@ -205,6 +214,64 @@ html, body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- glass UI ----------
+   The ambient aurora lives on <body> (multi-layer fixed gradients) so the
+   frosted surfaces above it have something real to blur. Rain-on-glass is the
+   brand. The résumé/letter sheets are DOCUMENTS — they stay opaque paper and
+   never get glassed. */
+body {
+  background:
+    radial-gradient(640px 460px at 10% -6%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    radial-gradient(720px 520px at 104% 12%, rgba(13, 148, 136, 0.13), transparent 70%),
+    radial-gradient(900px 640px at 46% 112%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%),
+    var(--bg);
+  background-attachment: fixed;
+}
+[data-theme="dark"] body {
+  background:
+    radial-gradient(640px 460px at 10% -6%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    radial-gradient(720px 520px at 104% 12%, rgba(13, 148, 136, 0.2), transparent 70%),
+    radial-gradient(900px 640px at 46% 112%, rgba(99, 102, 241, 0.16), transparent 72%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* the frosted recipe — major read surfaces only (blur on every chip janks) */
+.dash-card,
+.rec-card,
+.upload-card,
+.kanban-col,
+.mentor-card,
+.mentors-empty,
+.mentor-form,
+.admin-stat,
+.about-fact,
+.refine-panel,
+.exec-moves,
+.job-target,
+.applykit,
+.tips-list,
+.version-bar,
+.editor-rail {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+/* cards nested inside glass get a stronger pane so they still read as layers */
+.kanban-card,
+.applykit-answers {
+  background: var(--glass-strong);
+  border-color: var(--glass-border);
+}
+/* overlays: dim + blur the whole page behind floating windows */
+.applykit-overlay,
+.diff-overlay {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 a { color: var(--accent); }
@@ -875,19 +942,61 @@ a { color: var(--accent); }
   .about-fact.wide { grid-column: span 1; }
 }
 
-/* apply kit — the staged pack beside an open ATS tab */
-.applykit-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 80; display: flex; justify-content: flex-end; }
+/* apply kit — a floating glass window layered over the dashboard */
+.applykit-overlay { position: fixed; inset: 0; background: rgba(10, 14, 24, 0.4); z-index: 80; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .applykit {
-  width: min(440px, 92vw);
-  height: 100%;
-  overflow-y: auto;
-  background: var(--paper);
-  border-left: 1px solid var(--line);
-  padding: 18px 20px 28px;
-  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.25);
-  animation: applykit-in 0.22s ease;
+  width: min(980px, 96vw);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 18px 20px 20px;
+  animation: applykit-in 0.24s ease;
+  overflow: hidden;
 }
-@keyframes applykit-in { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes applykit-in { from { transform: translateY(16px) scale(0.985); opacity: 0; } to { transform: none; opacity: 1; } }
+.applykit-panes { display: flex; gap: 16px; min-height: 0; flex: 1; }
+.applykit-docs-pane { flex: 1.35; display: flex; flex-direction: column; min-width: 0; }
+.applykit-doc-tabs { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.applykit-doc-actions { margin-left: auto; display: flex; gap: 6px; }
+.applykit-resume-scroll {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #eceff3; /* paper tray behind the white sheet, both themes */
+}
+.applykit-resume-frame {
+  display: block;
+  width: 840px;
+  height: 2380px; /* ~2 A4 pages — taller than content so the pane scrolls, not the iframe */
+  border: 0;
+  transform: scale(0.64);
+  transform-origin: 0 0;
+  margin-bottom: -857px; /* reclaim the scaled-away height (2380 * 0.36) */
+  margin-right: -302px; /* and width (840 * 0.36) */
+}
+.applykit-letter-full {
+  flex: 1;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--sheet);
+  color: var(--sheet-ink);
+  padding: 16px 18px;
+  resize: none;
+}
+.applykit-letter-empty { flex: 1; display: grid; place-items: center; border: 1px dashed var(--line); border-radius: 12px; }
+.applykit-side { flex: 1; min-width: 280px; max-width: 360px; display: flex; flex-direction: column; overflow-y: auto; }
+@media (max-width: 760px) {
+  .applykit-panes { flex-direction: column; overflow-y: auto; }
+  .applykit-side { max-width: none; }
+  .applykit-resume-scroll { min-height: 320px; }
+}
 .applykit-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .applykit-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 .applykit-title { font-size: 16px; font-weight: 750; margin-top: 2px; }
