@@ -875,6 +875,36 @@ a { color: var(--accent); }
   .about-fact.wide { grid-column: span 1; }
 }
 
+/* apply kit — the staged pack beside an open ATS tab */
+.applykit-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 80; display: flex; justify-content: flex-end; }
+.applykit {
+  width: min(440px, 92vw);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  padding: 18px 20px 28px;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.25);
+  animation: applykit-in 0.22s ease;
+}
+@keyframes applykit-in { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.applykit-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.applykit-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.applykit-title { font-size: 16px; font-weight: 750; margin-top: 2px; }
+.applykit-sub { font-size: 12.5px; color: var(--muted); margin: 8px 0 14px; line-height: 1.5; }
+.applykit-docs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.applykit-letter { width: 100%; font: inherit; font-size: 12.5px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); padding: 10px 12px; resize: vertical; margin-bottom: 14px; }
+.applykit-answers { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.applykit-answer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.applykit-answer:last-child { border-bottom: none; }
+.applykit-answer-label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+.applykit-answer-value { display: flex; align-items: center; gap: 7px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.applykit-copy { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; cursor: pointer; font-size: 12px; padding: 2px 7px; color: var(--ink); }
+.applykit-copy:hover { border-color: var(--accent); color: var(--accent); }
+.applykit-missing { font-size: 12px; color: var(--accent); text-decoration: none; }
+.applykit-missing:hover { text-decoration: underline; }
+.applykit-note { font-size: 11px; color: var(--muted); margin-top: 12px; font-style: italic; line-height: 1.5; }
+
 /* recommendation card: dismiss */
 .rec-title-side { display: flex; align-items: center; gap: 6px; }
 .rec-dismiss { border: none; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 5px; border-radius: 6px; opacity: 0.55; }
@@ -1560,10 +1590,15 @@ a.start-tile:hover { border-color: var(--accent); }
 .rich-toolbar .size-val { color: #fff; font-size: 11px; min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .ProseMirror { outline: none; }
 .ProseMirror ul { margin: 0; padding-left: 20px; }
-.ProseMirror li { line-height: 1.5; margin: 2px 0; font-size: calc(14px * var(--r-body-scale, 1)); }
+.ProseMirror li { line-height: 1.5; margin: var(--r-bullet-gap, 3px) 0; font-size: calc(14px * var(--r-body-scale, 1)); }
+/* bullets are stored as <p> inside each li — without this, the browser's
+   default 1em paragraph margin doubles the gap between bullets (the "overly
+   spaced out" look). The li margin above is the ONE knob for bullet spacing. */
+.ProseMirror li p { margin: 0; }
 /* read-only bullets (redesign diff sheet) mirror the editor's list styling */
 .ro-bullets ul { margin: 6px 0 0; padding-left: 20px; }
-.ro-bullets li { line-height: 1.5; margin: 2px 0; font-size: calc(14px * var(--r-body-scale, 1)); }
+.ro-bullets li { line-height: 1.5; margin: var(--r-bullet-gap, 3px) 0; font-size: calc(14px * var(--r-body-scale, 1)); }
+.ro-bullets li p { margin: 0; } /* mirror the editor — see .ProseMirror li p */
 .ro-bullets li::marker { color: var(--muted); }
 .resume.ro { box-shadow: none; }
 /* the puppeteer print target: full-bleed sheet, no chrome, no page guides */

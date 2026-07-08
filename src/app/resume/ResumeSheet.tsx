@@ -20,7 +20,7 @@ type Sheet = {
   certifications: { id: string; name: string | null; issuer: string | null; date: string | null }[];
 };
 
-const DEFAULT_STYLE = { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "", template: "clean" };
+const DEFAULT_STYLE = { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, bulletGap: 3, accent: "#2563eb", fontFamily: "", template: "clean" };
 
 function bulletsHtml(bullets: Bullet[] | null): string {
   if (!bullets?.length) return "";
@@ -40,6 +40,7 @@ export default function ResumeSheet({ data }: { data: Sheet }) {
     "--r-header-scale": s.headerScale,
     "--r-body-scale": s.bodyScale,
     "--r-density": s.density,
+    "--r-bullet-gap": `${s.bulletGap ?? 3}px`,
     "--r-accent": s.accent,
     "--r-font": s.fontFamily || "inherit",
   } as CSSProperties;

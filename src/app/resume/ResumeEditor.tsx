@@ -25,6 +25,7 @@ type StyleConfig = {
   headerScale: number;
   bodyScale: number;
   density: number;
+  bulletGap: number; // px between bullets within an entry
   accent: string;
   fontFamily: string;
   template: string; // clean | accent-name | ruled | serif-center (CSS-only layout variants)
@@ -34,6 +35,7 @@ const DEFAULT_STYLE: StyleConfig = {
   headerScale: 1,
   bodyScale: 1,
   density: 1,
+  bulletGap: 3,
   accent: "#2563eb",
   fontFamily: "",
   template: "clean",
@@ -75,22 +77,22 @@ const STYLE_PRESETS: { name: string; hint: string; style: StyleConfig }[] = [
   {
     name: "Classic",
     hint: "Centered serif, restrained — finance / consulting",
-    style: { nameScale: 1.05, headerScale: 0.95, bodyScale: 1, density: 1.05, accent: "#1f2937", fontFamily: "Georgia, 'Times New Roman', serif", template: "serif-center" },
+    style: { nameScale: 1.05, headerScale: 0.95, bodyScale: 1, density: 1.05, bulletGap: 4, accent: "#1f2937", fontFamily: "Georgia, 'Times New Roman', serif", template: "serif-center" },
   },
   {
     name: "Modern",
     hint: "Clean sans, blue accent — tech default",
-    style: { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, accent: "#2563eb", fontFamily: "", template: "clean" },
+    style: { nameScale: 1, headerScale: 1, bodyScale: 1, density: 1, bulletGap: 3, accent: "#2563eb", fontFamily: "", template: "clean" },
   },
   {
     name: "Teal",
     hint: "Teal name, warm & serious — the Teal look",
-    style: { nameScale: 1.1, headerScale: 1, bodyScale: 0.97, density: 0.92, accent: "#0f766e", fontFamily: "Calibri, 'Segoe UI', system-ui, sans-serif", template: "accent-name" },
+    style: { nameScale: 1.1, headerScale: 1, bodyScale: 0.97, density: 0.92, bulletGap: 3, accent: "#0f766e", fontFamily: "Calibri, 'Segoe UI', system-ui, sans-serif", template: "accent-name" },
   },
   {
     name: "Compact",
     hint: "Ruled dense one-pager — lots of experience, one page",
-    style: { nameScale: 0.92, headerScale: 0.9, bodyScale: 0.92, density: 0.78, accent: "#334155", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", template: "ruled" },
+    style: { nameScale: 0.92, headerScale: 0.9, bodyScale: 0.92, density: 0.78, bulletGap: 1, accent: "#334155", fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif", template: "ruled" },
   },
 ];
 
@@ -528,6 +530,7 @@ export default function ResumeEditor({
     "--r-header-scale": style.headerScale,
     "--r-body-scale": style.bodyScale,
     "--r-density": style.density,
+    "--r-bullet-gap": `${style.bulletGap ?? 3}px`,
     "--r-accent": style.accent,
     "--r-font": style.fontFamily || "inherit",
   } as CSSProperties;
@@ -927,6 +930,15 @@ export default function ResumeEditor({
             <Stepper label="Headings" value={style.headerScale} onChange={(v) => setStyle({ headerScale: v })} />
             <Stepper label="Body text" value={style.bodyScale} onChange={(v) => setStyle({ bodyScale: v })} />
             <Stepper label="Spacing" value={style.density} min={0.5} max={1.5} onChange={(v) => setStyle({ density: v })} />
+            <Stepper
+              label="Bullet gap"
+              value={style.bulletGap ?? 3}
+              min={0}
+              max={12}
+              step={1}
+              fmt={(v) => `${v}px`}
+              onChange={(v) => setStyle({ bulletGap: Math.round(v) })}
+            />
             <div className="design-row">
               <span>Accent</span>
               <input
@@ -1656,6 +1668,7 @@ function Stepper({
   min = 0.8,
   max = 1.4,
   step = 0.05,
+  fmt,
 }: {
   label: string;
   value: number;
@@ -1663,6 +1676,7 @@ function Stepper({
   min?: number;
   max?: number;
   step?: number;
+  fmt?: (v: number) => string; // default renders as a percentage
 }) {
   const clamp = (v: number) => Math.round(Math.min(max, Math.max(min, v)) * 100) / 100;
   return (
@@ -1670,7 +1684,7 @@ function Stepper({
       <span>{label}</span>
       <span className="stepper">
         <button onClick={() => onChange(clamp(value - step))} disabled={value <= min} aria-label={`Decrease ${label}`}>−</button>
-        <span className="stepper-val">{Math.round(value * 100)}%</span>
+        <span className="stepper-val">{fmt ? fmt(value) : `${Math.round(value * 100)}%`}</span>
         <button onClick={() => onChange(clamp(value + step))} disabled={value >= max} aria-label={`Increase ${label}`}>+</button>
       </span>
     </div>

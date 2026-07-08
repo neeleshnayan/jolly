@@ -14,6 +14,9 @@ export type AboutOverrides = {
   highestDegree?: Degree | "none"; // licenses (CPA, bar…) come from certifications, not this pin
   currentEmployer?: string;
   trajectory?: string;
+  // apply-kit answers — pin-only (no derivation possible from a résumé)
+  workAuthorization?: string; // e.g. "Indian citizen — needs sponsorship in US/UK"
+  noticePeriod?: string; // e.g. "30 days", "immediate"
 };
 
 export type AboutFacts = {
@@ -21,6 +24,8 @@ export type AboutFacts = {
   yearsExperience: { value: number | null; pinned: boolean };
   highestDegree: { value: Degree | "none" | null; pinned: boolean };
   trajectory: { value: string | null; pinned: boolean };
+  workAuthorization: { value: string | null; pinned: boolean };
+  noticePeriod: { value: string | null; pinned: boolean };
 };
 
 // highest-first display order (SATISFIES in gates.ts already encodes what a
@@ -72,5 +77,7 @@ export async function getAboutFacts(userId: string): Promise<AboutFacts | null> 
     yearsExperience: { value: o.yearsExperience ?? quals.yearsExperience, pinned: o.yearsExperience !== undefined },
     highestDegree: { value: o.highestDegree ?? highestOf(quals.credentials), pinned: o.highestDegree !== undefined },
     trajectory: { value: o.trajectory ?? arc, pinned: o.trajectory !== undefined },
+    workAuthorization: { value: o.workAuthorization ?? null, pinned: o.workAuthorization !== undefined },
+    noticePeriod: { value: o.noticePeriod ?? null, pinned: o.noticePeriod !== undefined },
   };
 }

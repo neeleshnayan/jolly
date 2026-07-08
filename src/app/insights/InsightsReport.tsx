@@ -11,6 +11,8 @@ type About = {
   yearsExperience: Fact<number>;
   highestDegree: Fact<string>;
   trajectory: Fact<string>;
+  workAuthorization: Fact<string>;
+  noticePeriod: Fact<string>;
 };
 type Report = {
   profile: { fullName: string | null; headline: string | null };
@@ -302,6 +304,9 @@ function AboutFactsPanel({ userId, about, onSaved }: { userId: string; about: Ab
     { field: "yearsExperience", label: "Years of experience", fact: about.yearsExperience, render: (v) => `${v} yrs`, input: "number", gateNote: "filters roles by required experience" },
     { field: "highestDegree", label: "Highest degree", fact: about.highestDegree, render: (v) => DEGREE_LABEL[v] ?? String(v), input: "degree", gateNote: "filters roles that require a degree you don't hold" },
     { field: "trajectory", label: "Career trajectory", fact: about.trajectory, render: String, input: "text" },
+    // pin-only apply-kit answers — no derivation, the résumé can't know these
+    { field: "workAuthorization", label: "Work authorization", fact: about.workAuthorization, render: String, input: "text" },
+    { field: "noticePeriod", label: "Notice period", fact: about.noticePeriod, render: String, input: "text" },
   ];
 
   return (

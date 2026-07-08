@@ -22,6 +22,8 @@ export async function PATCH(req: NextRequest) {
       highestDegree?: string | null;
       currentEmployer?: string | null;
       trajectory?: string | null;
+      workAuthorization?: string | null;
+      noticePeriod?: string | null;
     };
     const userId = await resolveUserId(body.u);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -38,6 +40,8 @@ export async function PATCH(req: NextRequest) {
     setOrClear("highestDegree", body.highestDegree as AboutOverrides["highestDegree"] | null | undefined, typeof body.highestDegree === "string" && DEGREES.has(body.highestDegree));
     setOrClear("currentEmployer", (typeof body.currentEmployer === "string" ? body.currentEmployer.slice(0, 120).trim() || null : body.currentEmployer) as string | null | undefined, typeof body.currentEmployer === "string");
     setOrClear("trajectory", (typeof body.trajectory === "string" ? body.trajectory.slice(0, 300).trim() || null : body.trajectory) as string | null | undefined, typeof body.trajectory === "string");
+    setOrClear("workAuthorization", (typeof body.workAuthorization === "string" ? body.workAuthorization.slice(0, 160).trim() || null : body.workAuthorization) as string | null | undefined, typeof body.workAuthorization === "string");
+    setOrClear("noticePeriod", (typeof body.noticePeriod === "string" ? body.noticePeriod.slice(0, 80).trim() || null : body.noticePeriod) as string | null | undefined, typeof body.noticePeriod === "string");
 
     await db.update(profiles).set({ aboutOverrides: next, updatedAt: new Date() }).where(eq(profiles.id, p.id));
     return NextResponse.json({ ok: true, overrides: next });

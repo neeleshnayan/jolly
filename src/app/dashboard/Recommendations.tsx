@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatComp } from "@/lib/format/comp";
 import { displayCompany } from "@/lib/format/company";
+import ApplyKit from "./ApplyKit";
 
 type Job = {
   id: string;
@@ -147,8 +148,11 @@ export default function Recommendations({ userId }: { userId: string }) {
   // for a one-tap confirm — honest data (no phantom applications from bounces),
   // zero forms. Confirmed rows feed the outcome funnel on this same dashboard.
   const [confirming, setConfirming] = useState<Record<string, "ask" | "saving" | "done">>({});
-  function onApplyClick(id: string) {
+  // the Apply Kit rides the same click that opens the ATS tab
+  const [kitFor, setKitFor] = useState<{ id: string; title: string } | null>(null);
+  function onApplyClick(id: string, title?: string | null) {
     signal("apply_click", id);
+    setKitFor({ id, title: title ?? "this role" });
     setConfirming((c) => (c[id] ? c : { ...c, [id]: "ask" }));
   }
   async function confirmApplied(j: Job) {
@@ -296,7 +300,7 @@ export default function Recommendations({ userId }: { userId: string }) {
               )}
               {j.url && (
                 <div className="rec-apply-row">
-                  <a className="rec-apply" href={j.url} target="_blank" rel="noopener noreferrer" onClick={() => onApplyClick(j.id)}>
+                  <a className="rec-apply" href={j.url} target="_blank" rel="noopener noreferrer" onClick={() => onApplyClick(j.id, j.title)}>
                     View &amp; apply ↗
                   </a>
                   {confirming[j.id] === "ask" && (
@@ -314,6 +318,7 @@ export default function Recommendations({ userId }: { userId: string }) {
           </div>
         ))}
       </div>
+      {kitFor && <ApplyKit userId={userId} opportunityId={kitFor.id} jobTitle={kitFor.title} onClose={() => setKitFor(null)} />}
     </section>
   );
 }
