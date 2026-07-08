@@ -25,6 +25,8 @@ const PROMPT = `Read this job description and produce two things: hard FACTS (fo
 FACTS:
 - title, company, location, remote (onsite/hybrid/remote/unknown)
 - comp_min / comp_max (only if the JD states a range; else null)
+- comp_currency: ISO code of that range ("USD","INR","GBP","EUR") if the JD or
+  its location makes it clear; else null. Never guess a symbol from habit.
 - company_stage (startup/growth/enterprise/unknown — infer from the company & language)
 - domain (e.g. "fintech backend", "AI infra", "growth marketing")
 - summary: 2-3 plain-English sentences on what the person would actually DO day

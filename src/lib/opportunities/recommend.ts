@@ -125,7 +125,7 @@ export async function rankMatches(userId: string): Promise<RankedJob[]> {
   // deployment still demos, but users should never see them next to real jobs.)
   const real = allRoles.filter((r) => r.source !== "sample");
   const roles = real.length ? real : allRoles;
-  return roles
+  const ranked = roles
     .map((r) => {
       const v = (r.vector ?? {}) as OpportunityVector;
       const f = (r.facts ?? {}) as Partial<OpportunityFacts>;
@@ -165,6 +165,24 @@ export async function rankMatches(userId: string): Promise<RankedJob[]> {
       };
     })
     .sort((a, b) => b.fit - a.fit);
+
+  // Diversity guard: scores compress at the top (several 95-97% roles), so
+  // whichever company vectorized most recently would own the whole visible
+  // top-5. Cap each company at 2 head-of-list slots; overflow keeps its rank
+  // order afterwards — nothing hidden, just interleaved.
+  const head: RankedJob[] = [];
+  const tail: RankedJob[] = [];
+  const perCompany = new Map<string, number>();
+  for (const j of ranked) {
+    const n = perCompany.get(j.company ?? "?") ?? 0;
+    if (n < 2) {
+      head.push(j);
+      perCompany.set(j.company ?? "?", n + 1);
+    } else {
+      tail.push(j);
+    }
+  }
+  return [...head, ...tail];
 }
 
 /**

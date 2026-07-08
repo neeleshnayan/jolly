@@ -861,16 +861,20 @@ export default function ResumeEditor({
 
       <div className="editor-shell">
         <aside className="editor-rail no-print">
-          <div className="rail-group">
-            <div className="rail-title">Add to résumé</div>
-            <div className="rail-adds">
-              <button className="rail-add" onClick={() => addEntry("experience")}>+ Experience</button>
-              <button className="rail-add" onClick={() => addEntry("education")}>+ Education</button>
-              <button className="rail-add" onClick={() => addEntry("skill")}>+ Skill</button>
-              <button className="rail-add" onClick={() => addEntry("project")}>+ Project</button>
-              <button className="rail-add" onClick={() => addEntry("certification")}>+ Cert</button>
+          {/* section-adding only makes sense on the résumé doc — on the letter
+              tab these buttons would edit a document you can't see */}
+          {docTab === "resume" && (
+            <div className="rail-group">
+              <div className="rail-title">Add to résumé</div>
+              <div className="rail-adds">
+                <button className="rail-add" onClick={() => addEntry("experience")}>+ Experience</button>
+                <button className="rail-add" onClick={() => addEntry("education")}>+ Education</button>
+                <button className="rail-add" onClick={() => addEntry("skill")}>+ Skill</button>
+                <button className="rail-add" onClick={() => addEntry("project")}>+ Project</button>
+                <button className="rail-add" onClick={() => addEntry("certification")}>+ Cert</button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="rail-group">
             <div className="rail-title">Design</div>

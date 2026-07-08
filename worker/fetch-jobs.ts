@@ -40,9 +40,14 @@ async function main() {
   // import AFTER env is set (db + provider read env lazily)
   const { fetchRawJobs, runInference } = await import("@/lib/jobs/fetch");
   await fetchRawJobs({ log: console.log });
-  // then vectorize pending rows in batches with a cooldown (JOBS_INFER_LIMIT /
-  // JOBS_INFER_BATCH / JOBS_INFER_SLEEP_MS to tune)
-  await runInference({ log: console.log });
+  // Vectorization is a deliberate act, not a side effect of fetching — it owns
+  // the GPU for minutes and the admin panel is where counts get chosen. Opt in
+  // with --infer (bounded by JOBS_INFER_LIMIT / JOBS_INFER_BATCH / _SLEEP_MS).
+  if (process.argv.includes("--infer")) {
+    await runInference({ log: console.log });
+  } else {
+    console.log("Fetch-only run (pass --infer to also vectorize, or use the admin panel for a counted batch).");
+  }
   process.exit(0);
 }
 

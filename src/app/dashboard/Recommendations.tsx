@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { formatComp } from "@/lib/format/comp";
+import { displayCompany } from "@/lib/format/company";
 
 type Job = {
   id: string;
@@ -22,11 +24,6 @@ type Job = {
 };
 const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", sample: "Curated JD", pasted: "Curated JD" };
 const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
-function comp(min: number | null, max: number | null) {
-  if (!min && !max) return null;
-  const f = (n: number) => (n >= 100000 ? `${Math.round(n / 100000)}L` : `${Math.round(n / 1000)}k`);
-  return `₹${f(min ?? max!)}–${f(max ?? min!)}`;
-}
 
 type Prefs = { currentComp?: number; expectedComp?: number; locations?: string[]; remote?: "remote" | "hybrid" | "onsite" | "any" };
 
@@ -197,16 +194,16 @@ export default function Recommendations({ userId }: { userId: string }) {
               <div className="rec-title-row">
                 <div>
                   <div className="rec-title">{j.title}</div>
-                  <div className="rec-co">{j.company}</div>
+                  <div className="rec-co">{displayCompany(j.company)}</div>
                 </div>
                 {j.source && <span className="rec-source">{SOURCE_LABEL[j.source] ?? j.source}</span>}
               </div>
 
               <div className="rec-facts">
-                {comp(j.compMin, j.compMax) && (
+                {formatComp(j.compMin, j.compMax, j.location) && (
                   <div className="rec-fact">
                     <span className="rec-fact-label">Comp</span>
-                    <span className="rec-fact-value">{comp(j.compMin, j.compMax)}</span>
+                    <span className="rec-fact-value">{formatComp(j.compMin, j.compMax, j.location)}</span>
                   </div>
                 )}
                 {j.location && (

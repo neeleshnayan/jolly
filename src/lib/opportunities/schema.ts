@@ -37,6 +37,9 @@ export const opportunityFacts = z.object({
   remote: z.enum(["onsite", "hybrid", "remote", "unknown"]).default("unknown"),
   comp_min: z.number().nullable().default(null), // annual, in the JD's currency if stated
   comp_max: z.number().nullable().default(null),
+  // ISO code ("USD"/"INR"/"GBP"/"EUR") when the JD makes it clear — a raw number
+  // can't distinguish ₹35,00,000 from $350,000, so display needs this
+  comp_currency: z.string().nullable().default(null),
   company_stage: z.enum(["startup", "growth", "enterprise", "unknown"]).default("unknown"),
   domain: z.string().default(""),
   // a comprehensible plain-English read of the role — what the person would

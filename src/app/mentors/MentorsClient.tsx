@@ -114,7 +114,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
           <div className="mentors-empty">
             <p>
               The founding mentor circle is still forming — you&apos;re early. Matches appear here as mentors join whose
-              journeys overlap your move{edge?.to ? ` toward “${edge.to.slice(0, 60)}”` : ""}.
+              journeys overlap where you&apos;re headed.
             </p>
             <p className="dash-hint">Know someone who&apos;s made your move? Invite them to register below — that&apos;s how the circle grows.</p>
           </div>
@@ -308,7 +308,7 @@ function MentorForm({ userId, initial, exists, onSaved }: { userId: string; init
         </label>
       </div>
       <div className="refine-actions">
-        <label className="dash-hint" style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+        <label className="dash-hint" style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer", whiteSpace: "nowrap" }}>
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> visible to seekers
         </label>
         <span style={{ display: "flex", gap: 10, alignItems: "center" }}>

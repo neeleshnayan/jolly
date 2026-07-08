@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import UserChip from "../UserChip";
+import { displayCompany } from "@/lib/format/company";
 
 type Param = { score: number; rationale: string };
 type Report = {
@@ -115,7 +116,8 @@ export default function InsightsReport({ userId }: { userId: string }) {
         <h1>{r.profile.fullName ?? "You"}</h1>
         {r.profile.headline && <p className="report-headline">{r.profile.headline}</p>}
         <div className="report-meta">
-          {r.scoringAt ? `Profile read updated ${new Date(r.scoringAt).toLocaleDateString()}` : "Profile read pending"} ·{" "}
+          {/* "7/8/2026" is ambiguous for an Indian audience — spell the month */}
+          {r.scoringAt ? `Profile read updated ${new Date(r.scoringAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : "Profile read pending"} ·{" "}
           {r.insights.length} insight{r.insights.length === 1 ? "" : "s"} from mentor conversations
         </div>
         {defining.length > 0 && (
@@ -247,7 +249,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
               <a className="match-mini" key={i} href={m.url ?? "/dashboard"} target={m.url ? "_blank" : undefined} rel="noopener noreferrer">
                 <span className="match-fit">{Math.round(m.fit * 100)}%</span>
                 <span className="match-title">{m.title}</span>
-                <span className="match-co">{m.company}</span>
+                <span className="match-co">{displayCompany(m.company)}</span>
               </a>
             ))}
           </div>

@@ -243,6 +243,8 @@ export function sampleExtraction(j: SampleJob): OpportunityExtraction {
       remote: j.remote,
       comp_min: j.compMin,
       comp_max: j.compMax,
+      comp_currency: "INR", // curated samples are written in ₹
+
       company_stage: j.stage,
       domain: j.domain,
       summary: j.jd,

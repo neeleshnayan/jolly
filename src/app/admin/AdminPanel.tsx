@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatComp } from "@/lib/format/comp";
 
 type Metrics = {
   mentorCalls: { total: number; byUser: { who: string; n: number; last_at: string }[] };
@@ -58,11 +59,6 @@ type JobRow = {
   url: string | null;
   vectorizedAt: string | null;
   createdAt: string;
-};
-const fmtComp = (min: number | null, max: number | null) => {
-  if (!min && !max) return "—";
-  const f = (n: number) => (n >= 100000 ? `${Math.round(n / 100000)}L` : `${Math.round(n / 1000)}k`);
-  return `₹${f(min ?? max!)}–${f(max ?? min!)}`;
 };
 
 export default function AdminPanel() {
@@ -231,13 +227,16 @@ export default function AdminPanel() {
     <div className="admin-wrap">
       <div className="admin-head">
         <h1>Control room</h1>
-        <button className="refine-toggle" onClick={() => void load()}>↻ Reload</button>
+        <span className="admin-head-actions">
+          <a className="refine-toggle" href="/dashboard">← Back to drizzle</a>
+          <button className="refine-toggle" onClick={() => void load()}>↻ Reload</button>
+        </span>
       </div>
 
       <div className="admin-tabs">
         {(["usage", "inference", "jobs"] as Tab[]).map((t) => (
           <button key={t} className={`admin-tab${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
-            {t === "usage" ? "📊 Usage" : t === "inference" ? "🧮 LLM inference" : `⚙ Jobs${pending ? ` (${pending})` : ""}`}
+            {t === "usage" ? "📊 Usage" : t === "inference" ? "🧮 LLM inference" : `⚙ Jobs${pending ? ` (${pending} pending)` : ""}`}
           </button>
         ))}
       </div>
@@ -313,7 +312,7 @@ export default function AdminPanel() {
                       <td>{x.model}</td>
                       <td>{x.runs}</td>
                       <td>{fmtK(x.tokens_in)} / {fmtK(x.tokens_out)}</td>
-                      <td>{c > 0 ? `$${c.toFixed(3)}` : "₹0 (local)"}</td>
+                      <td>{c > 0 ? `$${c.toFixed(3)}` : "$0 (local)"}</td>
                     </tr>
                   );
                 })}
@@ -378,11 +377,16 @@ export default function AdminPanel() {
                 <input className="admin-count" type="number" min={1} max={10} value={inferBatch} onChange={(e) => setInferBatch(e.target.value)} />
               </label>
               <label className="admin-knob" title="Seconds of GPU cooldown between batches">
-                pause&nbsp;s
+                pause&nbsp;(sec)
                 <input className="admin-count" type="number" min={0} max={120} value={inferPause} onChange={(e) => setInferPause(e.target.value)} />
               </label>
-              <button className="btn-primary" onClick={() => void runInference()} disabled={inferring || fetching || pending === 0}>
-                {inferring ? "Vectorizing…" : `▶ Run inference${pending ? ` (${pending} pending)` : ""}`}
+              <button
+                className="btn-primary"
+                onClick={() => void runInference()}
+                disabled={inferring || fetching || pending === 0}
+                title={pending ? `${pending} pending in total — this run only vectorizes what you set in "total"` : undefined}
+              >
+                {inferring ? "Vectorizing…" : `▶ Vectorize ${Math.min(Number(inferCount) || 10, pending || 0)} job${(Math.min(Number(inferCount) || 10, pending || 0)) === 1 ? "" : "s"}`}
               </button>
             </span>
           </div>
@@ -484,10 +488,10 @@ export default function AdminPanel() {
                       <td>{j.company}</td>
                       <td className="admin-dim">{j.location ?? "—"}</td>
                       <td className="admin-dim">{j.remote && j.remote !== "unknown" ? j.remote : "—"}</td>
-                      <td className="admin-dim">{fmtComp(j.compMin, j.compMax)}</td>
+                      <td className="admin-dim">{formatComp(j.compMin, j.compMax, j.location) ?? "—"}</td>
                       <td className="admin-dim">{j.domain ?? "—"}{j.companyStage && j.companyStage !== "unknown" ? ` · ${j.companyStage}` : ""}</td>
                       <td className="admin-dim">{j.source}</td>
-                      <td>{j.vectorizedAt ? <span title={new Date(j.vectorizedAt).toLocaleString()}>✓ {fmtAgo(j.vectorizedAt)}</span> : <span className="admin-pending">pending</span>}</td>
+                      <td>{j.vectorizedAt ? <span style={{ whiteSpace: "nowrap" }} title={new Date(j.vectorizedAt).toLocaleString()}>✓ {fmtAgo(j.vectorizedAt)}</span> : <span className="admin-pending">pending</span>}</td>
                       <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
                       <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
                     </tr>,

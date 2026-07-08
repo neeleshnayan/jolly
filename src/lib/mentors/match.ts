@@ -50,9 +50,10 @@ export async function deriveSeekerEdge(userId: string): Promise<SeekerEdge | nul
     .limit(2);
   const from = [latest?.title, latest?.org].filter(Boolean).join(" at ") || p.headline || "";
   // an aspiration insight is a full sentence — clip it to a displayable phrase
-  // (matching still uses ALL its words via targetWords)
+  // (matching still uses ALL its words via targetWords). 60 chars keeps the
+  // "A → B" line reading like a move, not a paragraph that trails off.
   const rawTo = target || aspirations[0]?.content || "";
-  const to = rawTo.length > 90 ? `${rawTo.slice(0, 90).replace(/\s+\S*$/, "")}…` : rawTo;
+  const to = rawTo.length > 60 ? `${rawTo.slice(0, 60).replace(/\s+\S*$/, "")}…` : rawTo;
   return { from, to, targetWords: [...words(target ?? ""), ...aspirations.flatMap((a) => words(a.content))] };
 }
 

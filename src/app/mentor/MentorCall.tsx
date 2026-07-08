@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
+import { displayCompany } from "@/lib/format/company";
 
 type Phase = "idle" | "recording" | "thinking" | "speaking";
 type Turn = { role: "user" | "assistant"; text: string };
@@ -779,7 +780,7 @@ export default function MentorCall({ userId }: { userId: string }) {
                 }}
                 title="Debug: health of voicebox + Ollama + the client audio path"
               >
-                🔧
+                🔧 Debug
               </button>
               <button
                 className={`brain-toggle${brain === "anthropic" ? " cloud" : ""}`}
@@ -884,7 +885,7 @@ export default function MentorCall({ userId }: { userId: string }) {
                   <div className="call-role" key={i} style={{ animationDelay: `${i * 120}ms` }}>
                     <span className="call-role-kind">{r.kind}</span>
                     <div className="call-role-title">{r.title}</div>
-                    <div className="call-role-co">{r.company}</div>
+                    <div className="call-role-co">{displayCompany(r.company)}</div>
                   </div>
                 ))}
               </div>
