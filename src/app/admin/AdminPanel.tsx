@@ -89,6 +89,27 @@ export default function AdminPanel() {
     return () => clearInterval(id);
   }, [inferring]);
   const [fetchLog, setFetchLog] = useState<string[] | null>(null);
+
+  // 🚑 local rescue — dev-only tooling to un-wedge the GPU stack mid-demo
+  const [rescueBusy, setRescueBusy] = useState<string | null>(null);
+  const [rescueLog, setRescueLog] = useState<string[]>([]);
+  async function rescue(action: string) {
+    setRescueBusy(action);
+    setRescueLog((l) => [...l, `▶ ${action}…`]);
+    try {
+      const r = await fetch("/api/admin/rescue", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const j = await r.json();
+      setRescueLog((l) => [...l, ...(j.log ?? [j.error ?? "failed"])]);
+    } catch (e) {
+      setRescueLog((l) => [...l, `! ${e instanceof Error ? e.message : "request failed"}`]);
+    } finally {
+      setRescueBusy(null);
+    }
+  }
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [pending, setPending] = useState(0);
   const [tab, setTab] = useState<Tab>("usage");
@@ -248,6 +269,35 @@ export default function AdminPanel() {
 
       {tab === "usage" && (
         <>
+          {process.env.NODE_ENV !== "production" && (
+            <section className="admin-section rescue-section">
+              <h2>🚑 Local rescue <span className="admin-dim" style={{ fontWeight: 400, fontSize: 12 }}>— when a demo wedges, don&apos;t debug: press the button</span></h2>
+              <div className="admin-actions" style={{ marginTop: 6 }}>
+                <button className="btn-primary" onClick={() => void rescue("full")} disabled={!!rescueBusy}>
+                  {rescueBusy === "full" ? "Rescuing…" : "🚑 Fix it (full ladder)"}
+                </button>
+                <button className="refine-toggle" onClick={() => void rescue("warm")} disabled={!!rescueBusy}>
+                  {rescueBusy === "warm" ? "Warming…" : "🔥 Warm models"}
+                </button>
+                <button className="refine-toggle" onClick={() => void rescue("restart-ollama")} disabled={!!rescueBusy}>
+                  {rescueBusy === "restart-ollama" ? "Restarting…" : "↻ Restart Ollama"}
+                </button>
+                <button className="refine-toggle" onClick={() => void rescue("restart-voicebox")} disabled={!!rescueBusy}>
+                  {rescueBusy === "restart-voicebox" ? "Restarting…" : "↻ Restart voicebox"}
+                </button>
+                <button className="refine-toggle" onClick={() => void rescue("evict-stock")} disabled={!!rescueBusy}>
+                  ⚔ Evict stock Ollama
+                </button>
+              </div>
+              <p className="admin-note" style={{ marginTop: 8 }}>
+                Full ladder = evict :11434 squatter → test generation → restart rc Ollama if wedged → restart voicebox if STILL
+                wedged (zombie CUDA state blocks new GPU contexts) → warm the live model. Dev builds only; the endpoint 404s in production.
+              </p>
+              {rescueLog.length > 0 && (
+                <pre className="rescue-log">{rescueLog.join("\n")}</pre>
+              )}
+            </section>
+          )}
           <div className="admin-stats">
             <div className="admin-stat">
               <div className="admin-stat-n">{m.activity?.active_today ?? 0}</div>

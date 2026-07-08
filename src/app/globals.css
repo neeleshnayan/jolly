@@ -1124,6 +1124,22 @@ a { color: var(--accent); }
 .applykit-missing:hover { text-decoration: underline; }
 .applykit-note { font-size: 11px; color: var(--muted); margin-top: 12px; font-style: italic; line-height: 1.5; }
 
+/* admin local rescue */
+.rescue-section { border: 1px dashed color-mix(in srgb, #dc2626 45%, var(--line)); border-radius: 14px; padding: 14px 16px; margin-top: 18px; }
+.rescue-log {
+  margin: 10px 0 0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
 /* admin mentor diary */
 .diary-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 18px; }
 .diary-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
