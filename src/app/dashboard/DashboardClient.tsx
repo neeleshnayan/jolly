@@ -188,10 +188,7 @@ export default function DashboardClient({
         </a>
       </div>
 
-      <Recommendations userId={userId} />
-
-      {/* themes & versions live in the résumé editor's version bar — the
-          dashboard keeps only the version PICKER on the log form below */}
+      {/* applications first: what you're IN takes priority over what's next */}
       <section className="dash-section">
         <div className="dash-section-head">
           <h2>Applications</h2>
@@ -341,6 +338,8 @@ export default function DashboardClient({
           </>
         )}
       </section>
+
+      <Recommendations userId={userId} />
     </main>
   );
 }

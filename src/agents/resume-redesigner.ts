@@ -28,11 +28,14 @@ Return every token:
 - density: vertical spacing. 0.7–1.5. Lower to pack more onto one page; higher to let it breathe when there is room.
 - accent: one professional accent color as a hex string like "#1f4e79". Tasteful, never neon. Match the field (deep blue/slate for finance & engineering; warmer tones for design/creative).
 - font: exactly one of ${FONT_KEYS.join(", ")}. Serif (georgia/garamond/cambria) reads classic and formal; calibri/helvetica reads modern and clean.
-- template: exactly one of clean, accent-name, ruled, serif-center — the sheet's layout personality:
+- template: exactly one of clean, accent-name, ruled, serif-center, banner, bold, mono — the sheet's layout personality:
   * clean — understated left-aligned default; safest for conservative fields
   * accent-name — the person's name set in the accent color; modern, warm, startup-friendly
   * ruled — a bold accent rule across the top; confident and graphic, suits senior/product profiles
   * serif-center — centered header with hairline section rules; formal, suits finance/law/academia
+  * banner — a warm gradient header band behind the name; refined and memorable, suits design/marketing/product
+  * bold — oversized name with full-width tinted section bars; commands attention, suits leadership/sales/founder profiles
+  * mono — dark header strip, monospace accents, code-tag skills; unmistakably an engineer's résumé
 - rationale: one short sentence explaining the choices.
 
 This résumé currently spans about ${pages} A4 page(s). Prefer a look that fits cleanly on as few pages as possible without feeling cramped.

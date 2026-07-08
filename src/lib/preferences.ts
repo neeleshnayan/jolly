@@ -7,9 +7,12 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 
+export type CompCurrency = "INR" | "USD" | "GBP" | "EUR";
+
 export type Preferences = {
-  currentComp?: number;
+  currentComp?: number; // annual, in compCurrency
   expectedComp?: number;
+  compCurrency?: CompCurrency;
   locations?: string[];
   remote?: "remote" | "hybrid" | "onsite" | "any";
 };
@@ -29,6 +32,7 @@ export async function savePreferences(userId: string, prefs: Preferences): Promi
   const n = (v: unknown) => (typeof v === "number" && isFinite(v) && v > 0 ? Math.round(v) : undefined);
   clean.currentComp = n(prefs.currentComp);
   clean.expectedComp = n(prefs.expectedComp);
+  if (prefs.compCurrency && ["INR", "USD", "GBP", "EUR"].includes(prefs.compCurrency)) clean.compCurrency = prefs.compCurrency;
   if (Array.isArray(prefs.locations)) {
     const locs = prefs.locations.map((s) => String(s).trim()).filter(Boolean).slice(0, 6);
     if (locs.length) clean.locations = locs;

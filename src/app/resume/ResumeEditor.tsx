@@ -61,6 +61,9 @@ const TEMPLATE_OPTIONS = [
   { key: "accent-name", label: "Accent", hint: "Your name in the accent color — modern & warm" },
   { key: "ruled", label: "Ruled", hint: "Bold accent rule up top — confident, graphic" },
   { key: "serif-center", label: "Centered", hint: "Centered header, hairline rules — formal" },
+  { key: "banner", label: "Banner", hint: "Warm gradient header band — refined, memorable" },
+  { key: "bold", label: "Bold", hint: "Oversized name, tinted section bars — impossible to skim past" },
+  { key: "mono", label: "Mono", hint: "Dark header, monospace accents, code-tag skills — built for engineers" },
 ];
 const FONT_OPTIONS = [
   { label: "Default (sans)", value: "" },
@@ -277,6 +280,26 @@ export default function ResumeEditor({
       if (r.ok) setLetterVersions((v) => [{ id: j.id, label, content: letterText, createdAt: new Date().toISOString() }, ...v]);
     } finally {
       setLetterSaving(false);
+    }
+  }
+  const [letterPdfBusy, setLetterPdfBusy] = useState(false);
+  async function downloadLetterPdf() {
+    setLetterPdfBusy(true);
+    try {
+      const r = await fetch("/api/cover-letters/pdf", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, content: letterText }),
+      });
+      if (!r.ok) return;
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(data.profile.fullName || "cover-letter").trim().replace(/\s+/g, "-")}-cover-letter.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } finally {
+      setLetterPdfBusy(false);
     }
   }
   function downloadLetterText() {
@@ -826,19 +849,11 @@ export default function ResumeEditor({
 
   return (
     <>
+      {/* lean topbar: the brand IS the way back, PDF lives with the sheet */}
       <div className="topbar no-print">
         <Brand />
         <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <span className="status">{status}</span>
-          <a className="ghost-btn" href="/dashboard">← Dashboard</a>
-          <button
-            className="ghost-btn"
-            onClick={() => void downloadPdf()}
-            disabled={pdfBusy}
-            title="Download a clean A4 PDF"
-          >
-            {pdfBusy ? "Building…" : "Download PDF"}
-          </button>
           <a href="/mentor">Talk to your mentor →</a>
           <UserChip />
         </span>
@@ -1111,7 +1126,10 @@ export default function ResumeEditor({
               <button className="ghost-btn" onClick={() => void generateLetter()} disabled={letterBusy}>
                 {letterBusy ? "Writing…" : letterText ? "↻ Regenerate" : "✨ Generate"}
               </button>
-              <button className="ghost-btn" onClick={downloadLetterText} disabled={!letterText.trim()}>Download .txt</button>
+              <button className="ghost-btn" onClick={downloadLetterText} disabled={!letterText.trim()}>↓ .txt</button>
+              <button className="ghost-btn" onClick={() => void downloadLetterPdf()} disabled={letterPdfBusy || !letterText.trim()}>
+                {letterPdfBusy ? "Rendering…" : "↓ PDF"}
+              </button>
               <button className="btn-primary" onClick={() => void saveLetterVersion()} disabled={letterSaving || letterText.trim().length < 40}>
                 {letterSaving ? "Saving…" : "+ Save as version"}
               </button>

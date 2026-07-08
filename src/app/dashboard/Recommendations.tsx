@@ -27,7 +27,27 @@ type Job = {
 const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", consider: "a16z portfolio", sample: "Curated JD", pasted: "Curated JD" };
 const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
 
-type Prefs = { currentComp?: number; expectedComp?: number; locations?: string[]; remote?: "remote" | "hybrid" | "onsite" | "any" };
+type Prefs = {
+  currentComp?: number;
+  expectedComp?: number;
+  compCurrency?: "INR" | "USD" | "GBP" | "EUR";
+  locations?: string[];
+  remote?: "remote" | "hybrid" | "onsite" | "any";
+};
+
+// slider scales per currency: [min, max, step] in absolute annual units
+const COMP_SCALE: Record<string, [number, number, number]> = {
+  INR: [400000, 20000000, 100000], // 4L … 2Cr, step 1L
+  USD: [40000, 700000, 5000],
+  GBP: [30000, 500000, 5000],
+  EUR: [30000, 500000, 5000],
+};
+const compLabel = (n: number | undefined, cur: string) => {
+  if (!n) return "—";
+  if (cur === "INR") return n >= 10000000 ? `₹${(n / 10000000).toFixed(1)} Cr` : `₹${Math.round(n / 100000)} LPA`;
+  const sym = cur === "USD" ? "$" : cur === "GBP" ? "£" : "€";
+  return `${sym}${Math.round(n / 1000)}k`;
+};
 
 export default function Recommendations({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Job[] | null>(null);
@@ -323,23 +343,26 @@ export default function Recommendations({ userId }: { userId: string }) {
   );
 }
 
-// comp is stored in absolute ₹; the form talks in LPA (lakhs/yr) for sanity
-const toL = (n?: number) => (n ? String(Math.round(n / 100000)) : "");
-const fromL = (s: string) => {
-  const n = parseFloat(s);
-  return isFinite(n) && n > 0 ? Math.round(n * 100000) : undefined;
-};
-
 function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean; onSave: (p: Prefs) => void }) {
-  const [current, setCurrent] = useState(toL(prefs.currentComp));
-  const [expected, setExpected] = useState(toL(prefs.expectedComp));
+  const [currency, setCurrency] = useState<NonNullable<Prefs["compCurrency"]>>(prefs.compCurrency ?? "INR");
+  const [current, setCurrent] = useState<number | undefined>(prefs.currentComp);
+  const [expected, setExpected] = useState<number | undefined>(prefs.expectedComp);
   const [locations, setLocations] = useState((prefs.locations ?? []).join(", "));
   const [remote, setRemote] = useState<Prefs["remote"]>(prefs.remote ?? "any");
+  const [min, max, step] = COMP_SCALE[currency];
+
+  function pickCurrency(cur: NonNullable<Prefs["compCurrency"]>) {
+    // numbers don't survive a currency switch — ₹60L is not $60k
+    setCurrency(cur);
+    setCurrent(undefined);
+    setExpected(undefined);
+  }
 
   function submit() {
     onSave({
-      currentComp: fromL(current),
-      expectedComp: fromL(expected),
+      currentComp: current,
+      expectedComp: expected,
+      compCurrency: currency,
       locations: locations.split(",").map((s) => s.trim()).filter(Boolean),
       remote,
     });
@@ -349,12 +372,21 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
     <div className="refine-panel">
       <div className="refine-grid">
         <label className="refine-field">
-          <span>Current comp (₹ LPA)</span>
-          <input type="number" inputMode="numeric" value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="e.g. 35" />
+          <span>Currency</span>
+          <select value={currency} onChange={(e) => pickCurrency(e.target.value as NonNullable<Prefs["compCurrency"]>)}>
+            <option value="INR">₹ INR</option>
+            <option value="USD">$ USD</option>
+            <option value="GBP">£ GBP</option>
+            <option value="EUR">€ EUR</option>
+          </select>
         </label>
-        <label className="refine-field">
-          <span>Expected comp (₹ LPA)</span>
-          <input type="number" inputMode="numeric" value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="e.g. 60" />
+        <label className="refine-field refine-slider">
+          <span>Current comp · <b>{compLabel(current, currency)}</b></span>
+          <input type="range" min={min} max={max} step={step} value={current ?? min} onChange={(e) => setCurrent(Number(e.target.value))} />
+        </label>
+        <label className="refine-field refine-slider">
+          <span>Expected comp · <b>{compLabel(expected, currency)}</b></span>
+          <input type="range" min={min} max={max} step={step} value={expected ?? min} onChange={(e) => setExpected(Number(e.target.value))} />
         </label>
         <label className="refine-field">
           <span>How you want to work</span>
@@ -371,7 +403,7 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
         </label>
       </div>
       <div className="refine-actions">
-        <span className="refine-note">Used to re-rank on top of your work style — nothing is hidden, just ordered.</span>
+        <span className="refine-note">Used to re-rank on top of your work style — nothing is hidden, just ordered. Cross-currency roles compare via rough FX.</span>
         <button className="btn-primary" onClick={submit} disabled={saving}>
           {saving ? "Saving…" : "Save & re-rank"}
         </button>

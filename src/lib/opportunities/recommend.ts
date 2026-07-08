@@ -11,6 +11,7 @@ import { applyQualOverrides } from "@/lib/profile/about";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
+import { inferCurrency } from "@/lib/format/comp";
 import { scoreMatch } from "./match";
 import type { ScoringVector } from "@/lib/scoring/schema";
 import type { OpportunityVector, OpportunityFacts } from "./schema";
@@ -61,17 +62,28 @@ function whySummary(m: { fit: number; reasons: string[]; gaps: string[] }): stri
 }
 
 // ---- concrete refinements the user states explicitly (comp + where/how) ----
-const compFmt = (n: number) => (n >= 100000 ? `₹${Math.round(n / 100000)}L` : `₹${Math.round(n / 1000)}k`);
+// Rough FX to USD for RANKING only (a soft factor, not an exchange desk).
+const TO_USD: Record<string, number> = { USD: 1, INR: 1 / 85, GBP: 1.27, EUR: 1.08 };
+const compFmt = (n: number, cur: string) =>
+  cur === "INR"
+    ? n >= 100000
+      ? `₹${Math.round(n / 100000)}L`
+      : `₹${Math.round(n / 1000)}k`
+    : `${cur === "USD" ? "$" : cur === "GBP" ? "£" : "€"}${Math.round(n / 1000)}k`;
 
-/** How well the role's stated pay meets the user's expectation. Unknown comp is
- *  neutral (never penalized). Below target is a soft, proportional penalty. */
-function compRefine(pref: Preferences, compMin: number | null, compMax: number | null) {
+/** How well the role's stated pay meets the user's expectation — compared in
+ *  USD via rough FX. Unknown job comp OR unknown job currency is NEUTRAL
+ *  (a confident cross-currency penalty would be worse than none). */
+function compRefine(pref: Preferences, compMin: number | null, compMax: number | null, jobCurrency: string | null) {
   const exp = pref.expectedComp;
   if (!exp) return { factor: 1 } as { factor: number; reason?: string; gap?: string };
+  const userCur = pref.compCurrency ?? "INR"; // historical prefs predate the field and were entered in ₹
   const top = compMax ?? compMin;
-  if (!top) return { factor: 1 };
-  if (top >= exp) return { factor: 1, reason: `Comp clears your ${compFmt(exp)} target` };
-  const ratio = top / exp;
+  if (!top || !jobCurrency || !TO_USD[jobCurrency] || !TO_USD[userCur]) return { factor: 1 };
+  const topUsd = top * TO_USD[jobCurrency];
+  const expUsd = exp * TO_USD[userCur];
+  if (topUsd >= expUsd) return { factor: 1, reason: `Comp clears your ${compFmt(exp, userCur)} target` };
+  const ratio = topUsd / expUsd;
   return { factor: Math.max(0.6, 0.6 + 0.4 * ratio), gap: `Comp ~${Math.round((1 - ratio) * 100)}% under your target` };
 }
 
@@ -174,7 +186,7 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
       const gate = hardGate({ facts: f }, quals);
       if (!gate.pass) return null;
       const m = scoreMatch(vec, v);
-      const c = compRefine(pref, r.compMin, r.compMax);
+      const c = compRefine(pref, r.compMin, r.compMax, f.comp_currency ?? inferCurrency(r.location));
       const l = locationRefine(pref, r.remote, r.location);
       // concrete notes lead — they're the explicit knobs the user just set
       const reasons = [c.reason, l.reason, ...m.reasons].filter(Boolean) as string[];
