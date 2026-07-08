@@ -32,6 +32,7 @@ if (!url) {
 const sql = postgres(url, { max: 1, connect_timeout: 15 });
 
 const statements = [
+  `ALTER TYPE opportunity_source ADD VALUE IF NOT EXISTS 'consider'`,
   `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS about_overrides jsonb DEFAULT '{}'`,
   `ALTER TABLE applications ADD COLUMN IF NOT EXISTS notes text`,
   `ALTER TABLE applications ADD COLUMN IF NOT EXISTS follow_up_at timestamp with time zone`,

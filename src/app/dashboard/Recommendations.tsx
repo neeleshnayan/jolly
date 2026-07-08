@@ -22,7 +22,7 @@ type Job = {
   gaps: string[];
   why: string;
 };
-const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", sample: "Curated JD", pasted: "Curated JD" };
+const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", consider: "a16z portfolio", sample: "Curated JD", pasted: "Curated JD" };
 const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
 
 type Prefs = { currentComp?: number; expectedComp?: number; locations?: string[]; remote?: "remote" | "hybrid" | "onsite" | "any" };

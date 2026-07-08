@@ -47,4 +47,7 @@ export const COMPANIES: { source: Source; slug: string }[] = [
   // london / uk
   { source: "greenhouse", slug: "monzo" },
   { source: "greenhouse", slug: "gocardless" },
+  // VC portfolio aggregators — hundreds of startups per board, real company
+  // name carried per job (a16z: ~15k jobs across ~800 companies)
+  { source: "consider", slug: "andreessen-horowitz" },
 ];

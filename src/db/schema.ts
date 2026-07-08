@@ -332,6 +332,7 @@ export const opportunitySource = pgEnum("opportunity_source", [
   "greenhouse",
   "lever",
   "ashby",
+  "consider", // VC portfolio aggregators (a16z et al.)
   "pasted",
   "sample",
   "other",

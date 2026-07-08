@@ -71,7 +71,9 @@ export async function fetchRawJobs(opts?: { log?: (line: string) => void }): Pro
     if (!c.slug || c.slug.includes("your")) continue;
     let jobs;
     try {
-      jobs = await fetchBoard(c.source, c.slug);
+      // aggregators (consider) pay one fetch per JD, so they take the filter
+      // and cap up front; single-call boards ignore the opts
+      jobs = await fetchBoard(c.source, c.slug, { titleFilter, cap: perBoard });
     } catch (e) {
       log(`skip ${c.source}:${c.slug} — ${(e as Error).message}`);
       continue;
@@ -106,7 +108,9 @@ export async function fetchRawJobs(opts?: { log?: (line: string) => void }): Pro
           source: c.source,
           externalId: j.externalId,
           url: j.url,
-          company: c.slug,
+          // aggregator jobs carry their real company; single-company boards
+          // fall back to the board slug
+          company: j.company || c.slug,
           title: j.title,
           location: j.location,
           remote: guessRemote(j.location, j.title),
