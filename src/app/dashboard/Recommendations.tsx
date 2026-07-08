@@ -53,7 +53,20 @@ const compLabel = (n: number | undefined, cur: string) => {
   return `${sym}${Math.round(n / 1000)}k`;
 };
 
-export default function Recommendations({ userId }: { userId: string }) {
+/** Shape the kanban needs when a tracked application is lifted up live. */
+export type TrackedApplication = {
+  id: string;
+  company: string | null;
+  role: string | null;
+  status: string;
+  notes: string | null;
+  followUpAt: string | null;
+  appliedAt: string;
+  resumeVersionId: string | null;
+  themeName: string | null;
+};
+
+export default function Recommendations({ userId, onTracked }: { userId: string; onTracked?: (app: TrackedApplication) => void }) {
   const [matches, setMatches] = useState<Job[] | null>(null);
   const [learning, setLearning] = useState<{ active: boolean; events: number } | null>(null);
   const [radar, setRadar] = useState<RadarEntry[]>([]);
@@ -185,13 +198,27 @@ export default function Recommendations({ userId }: { userId: string }) {
   async function confirmApplied(j: Job) {
     setConfirming((c) => ({ ...c, [j.id]: "saving" }));
     try {
-      await fetch("/api/track/application", {
+      const res = await fetch("/api/track/application", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId, company: j.company, role: j.title, opportunityId: j.id }),
       });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
       signal("applied", j.id);
       setConfirming((c) => ({ ...c, [j.id]: "done" }));
+      // lift the new application to the kanban so it appears WITHOUT a reload
+      onTracked?.({
+        id: json.application.id,
+        company: displayCompany(j.company),
+        role: j.title,
+        status: "applied",
+        notes: null,
+        followUpAt: null,
+        appliedAt: new Date().toISOString(),
+        resumeVersionId: null,
+        themeName: null,
+      });
     } catch {
       setConfirming((c) => ({ ...c, [j.id]: "ask" })); // let them retry
     }

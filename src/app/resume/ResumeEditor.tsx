@@ -12,6 +12,7 @@ import ResumeSheet from "./ResumeSheet";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
 import SkillMap, { type SkillMapEntry } from "../SkillMap";
+import { displayCompany } from "@/lib/format/company";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
 type Link = { label: string; url: string };
@@ -41,6 +42,158 @@ const DEFAULT_STYLE: StyleConfig = {
   fontFamily: "",
   template: "clean",
 };
+
+/**
+ * The redesign wizard — three honest questions before the AI touches anything:
+ *   1. TARGET  — one of their ranked roles, a pasted JD, or a general polish
+ *   2. SKILLS  — which market-demanded gaps they ATTEST to (nothing auto-adds)
+ *   3. TIPS    — which mentor-call facts should guide the rewrite
+ */
+function RedesignWizard({
+  targets,
+  missingSkills,
+  tips,
+  tipsLoading,
+  onClose,
+  onRun,
+}: {
+  targets: { id: string; title: string | null; company: string | null }[];
+  missingSkills: { skill: string; demand: number }[];
+  tips: { text: string; entryLabel: string | null }[] | null;
+  tipsLoading: boolean;
+  onClose: () => void;
+  onRun: (cfg: { opportunityId?: string; pastedJd?: string; addSkills: string[]; guidance: string[] }) => void;
+}) {
+  const [step, setStep] = useState(1);
+  const [targetKind, setTargetKind] = useState<"general" | "match" | "paste">("general");
+  const [matchId, setMatchId] = useState<string | null>(targets[0]?.id ?? null);
+  const [pasted, setPasted] = useState("");
+  const [pickedSkills, setPickedSkills] = useState<Set<string>>(new Set());
+  const [pickedTips, setPickedTips] = useState<Set<string> | null>(null); // null = default all
+
+  const tipTexts = (tips ?? []).map((t) => t.text);
+  const effectiveTips = pickedTips ?? new Set(tipTexts);
+  const toggle = <T,>(set: Set<T>, v: T) => {
+    const next = new Set(set);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
+    return next;
+  };
+  const canNext = step !== 1 || targetKind !== "paste" || pasted.trim().length >= 60;
+
+  return (
+    <div className="applykit-overlay" onClick={onClose}>
+      <section className="applykit wizard" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Redesign with AI">
+        <div className="applykit-head">
+          <div>
+            <div className="applykit-kicker">redesign with ai · step {step} of 3</div>
+            <div className="applykit-title">
+              {step === 1 ? "What are we aiming at?" : step === 2 ? "Any skills to add — your call" : "Your mentor's tips as guidance"}
+            </div>
+          </div>
+          <button className="ai-cancel" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        {step === 1 && (
+          <div className="wizard-body">
+            <label className={`wizard-option${targetKind === "general" ? " on" : ""}`}>
+              <input type="radio" checked={targetKind === "general"} onChange={() => setTargetKind("general")} />
+              <span><b>General polish</b> — no specific role; one-page look + sharper wording</span>
+            </label>
+            {targets.map((t) => (
+              <label key={t.id} className={`wizard-option${targetKind === "match" && matchId === t.id ? " on" : ""}`}>
+                <input
+                  type="radio"
+                  checked={targetKind === "match" && matchId === t.id}
+                  onChange={() => {
+                    setTargetKind("match");
+                    setMatchId(t.id);
+                  }}
+                />
+                <span><b>{t.title}</b> <span className="wizard-dim">@ {displayCompany(t.company)}</span> — tailor toward this match</span>
+              </label>
+            ))}
+            <label className={`wizard-option${targetKind === "paste" ? " on" : ""}`}>
+              <input type="radio" checked={targetKind === "paste"} onChange={() => setTargetKind("paste")} />
+              <span><b>A different role</b> — paste its job description</span>
+            </label>
+            {targetKind === "paste" && (
+              <textarea className="wizard-jd" rows={6} placeholder="Paste the JD here…" value={pasted} onChange={(e) => setPasted(e.target.value)} autoFocus />
+            )}
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="wizard-body">
+            {missingSkills.length === 0 ? (
+              <p className="dash-empty">No gaps — your résumé already shows every skill your matches keep asking for.</p>
+            ) : (
+              <>
+                <p className="wizard-note">
+                  Your aligned roles keep asking for these and your résumé doesn&apos;t show them. Tick <b>only what&apos;s genuinely yours</b> —
+                  ticking adds it to your Skills and lets the rewrite use the term. Nothing is ever added for you.
+                </p>
+                {missingSkills.map((s) => (
+                  <label key={s.skill} className={`wizard-option${pickedSkills.has(s.skill) ? " on" : ""}`}>
+                    <input type="checkbox" checked={pickedSkills.has(s.skill)} onChange={() => setPickedSkills((p) => toggle(p, s.skill))} />
+                    <span><b>{s.skill}</b> <span className="wizard-dim">· {s.demand} aligned roles ask for it</span></span>
+                  </label>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="wizard-body">
+            {tipsLoading ? (
+              <p className="dash-empty">Reading your last call…</p>
+            ) : !tips?.length ? (
+              <p className="dash-empty">No open tips from your calls — the redesign will lean on your mentor&apos;s overall read of you.</p>
+            ) : (
+              <>
+                <p className="wizard-note">Facts you told your mentor that aren&apos;t on the sheet yet — ticked ones guide the rewrite.</p>
+                {tips.map((t) => (
+                  <label key={t.text} className={`wizard-option${effectiveTips.has(t.text) ? " on" : ""}`}>
+                    <input type="checkbox" checked={effectiveTips.has(t.text)} onChange={() => setPickedTips(toggle(effectiveTips, t.text))} />
+                    <span>{t.text}{t.entryLabel ? <span className="wizard-dim"> · {t.entryLabel}</span> : null}</span>
+                  </label>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="wizard-foot">
+          {step > 1 ? (
+            <button className="ghost-btn" onClick={() => setStep((s) => s - 1)}>← Back</button>
+          ) : (
+            <span />
+          )}
+          {step < 3 ? (
+            <button className="btn-primary" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
+              Next →
+            </button>
+          ) : (
+            <button
+              className="btn-primary"
+              onClick={() =>
+                onRun({
+                  opportunityId: targetKind === "match" ? (matchId ?? undefined) : undefined,
+                  pastedJd: targetKind === "paste" ? pasted : undefined,
+                  addSkills: [...pickedSkills],
+                  guidance: [...effectiveTips],
+                })
+              }
+            >
+              ✨ Run the redesign
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
 
 /** ATS score as a ring — the same number reads as progress, not a grade. */
 function AtsRing({ score }: { score: number }) {
@@ -421,7 +574,7 @@ export default function ResumeEditor({
       .catch(() => {});
   }, [userId]);
   const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
-  async function redesign(jd?: string, onlyKeywords?: string[]) {
+  async function redesign(jd?: string, onlyKeywords?: string[], guidance?: string[]) {
     setRedesigning(true);
     setRedesignErr("");
     try {
@@ -435,7 +588,8 @@ export default function ResumeEditor({
         body: JSON.stringify({
           userId,
           ...(jd?.trim() ? { jd: jd.trim() } : {}),
-          ...(jd?.trim() && missing.length ? { missingKeywords: missing.slice(0, 20) } : {}),
+          ...(missing.length ? { missingKeywords: missing.slice(0, 20) } : {}),
+          ...(guidance?.length ? { guidance } : {}),
         }),
       });
       const j = await res.json();
@@ -666,34 +820,55 @@ export default function ResumeEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- skill map (AI rail): market demand → one-click add to the sheet ----
+  // ---- skill map (AI rail): the gap is SHOWN, never auto-added ----
   const [skillRadar, setSkillRadar] = useState<SkillMapEntry[]>([]);
-  const [addingSkill, setAddingSkill] = useState<string | null>(null);
-  const [justAddedSkills] = useState(() => new Set<string>());
+  const [targetOptions, setTargetOptions] = useState<{ id: string; title: string | null; company: string | null }[]>([]);
   useEffect(() => {
     fetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => setSkillRadar(j.skillRadar ?? []))
+      .then((j) => {
+        setSkillRadar(j.skillRadar ?? []);
+        setTargetOptions((j.matches ?? []).slice(0, 4).map((m: { id: string; title: string | null; company: string | null }) => ({ id: m.id, title: m.title, company: m.company })));
+      })
       .catch(() => {});
   }, [userId]);
-  async function addSkillFromMap(name: string) {
-    setAddingSkill(name);
+  /** Used ONLY from the wizard, where the user explicitly ticked the skill —
+   *  their attestation, not the model's guess. */
+  async function addSkillExplicit(name: string) {
+    const res = await fetch("/api/profile/entry", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, kind: "skill", action: "create" }),
+    });
+    const json = await res.json();
+    if (!json.id) throw new Error(json.error || "Add failed");
+    setData((d) => ({ ...d, skills: [...d.skills, { id: json.id, name, category: null }] }));
+    save("skill", json.id, { name });
+    setSkillRadar((r) => r.map((e) => (e.skill === name ? { ...e, have: true } : e)));
+  }
+
+  // ---- the redesign wizard: target → skills → tips → run ----
+  const [wizardOpen, setWizardOpen] = useState(false);
+  function openWizard() {
+    setWizardOpen(true);
+    if (tips === null && tipsState === "idle") void loadTips(); // step 3 material
+  }
+  async function runRedesignWizard(cfg: { opportunityId?: string; pastedJd?: string; addSkills: string[]; guidance: string[] }) {
+    setWizardOpen(false);
+    setStatus("Preparing redesign…");
     try {
-      const res = await fetch("/api/profile/entry", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, kind: "skill", action: "create" }),
-      });
-      const json = await res.json();
-      if (!json.id) throw new Error(json.error || "Add failed");
-      setData((d) => ({ ...d, skills: [...d.skills, { id: json.id, name, category: null }] }));
-      save("skill", json.id, { name });
-      justAddedSkills.add(name); // flips to "already on your résumé" instantly
-      setStatus(`Added "${name}" to Skills`);
+      // 1) the user's ticked skills — explicit attestation, added for real
+      for (const s of cfg.addSkills) await addSkillExplicit(s);
+      // 2) resolve the target JD (a picked opportunity reuses the apply-kit read)
+      let jdText = cfg.pastedJd?.trim() || undefined;
+      if (!jdText && cfg.opportunityId) {
+        const kit = await fetch(`/api/apply-kit?u=${userId}&opportunityId=${cfg.opportunityId}`, { cache: "no-store" }).then((r) => r.json());
+        jdText = kit.job?.jd || undefined;
+      }
+      setStatus("");
+      await redesign(jdText, cfg.addSkills.length ? cfg.addSkills : undefined, cfg.guidance);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Add failed");
-    } finally {
-      setAddingSkill(null);
+      setStatus(err instanceof Error ? err.message : "Redesign failed");
     }
   }
 
@@ -896,6 +1071,7 @@ export default function ResumeEditor({
         refreshKey={versionRefreshKey}
         onSaveVersion={openSaveVersion}
         onAfterRestore={reloadData}
+        suggestedTheme={targetRole?.role ?? null}
       />
 
       {/* one workspace, two documents — same theme, separate version histories */}
@@ -1558,10 +1734,10 @@ export default function ResumeEditor({
             <div className="rail-group">
               <div className="rail-title">AI</div>
               <div className="ai-stack">
-                <button className="redesign-btn" onClick={() => void redesign()} disabled={redesigning}>
+                <button className="redesign-btn" onClick={openWizard} disabled={redesigning}>
                   {redesigning ? "Redesigning…" : "✨ Redesign with AI"}
                 </button>
-                <div className="redesign-hint">New look + sharper wording from your mentor&apos;s read of you. Review side-by-side.</div>
+                <div className="redesign-hint">Pick a target, confirm skills and tips — then a new one-page look with sharper wording. Review side-by-side.</div>
                 {redesignErr && <div className="ai-err">{redesignErr}</div>}
   
                 {/* target a job: JD in → tailored résumé + cover letter out */}
@@ -1698,16 +1874,24 @@ export default function ResumeEditor({
                       </div>
                     )}
                   </div>
-                ) : (
-                  <a className="rail-add rail-ai-link" href="/mentor">🎙 Talk to mentor for tips →</a>
-                )}
+                ) : null}
 
-                {/* the market's skill demand, one click from the sheet */}
-                <SkillMap radar={skillRadar} mode="add" onAdd={(s) => void addSkillFromMap(s)} adding={addingSkill} justAdded={justAddedSkills} />
+                {/* the market's skill demand — shown, never auto-added */}
+                <SkillMap radar={skillRadar} mode="view" />
               </div>
             </div>
         </aside>
       </div>
+      {wizardOpen && (
+        <RedesignWizard
+          targets={targetOptions}
+          missingSkills={skillRadar.filter((r) => !r.have)}
+          tips={tips?.filter((t) => !t.applied) ?? null}
+          tipsLoading={tipsState === "loading"}
+          onClose={() => setWizardOpen(false)}
+          onRun={(cfg) => void runRedesignWizard(cfg)}
+        />
+      )}
     </>
   );
 }

@@ -20,7 +20,7 @@ export const fontKeyToCss: Record<FontKey, string> = {
 //   accent-name  — the name set in the accent color; modern-warm
 //   ruled        — a bold accent rule across the top; confident, graphic
 //   serif-center — centered header, hairline section rules; formal/classic
-export const TEMPLATE_KEYS = ["clean", "accent-name", "ruled", "serif-center"] as const;
+export const TEMPLATE_KEYS = ["clean", "accent-name", "ruled", "serif-center", "banner", "bold", "mono"] as const;
 export type TemplateKey = (typeof TEMPLATE_KEYS)[number];
 
 // Loose numbers/strings on purpose — a local model may drift out of range; we
@@ -30,6 +30,7 @@ export const redesignResult = z.object({
   headerScale: z.number(),
   bodyScale: z.number(),
   density: z.number(),
+  bulletGap: z.number().default(3), // px between bullets — the one-page lever
   accent: z.string(),
   font: z.enum(FONT_KEYS),
   template: z.enum(TEMPLATE_KEYS).default("clean"),
@@ -48,6 +49,7 @@ export function toStyleConfig(r: RedesignResult) {
     headerScale: clamp(r.headerScale, 0.8, 1.4),
     bodyScale: clamp(r.bodyScale, 0.85, 1.2),
     density: clamp(r.density, 0.7, 1.5),
+    bulletGap: Math.round(Math.min(12, Math.max(0, Number.isFinite(r.bulletGap) ? r.bulletGap : 3))),
     accent: HEX.test(r.accent) ? r.accent : "#2563eb",
     fontFamily: fontKeyToCss[r.font] ?? "",
     template: (TEMPLATE_KEYS as readonly string[]).includes(r.template) ? r.template : "clean",

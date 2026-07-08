@@ -4,6 +4,7 @@ import { useState } from "react";
 import Recommendations from "./Recommendations";
 import Brand from "../Brand";
 import UserChip from "../UserChip";
+import { displayCompany } from "@/lib/format/company";
 
 type Version = {
   id: string;
@@ -245,7 +246,7 @@ export default function DashboardClient({
                       >
                         <div className="kanban-card-top">
                           <div>
-                            <div className="kanban-card-co">{a.company || "—"}</div>
+                            <div className="kanban-card-co">{displayCompany(a.company) || "—"}</div>
                             {a.role && <div className="kanban-card-role">{a.role}</div>}
                           </div>
                           <span className="kanban-card-icons">
@@ -318,7 +319,7 @@ export default function DashboardClient({
                 <div className="outcome-strip-head">🎉 Offers</div>
                 {apps.filter((a) => a.status === "offer").map((a) => (
                   <div className="outcome-card offer" key={a.id}>
-                    <span className="outcome-co">{a.company || "—"}</span>
+                    <span className="outcome-co">{displayCompany(a.company) || "—"}</span>
                     {a.role && <span className="outcome-role">{a.role}</span>}
                     <span className="kanban-age">{fmtDate(a.appliedAt)}</span>
                   </div>
@@ -330,7 +331,7 @@ export default function DashboardClient({
                 <div className="outcome-strip-head">Didn&apos;t work out — each one teaches the ranking</div>
                 {apps.filter((a) => a.status === "rejected" || a.status === "ghosted").map((a) => (
                   <div className="outcome-card" key={a.id}>
-                    <span className="outcome-co">{a.company || "—"}</span>
+                    <span className="outcome-co">{displayCompany(a.company) || "—"}</span>
                     {a.role && <span className="outcome-role">{a.role}</span>}
                     <span className="kanban-chip">{a.status === "ghosted" ? "no response" : "rejected"}</span>
                   </div>
@@ -342,7 +343,7 @@ export default function DashboardClient({
         )}
       </section>
 
-      <Recommendations userId={userId} />
+      <Recommendations userId={userId} onTracked={(app) => setApps((a) => [app, ...a])} />
     </main>
   );
 }

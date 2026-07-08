@@ -26,6 +26,7 @@ Return every token:
 - headerScale: size of section headings. 0.8–1.4.
 - bodyScale: size of body text & bullets. 0.85–1.2. If the résumé is long/dense, go smaller to fit; if sparse, slightly larger.
 - density: vertical spacing. 0.7–1.5. Lower to pack more onto one page; higher to let it breathe when there is room.
+- bulletGap: pixels between bullet lines, 0–12 (3 = default). Your second lever for fitting a page: 1–2 for dense résumés, 4–6 when there's room to breathe.
 - accent: one professional accent color as a hex string like "#1f4e79". Tasteful, never neon. Match the field (deep blue/slate for finance & engineering; warmer tones for design/creative).
 - font: exactly one of ${FONT_KEYS.join(", ")}. Serif (georgia/garamond/cambria) reads classic and formal; calibri/helvetica reads modern and clean.
 - template: exactly one of clean, accent-name, ruled, serif-center, banner, bold, mono — the sheet's layout personality:
@@ -38,7 +39,7 @@ Return every token:
   * mono — dark header strip, monospace accents, code-tag skills; unmistakably an engineer's résumé
 - rationale: one short sentence explaining the choices.
 
-This résumé currently spans about ${pages} A4 page(s). Prefer a look that fits cleanly on as few pages as possible without feeling cramped.
+This résumé currently spans about ${pages} A4 page(s). THE GOAL IS ONE PAGE: recruiters skim, and a tight single page beats a roomy two every time. If it currently overflows, reach for smaller bodyScale, lower density, and a tighter bulletGap TOGETHER until one page is realistic — but never below the readable floor (bodyScale 0.85, density 0.7, bulletGap 1). If the content is simply too much for one readable page, two clean pages beat one cramped one — say so in the rationale.
 
 RÉSUMÉ CONTENT:
 ${profileText}`;

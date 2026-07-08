@@ -3,7 +3,9 @@
 /**
  * The skills-overlap map — one warm card, two homes:
  *   dashboard (mode "filter"): clicking a skill filters the ranked roles
- *   résumé editor (mode "add"): clicking + drops the skill straight onto the sheet
+ *   résumé editor (mode "view"): the gap is SHOWN, never auto-added — adding a
+ *   skill is the user's own act (the redesign wizard asks explicitly), because
+ *   a résumé is a promise, not a keyword bag.
  *
  * Missing skills lead (they're the actionable), each with a demand bar so the
  * market's pull is VISIBLE, not a number to decode. Skills you already show
@@ -17,21 +19,15 @@ export default function SkillMap({
   mode,
   selected,
   onSelect,
-  onAdd,
-  adding,
-  justAdded,
 }: {
   radar: SkillMapEntry[];
-  mode: "filter" | "add";
+  mode: "filter" | "view";
   selected?: string | null;
   onSelect?: (skill: string | null) => void;
-  onAdd?: (skill: string) => void;
-  adding?: string | null;
-  justAdded?: Set<string>;
 }) {
   if (!radar.length) return null;
-  const missing = radar.filter((r) => !r.have && !justAdded?.has(r.skill));
-  const have = radar.filter((r) => r.have || justAdded?.has(r.skill));
+  const missing = radar.filter((r) => !r.have);
+  const have = radar.filter((r) => r.have);
   const maxDemand = Math.max(...radar.map((r) => r.demand), 1);
 
   return (
@@ -43,7 +39,7 @@ export default function SkillMap({
 
       {missing.length > 0 && (
         <>
-          <div className="skillmap-group">worth adding</div>
+          <div className="skillmap-group">the market keeps asking — not on your résumé</div>
           <div className="skillmap-rows">
             {missing.map((r) => (
               <div
@@ -57,19 +53,6 @@ export default function SkillMap({
                   <i style={{ width: `${Math.max(12, Math.round((r.demand / maxDemand) * 100))}%` }} />
                 </span>
                 <span className="skillmap-count">{r.demand} role{r.demand === 1 ? "" : "s"}</span>
-                {mode === "add" && (
-                  <button
-                    className="skillmap-add"
-                    disabled={!!adding}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAdd?.(r.skill);
-                    }}
-                    title="Add to your résumé's Skills — only if you genuinely have it"
-                  >
-                    {adding === r.skill ? "…" : "+ Add"}
-                  </button>
-                )}
               </div>
             ))}
           </div>
@@ -95,8 +78,10 @@ export default function SkillMap({
           </div>
         </>
       )}
-      {mode === "add" && missing.length > 0 && (
-        <div className="skillmap-honesty">Add only what&apos;s genuinely yours — the sheet is a promise, not a keyword bag.</div>
+      {mode === "view" && missing.length > 0 && (
+        <div className="skillmap-honesty">
+          Gaps are shown, never auto-added — if one is genuinely yours, add it via + Skill (or the redesign wizard will ask).
+        </div>
       )}
     </div>
   );

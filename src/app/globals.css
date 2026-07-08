@@ -727,7 +727,6 @@ a { color: var(--accent); }
 }
 .redesign-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .redesign-hint { font-size: 11.5px; color: var(--muted); margin: 6px 0 10px; line-height: 1.4; }
-.rail-ai-link { display: block; text-align: center; text-decoration: none; }
 /* mentor target-role teaser (light → expandable details) */
 .mentor-teaser { border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--paper)); background: color-mix(in srgb, var(--accent) 6%, var(--paper)); border-radius: 10px; overflow: hidden; }
 .mentor-teaser-head {
@@ -1045,6 +1044,23 @@ a { color: var(--accent); }
 .slot-hint { font-size: 11px; color: var(--muted); margin-top: 9px; line-height: 1.5; }
 .slot-mine { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; border: 1px solid var(--glass-border); background: var(--glass); border-radius: 999px; padding: 6px 14px; }
 
+/* redesign wizard — three honest questions before the AI touches anything */
+.applykit.wizard { width: min(640px, 94vw); max-height: min(82vh, 760px); }
+.wizard-body { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; flex: 1; padding: 4px 2px; }
+.wizard-option {
+  display: flex; align-items: flex-start; gap: 10px;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 13px; cursor: pointer; font-size: 13px; line-height: 1.5;
+  transition: border-color 0.12s, background 0.12s;
+}
+.wizard-option:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.wizard-option.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.wizard-option input { margin-top: 3px; accent-color: var(--accent); flex: 0 0 auto; }
+.wizard-dim { color: var(--muted); font-weight: 400; }
+.wizard-note { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 4px; }
+.wizard-jd { font: inherit; font-size: 12.5px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); padding: 10px 12px; resize: vertical; }
+.wizard-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+
 /* call queue — one live call per GPU; waiting is honest, not degraded */
 .call-queue { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0 2px; }
 .call-queue-pulse { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); animation: queue-pulse 1.6s ease-in-out infinite; }
@@ -1197,17 +1213,6 @@ a { color: var(--accent); }
   transition: width 0.4s ease;
 }
 .skillmap-count { flex: 0 0 auto; font-size: 11.5px; color: var(--muted); font-weight: 650; min-width: 52px; text-align: right; }
-.skillmap-add {
-  flex: 0 0 auto;
-  font: inherit; font-size: 11.5px; font-weight: 700;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-  border-radius: 999px; padding: 3px 12px; cursor: pointer;
-  transition: background 0.12s;
-}
-.skillmap-add:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
-.skillmap-add:disabled { opacity: 0.5; cursor: default; }
 .skillmap-haves { display: flex; flex-wrap: wrap; gap: 6px; }
 .skillmap-havechip {
   display: inline-flex; align-items: center; gap: 5px;
@@ -1241,7 +1246,6 @@ a { color: var(--accent); }
   padding: 8px 10px;
 }
 .editor-rail .skillmap-skill { grid-area: skill; flex: none; min-width: 0; }
-.editor-rail .skillmap-add { grid-area: add; }
 .editor-rail .skillmap-bar { grid-area: bar; }
 .editor-rail .skillmap-count { grid-area: count; min-width: 0; }
 
@@ -1373,6 +1377,15 @@ a { color: var(--accent); }
 }
 .vb-btn:hover { border-color: var(--accent); color: var(--accent); }
 .vb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.vb-newtheme { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vb-theme-picks { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.vb-pick {
+  font: inherit; font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px;
+  background: var(--glass-strong); color: var(--muted); cursor: pointer;
+}
+.vb-pick:hover { border-color: var(--accent); color: var(--accent); }
+.vb-pick.star { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 700; }
 .vb-btn.on { border-color: #d97706; color: #b45309; background: #fffbeb; }
 .vb-btn.primary { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--paper)); margin-left: auto; }
 .vb-msg { font-size: 12px; color: var(--muted); }

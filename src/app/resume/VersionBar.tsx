@@ -22,16 +22,21 @@ function fmt(v: Version) {
  * which version is active for applications (not always the latest), and load any
  * version back into the editor. Forking = load a version, edit, Save as new.
  */
+// role angles most people are testing — quick-picks under the + theme input
+const THEME_SUGGESTIONS = ["Founder", "Product", "Engineering", "Data & AI", "Consulting", "Design"];
+
 export default function VersionBar({
   userId,
   refreshKey,
   onSaveVersion,
   onAfterRestore,
+  suggestedTheme,
 }: {
   userId: string;
   refreshKey: number;
   onSaveVersion: () => void;
   onAfterRestore: () => void | Promise<void>;
+  suggestedTheme?: string | null; // the mentor's target-role read, if any
 }) {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [untagged, setUntagged] = useState<Version[]>([]);
@@ -42,8 +47,8 @@ export default function VersionBar({
   const [newThemeOpen, setNewThemeOpen] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
 
-  async function createTheme() {
-    const name = newThemeName.trim();
+  async function createTheme(pick?: string) {
+    const name = (pick ?? newThemeName).trim();
     if (!name) return;
     setBusy(true);
     try {
@@ -141,7 +146,7 @@ export default function VersionBar({
 
   return (
     <div className="version-bar no-print">
-      <span className="vb-label">Résumé theme</span>
+      <span className="vb-label">Role theme</span>
       <select className="vb-select" value={themeId} onChange={(e) => pickTheme(e.target.value)}>
         <option value="">{hasThemes ? "— pick a theme —" : "No themes yet"}</option>
         {themes.map((t) => (
@@ -164,9 +169,19 @@ export default function VersionBar({
           />
           <button className="vb-btn" onClick={() => void createTheme()} disabled={busy || !newThemeName.trim()}>✓</button>
           <button className="vb-btn" onClick={() => setNewThemeOpen(false)}>✕</button>
+          <span className="vb-theme-picks">
+            {[...(suggestedTheme ? [suggestedTheme] : []), ...THEME_SUGGESTIONS]
+              .filter((s) => !themes.some((t) => t.name.toLowerCase() === s.toLowerCase()))
+              .slice(0, 6)
+              .map((s) => (
+                <button key={s} className={`vb-pick${s === suggestedTheme ? " star" : ""}`} disabled={busy} onClick={() => void createTheme(s)} title={s === suggestedTheme ? "Your mentor's read on where you're headed" : undefined}>
+                  {s === suggestedTheme ? "★ " : ""}{s}
+                </button>
+              ))}
+          </span>
         </span>
       ) : (
-        <button className="vb-btn" onClick={() => setNewThemeOpen(true)} title="A theme is a strategic angle — one résumé direction you're testing">
+        <button className="vb-btn" onClick={() => setNewThemeOpen(true)} title="A role theme is a strategic angle — one résumé direction you're testing">
           + theme
         </button>
       )}

@@ -54,7 +54,14 @@ export async function POST(req: Request) {
     const atsNote = missing.length
       ? ` An ATS keyword check found these JD terms MISSING from the résumé: ${missing.join(", ")}. Where a bullet ALREADY truthfully demonstrates one of these, rephrase it to use that exact term (e.g. work that plainly used Python should say "Python"). If nothing on the résumé genuinely supports a term, LEAVE IT OUT — never fabricate experience to satisfy a keyword.`
       : "";
-    const OVERHAUL = OVERHAUL_BASE + insightNote + jdNote + atsNote;
+    // mentor tips the user TICKED in the wizard — explicit, user-approved guidance
+    const guidance = Array.isArray(body.guidance)
+      ? (body.guidance as unknown[]).filter((g): g is string => typeof g === "string").slice(0, 10)
+      : [];
+    const guidanceNote = guidance.length
+      ? ` The user selected these mentor tips as guidance for the rewrite (they approved each one — weave them in where the underlying bullet supports it): ${guidance.map((g) => `"${g}"`).join("; ")}.`
+      : "";
+    const OVERHAUL = OVERHAUL_BASE + insightNote + jdNote + atsNote + guidanceNote;
 
     // 1) the new look
     const { output: design } = await runAgent(resumeRedesigner, { profileText, pages }, { userId });
