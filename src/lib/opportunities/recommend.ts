@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { opportunities, profiles, rankingSignals } from "@/db/schema";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
+import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
 import { scoreMatch } from "./match";
 import type { ScoringVector } from "@/lib/scoring/schema";
 import type { OpportunityVector, OpportunityFacts } from "./schema";
@@ -101,11 +102,21 @@ function locationRefine(pref: Preferences, remote: string | null, location: stri
   return { factor, reason, gap };
 }
 
+export type RankOutcome = { matches: RankedJob[]; learning: { active: boolean; events: number; confidence: number } };
+
 export async function rankMatches(userId: string): Promise<RankedJob[]> {
-  const vec = await userVector(userId);
-  if (!vec) return [];
+  return (await rankMatchesWithMeta(userId)).matches;
+}
+
+export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> {
+  const base = await userVector(userId);
+  if (!base) return { matches: [], learning: { active: false, events: 0, confidence: 0 } };
   // visibility: global roles for everyone + THIS user's private bookmarks
   const [me] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  // Layer 2: the mentor call is the prior, behavior is the evidence — drift a
+  // rank-time COPY of the vector toward what they actually choose (±0.15 max)
+  const drift: LearnedDrift | null = me ? await learnDrift(me.id) : null;
+  const vec = applyDrift(base, drift);
   const visible = me
     ? or(eq(opportunities.visibility, "global"), eq(opportunities.addedByProfileId, me.id))
     : eq(opportunities.visibility, "global");
@@ -194,7 +205,10 @@ export async function rankMatches(userId: string): Promise<RankedJob[]> {
       tail.push(j);
     }
   }
-  return [...head, ...tail];
+  return {
+    matches: [...head, ...tail],
+    learning: { active: !!drift && drift.confidence > 0, events: drift?.events ?? 0, confidence: drift?.confidence ?? 0 },
+  };
 }
 
 /**

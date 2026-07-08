@@ -29,6 +29,7 @@ type Prefs = { currentComp?: number; expectedComp?: number; locations?: string[]
 
 export default function Recommendations({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Job[] | null>(null);
+  const [learning, setLearning] = useState<{ active: boolean; events: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
@@ -44,6 +45,7 @@ export default function Recommendations({ userId }: { userId: string }) {
       const r = await fetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" });
       const j = await r.json();
       setMatches(j.matches ?? []);
+      setLearning(j.learning ?? null);
     } catch {
       setMatches([]);
     } finally {
@@ -190,7 +192,12 @@ export default function Recommendations({ userId }: { userId: string }) {
     <section className="dash-section">
       <div className="dash-section-head">
         <h2>Recommended for you</h2>
-        <span className="dash-hint">Ranked to how you work, not just what you can do</span>
+        <span className="dash-hint">
+          Ranked to how you work, not just what you can do
+          {learning?.active && (
+            <span title="Your applies and dismissals tune this ranking — it sharpens with every choice."> · learning from your choices ✓</span>
+          )}
+        </span>
         {process.env.NODE_ENV !== "production" && (
           <button className="refine-toggle" onClick={() => void load()} disabled={loading} title="Debug only — force a fresh fetch, bypassing any cache">
             {loading ? "Refreshing…" : "⟳ Refresh (debug)"}

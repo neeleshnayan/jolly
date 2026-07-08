@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUserId } from "@/lib/auth/user";
-import { rankMatches, pickSpectrum } from "@/lib/opportunities/recommend";
+import { rankMatchesWithMeta, pickSpectrum } from "@/lib/opportunities/recommend";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const ranked = await rankMatches(userId);
-  const spectrum = pickSpectrum(ranked);
-  return NextResponse.json({ ok: true, count: ranked.length, matches: ranked, spectrum });
+  const { matches, learning } = await rankMatchesWithMeta(userId);
+  const spectrum = pickSpectrum(matches);
+  return NextResponse.json({ ok: true, count: matches.length, matches, spectrum, learning });
 }
