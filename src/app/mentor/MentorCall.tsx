@@ -284,12 +284,16 @@ export default function MentorCall({ userId }: { userId: string }) {
   }
   // Reveal the role cards the moment the mentor actually brings one up. The
   // mentor paraphrases ("the founding engineer role at that fintech"), so exact
-  // title matching missed real mentions — match company OR enough title words.
+  // title matching missed real mentions — match enough title words, or a
+  // company name WITH role context. A company alone is NOT a role mention:
+  // "how's it been since the offer from Anthropic?" must not summon the
+  // Anthropic job card (that greeting was revealing the spectrum every call).
   function maybeRevealRoles(replyText: string) {
     if (roleCards || !spectrumRef.current.length) return;
     const t = ` ${replyText.toLowerCase().replace(/[^a-z0-9 ]+/g, " ")} `;
+    const roleContext = /\b(role|roles|position|positions|opening|openings|job|jobs|hiring|listing|posting)\b/.test(t);
     const named = spectrumRef.current.some((r) => {
-      if (r.company && t.includes(` ${r.company.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").trim()} `)) return true;
+      if (roleContext && r.company && t.includes(` ${r.company.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").trim()} `)) return true;
       const words = (r.title ?? "")
         .toLowerCase()
         .replace(/[^a-z0-9 ]+/g, " ")
