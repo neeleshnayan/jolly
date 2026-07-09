@@ -65,11 +65,15 @@ FACTS:
 - must_have_skills / nice_to_have_skills: concrete skills, tools, languages,
   frameworks, methodologies. Use each name's CANONICAL capitalization (TypeScript,
   Next.js, PostgreSQL, Kubernetes, React, dbt, gRPC) — this text goes straight
-  onto a candidate's résumé, so "typescript" or "NEXTJS" reads wrong. Each entry
-  is ONE atomic skill as a short noun phrase — NOT a full sentence, NOT a
-  duration/experience requirement ("5+ years experience"), NOT a degree/credential
-  ("Bachelor's degree"): those live in min_years_experience / required_credentials.
-  Just the skill itself ("Site Reliability Engineering", "CI/CD", "Product Marketing").
+  onto a candidate's résumé, so "typescript" or "NEXTJS" reads wrong. Each entry is
+  ONE atomic skill — a short NOUN naming a tool/tech/discipline, 1-4 words. GOOD:
+  "Distributed Systems", "BGP", "RAG", "Product Marketing", "Securities Law",
+  "Kubernetes". BAD, never emit: full sentences ("experience building multi-sided
+  platforms at enterprise scale"), personality traits ("willingness to pick up
+  slack", "bias towards impact", "concern for societal impact"), duration ("5+ years
+  experience"), degrees ("Bachelor's degree"). If a bullet is a responsibility or a
+  trait, extract the SKILL it implies — not the sentence. Duration/degrees live in
+  min_years_experience / required_credentials.
 
 VECTOR — what the role REQUIRES (0 = low/left, 1 = high/right):
 - req_seniority (entry → executive level the role needs)
