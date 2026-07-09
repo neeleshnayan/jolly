@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { applyEdits, type EditKind } from "@/lib/profile/update";
 import { resolveUserId } from "@/lib/auth/user";
+import { invalidateScoring } from "@/lib/scoring/persist";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
       }
     }
     const result = await applyEdits(userId, edits);
+    void invalidateScoring(userId); // edits changed the inputs — next Refresh recomputes
     return NextResponse.json(result);
   } catch (err) {
     console.error("[/api/profile/batch]", err);

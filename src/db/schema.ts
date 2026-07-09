@@ -81,6 +81,7 @@ export const profiles = pgTable("profiles", {
   // and only recompute after uploads / mentor calls or an explicit request.
   scoring: jsonb("scoring").$type<Record<string, unknown>>(),
   scoringAt: timestamp("scoring_at", { withTimezone: true }),
+  scoringStale: boolean("scoring_stale").default(false), // résumé/insight edit → recompute on next Refresh
   // explicit, user-stated refinements for matching — concrete comp targets and
   // where/how they want to work. Fold into ranking on top of the scoring vector.
   preferences: jsonb("preferences")

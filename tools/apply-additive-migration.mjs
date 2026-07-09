@@ -34,6 +34,7 @@ const sql = postgres(url, { max: 1, connect_timeout: 15 });
 const statements = [
   `ALTER TABLE mentor_profiles ADD COLUMN IF NOT EXISTS contact_email text`,
   `ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS cost_usd numeric`,
+  `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS scoring_stale boolean DEFAULT false`,
   `CREATE TABLE IF NOT EXISTS mentor_calls (
      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
      profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,

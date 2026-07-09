@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { reorderEntries, type EntryKind } from "@/lib/profile/update";
 import { resolveUserId } from "@/lib/auth/user";
+import { invalidateScoring } from "@/lib/scoring/persist";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,9 @@ export async function POST(req: Request) {
     if (!Array.isArray(ids)) {
       return NextResponse.json({ error: "ids must be an array" }, { status: 400 });
     }
-    return NextResponse.json(await reorderEntries(userId, kind, ids));
+    const res = await reorderEntries(userId, kind, ids);
+    void invalidateScoring(userId); // order shapes emphasis the scorer reads
+    return NextResponse.json(res);
   } catch (err) {
     console.error("[/api/profile/reorder]", err);
     return NextResponse.json(

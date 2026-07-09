@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveUserId } from "@/lib/auth/user";
 import { restoreVersion } from "@/lib/track/persist";
+import { invalidateScoring } from "@/lib/scoring/persist";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "versionId required" }, { status: 400 });
     }
     await restoreVersion(userId, body.versionId);
+    void invalidateScoring(userId); // restoring a version swaps the live content
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed" }, { status: 500 });

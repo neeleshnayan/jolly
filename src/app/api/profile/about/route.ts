@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { resolveUserId } from "@/lib/auth/user";
+import { invalidateScoring } from "@/lib/scoring/persist";
 import type { AboutOverrides } from "@/lib/profile/about";
 
 export const runtime = "nodejs";
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest) {
     setOrClear("noticePeriod", (typeof body.noticePeriod === "string" ? body.noticePeriod.slice(0, 80).trim() || null : body.noticePeriod) as string | null | undefined, typeof body.noticePeriod === "string");
 
     await db.update(profiles).set({ aboutOverrides: next, updatedAt: new Date() }).where(eq(profiles.id, p.id));
+    void invalidateScoring(userId); // pinned facts feed the ranking gates
     return NextResponse.json({ ok: true, overrides: next });
   } catch (err) {
     console.error("[/api/profile/about]", err);

@@ -1,7 +1,8 @@
 /**
- * The scoring vector is expensive (big model), so it's cached on the profile and
- * only refreshed when the inputs change — after an upload, after a mentor call,
- * or on explicit request. Read paths serve the saved value.
+ * The scoring vector is expensive (big model), so it's cached on the profile.
+ * Résumé/insight edits mark it stale (invalidateScoring); the next ranking read
+ * recomputes it lazily. Read paths serve the saved value until then, so a stale
+ * vector never leaves the user with no recommendations.
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -19,7 +20,7 @@ export async function computeAndSaveScoring(userId: string): Promise<Record<stri
   const profileText = buildProfileText(full, map.insights);
   const { output } = await runAgent(profileScorer, { profileText }, { userId });
   const scoring = output as Record<string, unknown>;
-  await db.update(profiles).set({ scoring, scoringAt: new Date() }).where(eq(profiles.userId, userId));
+  await db.update(profiles).set({ scoring, scoringAt: new Date(), scoringStale: false }).where(eq(profiles.userId, userId));
   // history, never overwritten — powers "how the mentor's read of you evolved"
   try {
     const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
@@ -32,11 +33,21 @@ export async function computeAndSaveScoring(userId: string): Promise<Record<stri
 
 export async function getSavedScoring(
   userId: string,
-): Promise<{ scoring: Record<string, unknown> | null; scoringAt: Date | null }> {
+): Promise<{ scoring: Record<string, unknown> | null; scoringAt: Date | null; stale: boolean }> {
   const [p] = await db
-    .select({ scoring: profiles.scoring, scoringAt: profiles.scoringAt })
+    .select({ scoring: profiles.scoring, scoringAt: profiles.scoringAt, scoringStale: profiles.scoringStale })
     .from(profiles)
     .where(eq(profiles.userId, userId))
     .limit(1);
-  return { scoring: p?.scoring ?? null, scoringAt: p?.scoringAt ?? null };
+  return { scoring: p?.scoring ?? null, scoringAt: p?.scoringAt ?? null, stale: p?.scoringStale ?? false };
+}
+
+/** Mark the scoring vector stale — call after any résumé/insight edit. Cheap;
+ *  the next ranking read recomputes it. Safe to fire-and-forget. */
+export async function invalidateScoring(userId: string): Promise<void> {
+  try {
+    await db.update(profiles).set({ scoringStale: true }).where(eq(profiles.userId, userId));
+  } catch {
+    /* invalidation is best-effort — worst case the recompute happens one edit later */
+  }
 }

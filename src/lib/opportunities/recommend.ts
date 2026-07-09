@@ -47,11 +47,14 @@ export type RankedJob = {
 
 async function userVector(userId: string): Promise<ScoringVector | null> {
   const saved = await getSavedScoring(userId);
-  if (saved.scoring) return saved.scoring as unknown as ScoringVector;
+  // fresh cache → serve it. Stale or missing → recompute (this is the "Refresh
+  // picks up your edits" path). If recompute fails, fall back to the cached
+  // (stale) vector so the user never loses their recommendations entirely.
+  if (saved.scoring && !saved.stale) return saved.scoring as unknown as ScoringVector;
   try {
     return (await computeAndSaveScoring(userId)) as unknown as ScoringVector;
   } catch {
-    return null;
+    return (saved.scoring ?? null) as unknown as ScoringVector | null;
   }
 }
 

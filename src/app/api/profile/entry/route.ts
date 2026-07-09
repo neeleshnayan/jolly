@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createEntry, deleteEntry, type EntryKind } from "@/lib/profile/update";
 import { resolveUserId } from "@/lib/auth/user";
+import { invalidateScoring } from "@/lib/scoring/persist";
 
 export const runtime = "nodejs";
 
@@ -22,13 +23,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
     }
     if (action === "create") {
-      return NextResponse.json(await createEntry(userId, kind));
+      const res = await createEntry(userId, kind);
+      void invalidateScoring(userId);
+      return NextResponse.json(res);
     }
     if (action === "delete") {
       if (typeof id !== "string" || !id) {
         return NextResponse.json({ error: "Missing id" }, { status: 400 });
       }
-      return NextResponse.json(await deleteEntry(userId, kind, id));
+      const res = await deleteEntry(userId, kind, id);
+      void invalidateScoring(userId);
+      return NextResponse.json(res);
     }
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (err) {
