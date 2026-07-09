@@ -57,6 +57,19 @@ export default function ApplyKit({
   const [pickedVersion, setPickedVersion] = useState("");
   const [versionState, setVersionState] = useState<"idle" | "loading" | "done">("idle");
   const [frameKey, setFrameKey] = useState(0); // bump to re-render the iframe after a restore
+  // the print iframe carries the app's dark body background; a fixed-height
+  // iframe left ~800px of that showing below a short résumé (the "black
+  // component"). Measure the real content height on load and fit to it.
+  const [frameH, setFrameH] = useState(2380);
+  const fitFrame = (el: HTMLIFrameElement | null) => {
+    if (!el) return;
+    try {
+      const h = el.contentDocument?.body?.scrollHeight ?? 0;
+      if (h > 200) setFrameH(h + 16);
+    } catch {
+      /* same-origin, so this shouldn't throw — keep the default height if it does */
+    }
+  };
   // how this résumé fares against THIS job's keyword screen
   const [ats, setAts] = useState<AtsSummary | null>(null);
   const [atsBusy, setAtsBusy] = useState(false);
@@ -322,7 +335,14 @@ export default function ApplyKit({
                   <div className="applykit-resume-scroll">
                     {/* the print page IS the document — true fidelity, zero drift.
                         embed=1 restores the page margins (puppeteer adds them for PDF) */}
-                    <iframe key={frameKey} className="applykit-resume-frame" src={`/resume/print?u=${userId}&embed=1`} title="Your résumé" />
+                    <iframe
+                      key={frameKey}
+                      className="applykit-resume-frame"
+                      src={`/resume/print?u=${userId}&embed=1`}
+                      title="Your résumé"
+                      onLoad={(e) => fitFrame(e.currentTarget)}
+                      style={{ height: `${frameH}px`, marginBottom: `-${Math.round(frameH * 0.36)}px` }}
+                    />
                   </div>
                 </>
               ) : letterText || letterBusy ? (

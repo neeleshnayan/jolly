@@ -1117,12 +1117,12 @@ a { color: var(--accent); }
 .applykit-resume-frame {
   display: block;
   width: 840px;
-  height: 2380px; /* ~2 A4 pages — taller than content so the pane scrolls, not the iframe */
+  /* height + margin-bottom are set inline, measured from the real content so the
+     iframe fits the résumé exactly (no dark app-background tail below a short one) */
   border: 0;
   transform: scale(0.64);
   transform-origin: 0 0;
-  margin-bottom: -857px; /* reclaim the scaled-away height (2380 * 0.36) */
-  margin-right: -302px; /* and width (840 * 0.36) */
+  margin-right: -302px; /* reclaim the scaled-away width (840 * 0.36) */
 }
 .applykit-letter-empty { flex: 1; display: grid; place-items: center; border: 1px dashed var(--line); border-radius: 12px; }
 .applykit-side { flex: 1; min-width: 280px; max-width: 360px; display: flex; flex-direction: column; overflow-y: auto; }
