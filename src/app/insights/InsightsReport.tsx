@@ -14,9 +14,11 @@ type About = {
   workAuthorization: Fact<string>;
   noticePeriod: Fact<string>;
 };
+type TrajectoryPoint = { period: string; line: string; kind: string };
 type Report = {
-  profile: { fullName: string | null; headline: string | null };
+  profile: { fullName: string | null; headline: string | null; avatarUrl?: string | null };
   about: About | null;
+  trajectory: TrajectoryPoint[];
   scoring: Record<string, Param> | null;
   scoringAt: string | null;
   insights: { dimension: string; content: string; confidence: number | null }[];
@@ -141,6 +143,8 @@ export default function InsightsReport({ userId }: { userId: string }) {
         )}
         {r.about && <AboutFactsPanel userId={userId} about={r.about} onSaved={() => void load()} />}
       </header>
+
+      {r.trajectory.length >= 2 && <GrowthCard profile={r.profile} trajectory={r.trajectory} />}
 
       <section className="report-section">
         <div className="report-sec-head">
@@ -273,6 +277,51 @@ export default function InsightsReport({ userId }: { userId: string }) {
 }
 
 const DEGREE_LABEL: Record<string, string> = { phd: "PhD", md: "MD / MBBS", jd: "JD / LLB", mba: "MBA", masters: "Master's", bachelors: "Bachelor's", associate: "Associate / Diploma", none: "No degree" };
+
+const KIND_ICON: Record<string, string> = { aspiration: "🌅", value: "🧭", goal: "🎯", energizer: "⚡", pattern: "🔁", conversation: "💬" };
+
+/**
+ * The growth card — a contact card for who they're BECOMING. Not chat history:
+ * their stance, month by month, with the newest as "the direction now". This
+ * is the artifact that gets passed along (a shareable/QR version comes later).
+ */
+function GrowthCard({ profile, trajectory }: { profile: Report["profile"]; trajectory: TrajectoryPoint[] }) {
+  const now = trajectory[trajectory.length - 1];
+  const initial = (profile.fullName ?? "?").trim().charAt(0).toUpperCase();
+  return (
+    <section className="growth-card">
+      <div className="growth-head">
+        {profile.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="growth-avatar" src={profile.avatarUrl} alt="" />
+        ) : (
+          <span className="growth-avatar growth-avatar-fallback">{initial}</span>
+        )}
+        <div>
+          <div className="growth-name">{profile.fullName}</div>
+          <div className="growth-kicker">growth · how your direction has moved</div>
+        </div>
+      </div>
+      <ol className="growth-arc">
+        {trajectory.map((t, i) => (
+          <li key={`${t.period}-${i}`} className={i === trajectory.length - 1 ? "now" : ""}>
+            <span className="growth-dot" aria-hidden />
+            <span className="growth-period">{t.period}</span>
+            <span className="growth-line">
+              <span className="growth-kind" title={t.kind}>{KIND_ICON[t.kind] ?? "•"}</span> {t.line}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {now && (
+        <div className="growth-now">
+          the direction now — <b>{now.line}</b>
+        </div>
+      )}
+      <div className="growth-foot">drizzle remembers growth, not just conversations 🌧</div>
+    </section>
+  );
+}
 
 /**
  * The at-a-glance facts. Derived from the résumé by default; click ✎ to pin a

@@ -46,6 +46,11 @@ async function main() {
       { company: "Anthropic", role: "Incident Response Manager", status: "interview", lastResult: null, appliedAt: new Date(Date.now() - 2 * 86400000) },
       { company: "Stripe", role: "PM", status: "ghosted", lastResult: "No response after interview", appliedAt: new Date(Date.now() - 9 * 86400000) },
     ],
+    trajectory: [
+      { period: "May 2026", line: "Wanted a FAANG title above all", kind: "goal" },
+      { period: "Jun 2026", line: "Realized ownership matters more than compensation", kind: "value" },
+      { period: "Jul 2026", line: "Applying to Series A companies with real scope", kind: "goal" },
+    ],
   };
   const prompt = buildMentorSystemPrompt(map as never, [], 1100, { index: 0, asked: [] });
   assert("previous-calls block present", prompt.includes("YOUR PREVIOUS CALLS") && prompt.includes("pull toward founding"));
@@ -53,8 +58,32 @@ async function main() {
   assert("activity block present", prompt.includes("WHAT THEY'VE DONE SINCE") && prompt.includes("interviewing"));
   assert("ghosting shown honestly", prompt.includes("no response"));
   assert("relative dates humanized", /\d+ days ago|yesterday|earlier today/.test(prompt));
-  const fresh = buildMentorSystemPrompt({ ...map, previousCalls: [], activity: [] } as never, [], 1100, { index: 0, asked: [] });
+  const fresh = buildMentorSystemPrompt({ ...map, previousCalls: [], activity: [], trajectory: [] } as never, [], 1100, { index: 0, asked: [] });
   assert("first call has NO continuity blocks", !fresh.includes("YOUR PREVIOUS CALLS") && !fresh.includes("DONE SINCE"));
+  assert("growth arc present with ≥2 points", prompt.includes("THEIR GROWTH ARC") && prompt.includes("Wanted a FAANG title"));
+  assert("arc coaches naming the shift", prompt.includes("NAME a shift"));
+  assert("no arc on a fresh relationship", !fresh.includes("GROWTH ARC"));
+
+  // trajectory derivation (pure): stance-ranked, adaptive granularity
+  const { buildTrajectory } = await import("@/lib/mentor/trajectory");
+  const multiMonth = buildTrajectory(
+    [
+      { dimension: "goal", content: "Wanted FAANG", createdAt: "2026-05-10" },
+      { dimension: "value", content: "Ownership over comp", createdAt: "2026-06-12" },
+      { dimension: "energizer", content: "weaker signal same month", createdAt: "2026-06-13" },
+    ],
+    [{ summary: "Explored Series A options. More detail here.", createdAt: "2026-07-01" }],
+  );
+  assert("one point per month, stance outranks energizer", multiMonth.length === 3 && multiMonth[1].line.includes("Ownership"));
+  assert("months labeled across months", /May 2026/.test(multiMonth[0].period));
+  const sameMonth = buildTrajectory(
+    [
+      { dimension: "goal", content: "A", createdAt: "2026-07-08" },
+      { dimension: "value", content: "B", createdAt: "2026-07-09" },
+    ],
+    [],
+  );
+  assert("day granularity inside one month", sameMonth.length === 2 && /8 Jul/.test(sameMonth[0].period));
 
   // ---- 2. capability seam against the real pool (read-only) ----
   // dynamic: name the user's CURRENT top match, so the test survives pool churn

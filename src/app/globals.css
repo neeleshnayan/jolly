@@ -1156,6 +1156,36 @@ a { color: var(--accent); }
   white-space: pre-wrap;
 }
 
+/* growth card — a contact card for who they're becoming */
+.growth-card {
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  box-shadow: var(--glass-shadow);
+  padding: 20px 22px 16px;
+  margin: 26px 0 6px;
+  max-width: 640px;
+}
+.growth-head { display: flex; align-items: center; gap: 13px; margin-bottom: 16px; }
+.growth-avatar { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+.growth-avatar-fallback { display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 750; font-size: 19px; }
+.growth-name { font-size: 16.5px; font-weight: 750; letter-spacing: -0.01em; }
+.growth-kicker { font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--accent); margin-top: 2px; }
+.growth-arc { list-style: none; margin: 0; padding: 0 0 0 6px; position: relative; }
+.growth-arc::before { content: ""; position: absolute; left: 10px; top: 8px; bottom: 8px; width: 2px; border-radius: 2px; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 20%, transparent), var(--accent)); }
+.growth-arc li { position: relative; display: flex; gap: 10px; align-items: baseline; padding: 6px 0 6px 20px; font-size: 13px; line-height: 1.55; }
+.growth-dot { position: absolute; left: 0; top: 11px; width: 10px; height: 10px; border-radius: 50%; background: var(--paper); border: 2.5px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.growth-arc li.now .growth-dot { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.growth-period { flex: 0 0 62px; font-size: 11px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.growth-line { color: var(--ink); }
+.growth-arc li.now .growth-line { font-weight: 600; }
+.growth-kind { opacity: 0.85; margin-right: 2px; }
+.growth-now { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.55; }
+.growth-now b { color: var(--accent); }
+.growth-foot { margin-top: 10px; font-size: 10.5px; color: var(--muted); font-style: italic; }
+
 /* admin mentor diary */
 .diary-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 18px; }
 .diary-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
@@ -2162,12 +2192,17 @@ textarea.f { line-height: 1.55; }
 }
 .orb.idle { animation: orb-breathe 3.6s ease-in-out infinite; }
 @keyframes orb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+/* speaking: the orb PULSES with the voice — alive, not static */
+.orb.speaking { animation: orb-pulse 1.05s ease-in-out infinite; }
+@keyframes orb-pulse { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.06); } 60% { transform: scale(1.02); } }
 .orb.speaking::before { animation: orb-ring 1.6s ease-out infinite; }
 .orb.speaking::after { animation: orb-ring 1.6s ease-out infinite 0.8s; }
 @keyframes orb-ring {
   0% { transform: scale(1); opacity: 0.7; }
   100% { transform: scale(1.55); opacity: 0; }
 }
+/* listening: a slow, attentive breath */
+.orb.listening { animation: orb-breathe 4.2s ease-in-out infinite; }
 .orb.listening {
   background: radial-gradient(circle at 35% 30%, #f87171, #dc2626 70%);
   box-shadow: 0 12px 40px rgba(220, 38, 38, 0.4);
@@ -2184,6 +2219,44 @@ textarea.f { line-height: 1.55; }
   animation: orb-spin 1s linear infinite;
 }
 @keyframes orb-spin { to { transform: rotate(360deg); } }
+/* thinking: tiny particles drift up out of the orb — visible reasoning */
+.orb-particles { position: absolute; inset: -30%; pointer-events: none; }
+.orb-particles i {
+  position: absolute;
+  bottom: 42%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 8px rgba(122, 165, 248, 0.9);
+  opacity: 0;
+  animation: particle-rise 1.9s ease-out infinite;
+}
+.orb-particles i:nth-child(1) { left: 28%; animation-delay: 0s; }
+.orb-particles i:nth-child(2) { left: 46%; animation-delay: 0.35s; animation-duration: 2.2s; }
+.orb-particles i:nth-child(3) { left: 62%; animation-delay: 0.7s; }
+.orb-particles i:nth-child(4) { left: 38%; animation-delay: 1.05s; animation-duration: 1.7s; }
+.orb-particles i:nth-child(5) { left: 70%; animation-delay: 1.3s; animation-duration: 2.4s; }
+.orb-particles i:nth-child(6) { left: 22%; animation-delay: 1.55s; }
+@keyframes particle-rise {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-72px) scale(1.1); }
+}
+/* post-call processing steps — the machinery, made visible */
+.proc-steps { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
+.proc-step { display: flex; align-items: center; gap: 11px; font-size: 14px; color: var(--muted); transition: color 0.3s; }
+.proc-step.live { color: var(--ink); font-weight: 600; }
+.proc-step.done { color: var(--ink); }
+.proc-mark { flex: 0 0 22px; display: inline-flex; justify-content: center; color: #16a34a; font-weight: 700; }
+.proc-step:not(.done) .proc-mark { color: var(--muted); }
+
+/* thinking label: three quiet dots instead of shouting THINKING… */
+.think-dots { display: inline-flex; gap: 5px; align-items: center; }
+.think-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: think-bounce 1.2s ease-in-out infinite; }
+.think-dots i:nth-child(2) { animation-delay: 0.18s; }
+.think-dots i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes think-bounce { 0%, 100% { transform: translateY(0); opacity: 0.5; } 40% { transform: translateY(-5px); opacity: 1; } }
 
 /* in-call idle — hands-free, actively listening (green, gently breathing) */
 .orb.ready {

@@ -8,9 +8,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { profiles, insights, mentorProbes, resumeThemes } from "@/db/schema";
+import { profiles, insights, mentorProbes, resumeThemes, mentorCalls } from "@/db/schema";
 import { getSavedScoring } from "@/lib/scoring/persist";
 import { getAboutFacts } from "@/lib/profile/about";
+import { buildTrajectory } from "@/lib/mentor/trajectory";
 import { rankMatches } from "@/lib/opportunities/recommend";
 import { runAgent } from "@/agents/run";
 import { diagnosisWriter } from "@/agents/diagnosis";
@@ -22,7 +23,7 @@ export const maxDuration = 120;
 async function loadReport(userId: string) {
   const [p] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!p) return null;
-  const [ins, probes, themes, saved, matches, about] = await Promise.all([
+  const [ins, probes, themes, saved, matches, about, calls] = await Promise.all([
     db
       .select({ dimension: insights.dimension, content: insights.content, confidence: insights.confidence, createdAt: insights.createdAt })
       .from(insights)
@@ -36,13 +37,18 @@ async function loadReport(userId: string) {
     getSavedScoring(userId),
     rankMatches(userId).catch(() => []),
     getAboutFacts(userId),
+    db
+      .select({ summary: mentorCalls.summary, createdAt: mentorCalls.createdAt })
+      .from(mentorCalls)
+      .where(eq(mentorCalls.profileId, p.id)),
   ]);
   const target = themes.find(
     (t) => (t.latentAttributes as { kind?: string; role?: string } | null)?.kind === "target_role",
   )?.latentAttributes as { role?: string; rationale?: string } | undefined;
   return {
-    profile: { fullName: p.fullName, headline: p.headline },
+    profile: { fullName: p.fullName, headline: p.headline, avatarUrl: p.avatarUrl },
     about,
+    trajectory: buildTrajectory(ins, calls),
     scoring: saved.scoring,
     scoringAt: saved.scoringAt,
     insights: ins,

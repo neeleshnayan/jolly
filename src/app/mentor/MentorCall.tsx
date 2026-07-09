@@ -10,6 +10,48 @@ import Brand from "../Brand";
 import SlotPicker from "./SlotPicker";
 import { displayCompany } from "@/lib/format/company";
 
+/** The post-call machinery, made visible: while the recap builds, show what
+ *  drizzle is actually doing with the conversation — steps advance on a
+ *  cadence tuned to the real pipeline (recap ≈ 20-40s on the local model;
+ *  ranking + tips genuinely queue behind the review-save). */
+function ProcessingSteps() {
+  const STEPS = [
+    "Reading back the conversation…",
+    "Pulling out what we learned about you…",
+    "Re-aligning your job queue to who you're becoming…",
+    "Scanning the call for résumé-worthy facts…",
+    "Writing your recap…",
+  ];
+  const [done, setDone] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setDone((d) => Math.min(d + 1, STEPS.length - 1)), 6500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="proc-steps">
+      {STEPS.map((s, i) => (
+        <div key={s} className={`proc-step${i < done ? " done" : i === done ? " live" : ""}`}>
+          <span className="proc-mark">{i < done ? "✓" : i === done ? <span className="think-dots"><i /><i /><i /></span> : "·"}</span>
+          <span>{s}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Mentor captions with the load-bearing words in bold: *emphasis*, plus any
+ *  role title / company from the call's spectrum. HTML-escaped first. */
+function renderCaption(text: string, keyTerms: string[]): string {
+  let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  html = html.replace(/\*([^*\n]{2,60})\*/g, "<b>$1</b>");
+  for (const term of [...new Set(keyTerms)]) {
+    const re = new RegExp(`(?<!<b>)(${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+    html = html.replace(re, "<b>$1</b>");
+  }
+  return html;
+}
+
 type Phase = "idle" | "recording" | "thinking" | "speaking";
 type Turn = { role: "user" | "assistant"; text: string };
 type Insight = { dimension: string; content: string; confidence: number };
@@ -833,12 +875,13 @@ export default function MentorCall({ userId }: { userId: string }) {
           ? "Mentor is speaking"
           : "Listening — just start talking";
   const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant");
+  // the mentor's words STAY readable while the user speaks — accents shouldn't
+  // cost anyone the thread; key terms (roles, companies, people) render bold
   const caption =
-    phase === "recording"
-      ? ""
-      : phase === "speaking" && spokenText
-        ? revealWords(spokenText, revealFrac)
-        : lastAssistant?.text ?? "";
+    phase === "speaking" && spokenText
+      ? revealWords(spokenText, revealFrac)
+      : lastAssistant?.text ?? "";
+  const keyTerms = spectrumRef.current.flatMap((r) => [r.title, r.company, displayCompany(r.company)]).filter((t): t is string => !!t && t.length > 2);
 
   return (
     <div className="call">
@@ -960,6 +1003,11 @@ export default function MentorCall({ userId }: { userId: string }) {
         <div className="call-stage">
           <div className={`orb reactive ${orbClass}`} ref={orbRef}>
             <span className="orb-core" />
+            {phase === "thinking" && (
+              <span className="orb-particles" aria-hidden>
+                <i /><i /><i /><i /><i /><i />
+              </span>
+            )}
           </div>
           <div className="call-name">Your mentor</div>
           <div className={`call-timer${remaining <= 120 ? " low" : ""}`}>
@@ -970,8 +1018,14 @@ export default function MentorCall({ userId }: { userId: string }) {
           </div>
 
           <div className="caption">
-            <div className="caption-label">{label}</div>
-            {caption && <div className="caption-text">{caption}</div>}
+            <div className="caption-label">
+              {phase === "thinking" ? (
+                <span className="think-dots" aria-label="Thinking"><i /><i /><i /></span>
+              ) : (
+                label
+              )}
+            </div>
+            {caption && <div className="caption-text" dangerouslySetInnerHTML={{ __html: renderCaption(caption, keyTerms) }} />}
           </div>
 
           {roleCards && (
@@ -1012,7 +1066,7 @@ export default function MentorCall({ userId }: { userId: string }) {
         <div className="review">
           <h2>Your recap</h2>
           {review.loading ? (
-            <p className="sub">Reading back the conversation…</p>
+            <ProcessingSteps />
           ) : review.error ? (
             <p className="status-line error">{review.error}</p>
           ) : (

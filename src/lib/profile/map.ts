@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { profiles, experiences, insights, mentorProbes, mentorCalls, applications, applicationEvents } from "@/db/schema";
+import { buildTrajectory, type TrajectoryPoint } from "@/lib/mentor/trajectory";
 
 export interface MentorMap {
   profile: { fullName: string | null; headline: string | null } | null;
@@ -10,6 +11,8 @@ export interface MentorMap {
   // continuity: the relationship, not just the person
   previousCalls: { summary: string; createdAt: Date }[];
   activity: { company: string | null; role: string | null; status: string; lastResult: string | null; appliedAt: Date }[];
+  // evolution: how their stance has MOVED over time (drizzle remembers growth)
+  trajectory: TrajectoryPoint[];
 }
 
 /** The slice of the map the mentor needs to probe intelligently — including
@@ -22,7 +25,7 @@ export async function getMentorMap(userId: string): Promise<MentorMap> {
     .where(eq(profiles.userId, userId))
     .limit(1);
 
-  if (!profile) return { profile: null, experiences: [], insights: [], probes: [], previousCalls: [], activity: [] };
+  if (!profile) return { profile: null, experiences: [], insights: [], probes: [], previousCalls: [], activity: [], trajectory: [] };
 
   const [exps, ins, prbs, calls, apps] = await Promise.all([
     db
@@ -34,6 +37,7 @@ export async function getMentorMap(userId: string): Promise<MentorMap> {
         dimension: insights.dimension,
         content: insights.content,
         confidence: insights.confidence,
+        createdAt: insights.createdAt, // dated — the trajectory needs WHEN
       })
       .from(insights)
       .where(and(eq(insights.profileId, profile.id), eq(insights.status, "active"))),
@@ -86,5 +90,6 @@ export async function getMentorMap(userId: string): Promise<MentorMap> {
       lastResult: lastResults.get(a.id) ?? null,
       appliedAt: a.appliedAt,
     })),
+    trajectory: buildTrajectory(ins, calls),
   };
 }

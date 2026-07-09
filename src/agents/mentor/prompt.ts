@@ -121,6 +121,15 @@ If time has fully run out mid-thread, bounce politely: acknowledge the thread is
     rejected: "didn't work out",
     ghosted: "no response",
   };
+  // evolution: the deepest thing this mentor does. Not recall — SEEING them
+  // change over time, and naming it.
+  const arcBlock =
+    (map.trajectory?.length ?? 0) >= 2
+      ? `\n\nTHEIR GROWTH ARC — how their stance has MOVED across your relationship (oldest → newest):\n${map.trajectory
+          .map((t) => `- ${t.period}: ${t.line}`)
+          .join("\n")}\nWhen the moment is right — not as a party trick — NAME a shift you see: "when we first spoke you were optimizing for X; over our last conversations it's consistently been Y — that changes which roles I think you'd actually enjoy." People love being remembered; being SEEN over time is the deepest thing you offer. One well-placed observation per call, at most.`
+      : "";
+
   const activityBlock = map.activity.length
     ? `\n\nWHAT THEY'VE DONE SINCE YOU LAST SPOKE (their live applications — you're their mentor through the PROCESS too. Ask how it's going where it's natural; celebrate offers properly; treat rejections as data, not failure; coach concretely on prep, follow-ups, and negotiation when they want it):\n${map.activity
         .map((a) => `- ${a.role ?? "a role"}${a.company ? ` at ${a.company}` : ""} — ${STATUS_LINE[a.status] ?? a.status}${a.lastResult ? ` (${a.lastResult.toLowerCase()})` : ""}, ${ago(a.appliedAt)}`)
@@ -185,7 +194,7 @@ Résumé history:
 ${history}
 
 Understanding so far:
-${known}${prevCallsBlock}${activityBlock}
+${known}${prevCallsBlock}${arcBlock}${activityBlock}
 
 WHERE YOUR CURIOSITY IS THIN (drift here when it feels natural — never interrogate):
 ${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${circleBlock}${askedBlock}${turnBlock}${closingBlock}${timeHint}
