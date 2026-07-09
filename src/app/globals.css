@@ -1124,19 +1124,6 @@ a { color: var(--accent); }
   margin-bottom: -857px; /* reclaim the scaled-away height (2380 * 0.36) */
   margin-right: -302px; /* and width (840 * 0.36) */
 }
-.applykit-letter-full {
-  flex: 1;
-  width: 100%;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.6;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--sheet);
-  color: var(--sheet-ink);
-  padding: 16px 18px;
-  resize: none;
-}
 .applykit-letter-empty { flex: 1; display: grid; place-items: center; border: 1px dashed var(--line); border-radius: 12px; }
 .applykit-side { flex: 1; min-width: 280px; max-width: 360px; display: flex; flex-direction: column; overflow-y: auto; }
 @media (max-width: 760px) {
@@ -2099,6 +2086,10 @@ a.start-tile:hover { border-color: var(--accent); }
   background-image: none;
   max-width: none;
 }
+/* iframe preview (Apply Kit): restore the 14mm margins puppeteer applies for
+   the PDF, so on-screen matches the printed document instead of sitting flush */
+.print-page.print-embed .resume,
+.print-page.print-embed .resume.ro { padding: 14mm; }
 .ProseMirror li::marker { color: var(--muted); }
 .ProseMirror a { color: var(--accent); text-decoration: underline; }
 .ProseMirror-focused { outline: none; }
@@ -2825,14 +2816,23 @@ textarea.f { line-height: 1.55; }
 /* the letter reads as a LETTER: paper, margins, serif warmth — still editable */
 .applykit-hooks { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
 .applykit-letter-sheet { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: #eceff3; padding: 18px; display: flex; }
-.applykit-letter-full.letter-paper {
-  flex: 1; margin: 0 auto; max-width: 640px; min-height: 100%;
+/* the letter reads as a LETTER: paper, letterhead (name/contact/date), a serif
+   body — still editable in place */
+.letter-paper {
+  flex: 1; margin: 0 auto; max-width: 660px; min-height: 100%;
   background: #fff; color: #1a2233;
-  border: none; border-radius: 4px;
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.14);
+  border-radius: 4px; box-shadow: 0 6px 24px rgba(15, 23, 42, 0.14);
+  padding: 46px 52px; display: flex; flex-direction: column;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 13.5px; line-height: 1.7;
-  padding: 42px 48px; resize: none; outline: none;
+}
+.letter-head { border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 20px; }
+.letter-name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.letter-contact { font-size: 12px; color: #55617a; margin-top: 3px; }
+.letter-date { font-size: 12.5px; color: #55617a; margin-top: 14px; }
+.letter-body {
+  flex: 1; border: none; outline: none; resize: none; background: transparent;
+  color: inherit; font: inherit; font-size: 13.5px; line-height: 1.75;
+  min-height: 220px; padding: 0;
 }
 
 /* the mentor's own card — exactly the seeker view, plus an edit affordance */
@@ -2850,3 +2850,14 @@ textarea.f { line-height: 1.55; }
 .call-mentor-head .mentor-avatar { width: 34px; height: 34px; font-size: 15px; }
 .call-mentor-move { font-size: 11px; color: var(--muted); }
 .call-mentor .tip-add { font-size: 11.5px; }
+
+/* Apply-Kit → editor handoff: the job the editing is aimed at */
+.job-target-chip {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 10%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--paper));
+  border-radius: 8px; padding: 5px 9px; margin-bottom: 8px;
+}
+.job-target-clear { margin-left: auto; border: none; background: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 0 2px; }
+.job-target-clear:hover { color: var(--accent); }

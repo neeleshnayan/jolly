@@ -393,6 +393,8 @@ export default function ResumeEditor({
   // "target a job" — paste a JD, get a tailored cover letter and/or a tailored redesign
   const [jobOpen, setJobOpen] = useState(false);
   const [jd, setJd] = useState("");
+  // handoff from the Apply Kit's Edit: /resume?job=<id> aims the panel at that role
+  const [targetJob, setTargetJob] = useState<{ title: string | null; company: string | null } | null>(null);
   const [letter, setLetter] = useState<{ text: string; hooks: string[] } | null>(null);
   const [letterBusy, setLetterBusy] = useState(false);
   const [letterErr, setLetterErr] = useState("");
@@ -423,6 +425,30 @@ export default function ResumeEditor({
       })
       .catch(() => {});
   }, [userId]);
+  // Apply Kit "Edit" handoff: /resume?job=<id> opens Target-a-job aimed at THAT
+  // role — its JD loaded, its keyword screen run, its title shown. One-shot: the
+  // param is scrubbed so a reload doesn't re-fetch.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("job");
+    if (!id) return;
+    (async () => {
+      try {
+        const kit = await fetch(`/api/apply-kit?u=${userId}&opportunityId=${id}`, { cache: "no-store" }).then((r) => r.json());
+        if (kit.job?.jd) {
+          setJd(kit.job.jd);
+          setJobOpen(true);
+          setTargetJob({ title: kit.job.title ?? null, company: kit.job.company ?? null });
+          void checkAts(kit.job.jd);
+        }
+      } catch {
+        /* editor still opens; just not pre-aimed */
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("job");
+      window.history.replaceState({}, "", url);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   async function saveLetterVersion() {
     if (letterText.trim().length < 40) return;
     setLetterSaving(true);
@@ -467,20 +493,22 @@ export default function ResumeEditor({
     a.click();
     URL.revokeObjectURL(a.href);
   }
-  async function checkAts() {
+  async function checkAts(explicitJd?: string) {
+    const jdText = (explicitJd ?? jd).trim();
+    if (!jdText) return;
     setAtsBusy(true);
     setLetterErr("");
     try {
       const r = await fetch("/api/resume/ats-check", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, jd }),
+        body: JSON.stringify({ userId, jd: jdText }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Check failed");
       setAts(j);
       try {
-        const key = atsRunKey(jd);
+        const key = atsRunKey(jdText);
         setAtsPrev(JSON.parse(localStorage.getItem(key) ?? "null"));
         localStorage.setItem(key, JSON.stringify({ score: j.score, at: Date.now() }));
       } catch {
@@ -1825,6 +1853,13 @@ export default function ResumeEditor({
                 </button>
                 {jobOpen && (
                   <div className="job-target">
+                    {targetJob && (
+                      <div className="job-target-chip">
+                        🎯 Aimed at <b>{targetJob.title ?? "this role"}</b>
+                        {targetJob.company ? <span className="wizard-dim"> · {displayCompany(targetJob.company)}</span> : null}
+                        <button className="job-target-clear" onClick={() => { setTargetJob(null); setJd(""); setAts(null); }} title="Clear — target a different job">✕</button>
+                      </div>
+                    )}
                     <textarea
                       className="job-target-jd"
                       placeholder="Paste the job description here (optional for a general cover letter)…"

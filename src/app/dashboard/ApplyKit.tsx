@@ -180,6 +180,16 @@ export default function ApplyKit({
     }
   }
 
+  // letterhead built from the answers already staged — makes the draft read as
+  // a real letter (name + contact + date), not a naked block of body text
+  const answerVal = (key: string) => kit?.answers.find((a) => a.key === key)?.value ?? null;
+  const letterName = answerVal("fullName");
+  const letterContact = [answerVal("email"), answerVal("phone"), answerVal("location")].filter(Boolean).join(" · ");
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  // Edit hands the JOB to the editor: /resume?job=<id> pre-loads Target-a-job
+  // with this JD + the ATS read, so editing is aimed at this role, not generic
+  const editHref = `/resume?job=${opportunityId}`;
+
   return (
     <div className="applykit-overlay" onClick={onClose}>
       <section className="applykit applykit-window" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Apply kit">
@@ -207,7 +217,7 @@ export default function ApplyKit({
                 </button>
                 <span className="applykit-doc-actions">
                   {docTab === "resume" && (
-                    <a className="ghost-btn" href="/resume" title="Something to tweak? The editor keeps this kit's target — come back and re-check.">
+                    <a className="ghost-btn" href={editHref} title="Edit aimed at THIS job — the editor opens with its keywords and ATS read loaded.">
                       ✎ Edit
                     </a>
                   )}
@@ -280,7 +290,7 @@ export default function ApplyKit({
                                   {!simulated.has(k.term) && deltaFor(k.term) > 0 && <em>+{deltaFor(k.term)}%</em>}
                                 </button>
                               ))}
-                              <a className="diag-fix" href="/resume">✎ genuinely yours? fix in the editor</a>
+                              <a className="diag-fix" href={editHref}>✎ genuinely yours? fix in the editor</a>
                             </span>
                           ) : (
                             <span className="applykit-ats-ok">Every required keyword is covered ✓</span>
@@ -310,8 +320,9 @@ export default function ApplyKit({
                   </div>
 
                   <div className="applykit-resume-scroll">
-                    {/* the print page IS the document — true fidelity, zero drift */}
-                    <iframe key={frameKey} className="applykit-resume-frame" src={`/resume/print?u=${userId}`} title="Your résumé" />
+                    {/* the print page IS the document — true fidelity, zero drift.
+                        embed=1 restores the page margins (puppeteer adds them for PDF) */}
+                    <iframe key={frameKey} className="applykit-resume-frame" src={`/resume/print?u=${userId}&embed=1`} title="Your résumé" />
                   </div>
                 </>
               ) : letterText || letterBusy ? (
@@ -324,12 +335,20 @@ export default function ApplyKit({
                     </div>
                   )}
                   <div className="applykit-letter-sheet">
-                    <textarea
-                      className="applykit-letter-full letter-paper"
-                      value={letterBusy && !letterText ? "Writing against this job's description…" : letterText}
-                      onChange={(e) => setLetterText(e.target.value)}
-                      readOnly={letterBusy}
-                    />
+                    <div className="letter-paper">
+                      <div className="letter-head">
+                        {letterName && <div className="letter-name">{letterName}</div>}
+                        {letterContact && <div className="letter-contact">{letterContact}</div>}
+                        <div className="letter-date">{today}</div>
+                      </div>
+                      <textarea
+                        className="letter-body"
+                        value={letterBusy && !letterText ? "Writing against this job's description…" : letterText}
+                        onChange={(e) => setLetterText(e.target.value)}
+                        readOnly={letterBusy}
+                        placeholder="Your letter…"
+                      />
+                    </div>
                   </div>
                 </>
               ) : (

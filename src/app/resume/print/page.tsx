@@ -10,16 +10,19 @@ import ResumeSheet from "../ResumeSheet";
 export default async function PrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ u?: string }>;
+  searchParams: Promise<{ u?: string; embed?: string }>;
 }) {
-  const { u } = await searchParams;
+  const { u, embed } = await searchParams;
   const userId = (await getSessionUserId()) ?? u;
   if (!userId) return <main className="print-page">Not signed in.</main>;
   const data = await getFullProfile(userId);
   if (!data) return <main className="print-page">No résumé.</main>;
 
+  // ?embed=1 → shown in the Apply Kit iframe (not puppeteer). Puppeteer adds the
+  // page margins for the PDF; an on-screen preview must restore them itself, or
+  // the content sits flush to the edges.
   return (
-    <main className="print-page">
+    <main className={`print-page${embed ? " print-embed" : ""}`}>
       <ResumeSheet data={data} />
     </main>
   );
