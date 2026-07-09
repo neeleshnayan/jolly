@@ -484,6 +484,7 @@ export const mentorProfiles = pgTable("mentor_profiles", {
     .unique()
     .references(() => profiles.id, { onDelete: "cascade" }),
   headline: text("headline"), // "Product lead at X, ex-Goldman"
+  contactEmail: text("contact_email"), // where mentorship requests reach them — never shown pre-intro
   journey: text("journey"), // the story in their words
   expertise: jsonb("expertise").$type<string[]>().default([]).notNull(),
   transitions: jsonb("transitions").$type<{ from: string; to: string }[]>().default([]).notNull(),

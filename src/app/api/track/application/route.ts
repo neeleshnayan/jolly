@@ -1,8 +1,31 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { resolveUserId } from "@/lib/auth/user";
-import { createApplication, setApplicationStatus, updateApplication } from "@/lib/track/persist";
+import { createApplication, listApplications, setApplicationStatus, updateApplication } from "@/lib/track/persist";
+import { rankMatches } from "@/lib/opportunities/recommend";
 
 export const runtime = "nodejs";
+export const maxDuration = 90;
+
+// GET — the applications board's read: every application enriched with the
+// linked role's summary/skills and its CURRENT match score (recomputed live,
+// so the number stays honest as the ranking learns)
+export async function GET(req: NextRequest) {
+  const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
+  if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const apps = await listApplications(userId);
+  let fitById = new Map<string, number>();
+  if (apps.some((a) => a.opportunityId)) {
+    try {
+      fitById = new Map((await rankMatches(userId)).map((j) => [j.id, j.fit]));
+    } catch {
+      /* fit is garnish — the board renders without it */
+    }
+  }
+  return NextResponse.json({
+    ok: true,
+    applications: apps.map((a) => ({ ...a, fit: a.opportunityId ? (fitById.get(a.opportunityId) ?? null) : null })),
+  });
+}
 
 // POST — create an application
 export async function POST(req: Request) {

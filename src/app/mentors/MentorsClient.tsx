@@ -7,6 +7,7 @@ import UserChip from "../UserChip";
 type Transition = { from: string; to: string };
 type MentorMe = {
   headline: string | null;
+  contactEmail: string | null;
   journey: string | null;
   expertise: string[];
   transitions: Transition[];
@@ -66,6 +67,9 @@ export default function MentorsClient({ userId }: { userId: string }) {
   // intro requests
   const [introState, setIntroState] = useState<Record<string, "ask" | "sending" | "sent">>({});
   const [introNote, setIntroNote] = useState("");
+  // when the mentor shared a contact email, the request comes back with a
+  // ready-to-send draft — the seeker sends it from their own mail client
+  const [mailtos, setMailtos] = useState<Record<string, string>>({});
   async function requestIntro(mentorId: string) {
     setIntroState((s) => ({ ...s, [mentorId]: "sending" }));
     try {
@@ -75,6 +79,8 @@ export default function MentorsClient({ userId }: { userId: string }) {
         body: JSON.stringify({ u: userId, mentorId, note: introNote }),
       });
       if (!r.ok) throw new Error();
+      const j = await r.json();
+      if (j.mailto) setMailtos((m) => ({ ...m, [mentorId]: j.mailto }));
       setIntroState((s) => ({ ...s, [mentorId]: "sent" }));
       setIntroNote("");
     } catch {
@@ -154,7 +160,14 @@ export default function MentorsClient({ userId }: { userId: string }) {
                   </ul>
                 )}
                 {introState[m.id] === "sent" ? (
-                  <div className="apply-confirm done">✓ Intro requested — you&apos;ll hear from us with next steps</div>
+                  <div className="apply-confirm done">
+                    ✓ Intro requested — you&apos;ll hear from us with next steps
+                    {mailtos[m.id] && (
+                      <a className="tip-add" href={mailtos[m.id]} style={{ marginLeft: 8 }}>
+                        ✉ Or email them now — draft&apos;s ready
+                      </a>
+                    )}
+                  </div>
                 ) : introState[m.id] === "ask" || introState[m.id] === "sending" ? (
                   <div className="intro-ask">
                     <textarea
@@ -198,7 +211,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
             initial={
               me ??
               (suggested
-                ? { headline: suggested.headline, journey: suggested.journey, expertise: suggested.expertise, transitions: suggested.transitions, languages: null, timezone: suggested.timezone || null, availability: "occasionally", feeHr: null, active: true }
+                ? { headline: suggested.headline, contactEmail: null, journey: suggested.journey, expertise: suggested.expertise, transitions: suggested.transitions, languages: null, timezone: suggested.timezone || null, availability: "occasionally", feeHr: null, active: true }
                 : null)
             }
             exists={!!me}
@@ -217,6 +230,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
 
 function MentorForm({ userId, initial, exists, onSaved }: { userId: string; initial: MentorMe; exists: boolean; onSaved: () => Promise<void> }) {
   const [headline, setHeadline] = useState(initial?.headline ?? "");
+  const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? "");
   const [journey, setJourney] = useState(initial?.journey ?? "");
   const [expertise, setExpertise] = useState((initial?.expertise ?? []).join(", "));
   const [transitions, setTransitions] = useState<Transition[]>(initial?.transitions?.length ? initial.transitions : [{ from: "", to: "" }]);
@@ -238,6 +252,7 @@ function MentorForm({ userId, initial, exists, onSaved }: { userId: string; init
         body: JSON.stringify({
           u: userId,
           headline,
+          contactEmail,
           journey,
           expertise: expertise.split(",").map((s) => s.trim()).filter(Boolean),
           transitions: transitions.filter((t) => t.from.trim() && t.to.trim()),
@@ -263,6 +278,10 @@ function MentorForm({ userId, initial, exists, onSaved }: { userId: string; init
       <label className="refine-field">
         <span>Headline</span>
         <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. Product lead at Stripe, ex-Goldman Ops" />
+      </label>
+      <label className="refine-field">
+        <span>Contact email — where mentorship requests reach you (only shared after you&apos;re matched)</span>
+        <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="you@example.com" />
       </label>
       <label className="refine-field">
         <span>Your journey — the story, in your words</span>

@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     u?: string;
     headline?: string;
+    contactEmail?: string;
     journey?: string;
     expertise?: string[];
     transitions?: { from: string; to: string }[];
@@ -85,8 +86,11 @@ export async function POST(req: NextRequest) {
   const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!p) return NextResponse.json({ error: "No profile" }, { status: 404 });
 
+  const email = (body.contactEmail ?? "").trim().slice(0, 200);
   const clean = {
     headline: (body.headline ?? "").slice(0, 140) || null,
+    // where requests reach them; never exposed in match listings, only after an intro is logged
+    contactEmail: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : null,
     journey: (body.journey ?? "").slice(0, 2000) || null,
     expertise: (Array.isArray(body.expertise) ? body.expertise : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 12),
     transitions: (Array.isArray(body.transitions) ? body.transitions : [])

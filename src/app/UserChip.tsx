@@ -54,6 +54,7 @@ export default function UserChip() {
             {me.email && <div className="chip-menu-email">{me.email}</div>}
           </div>
           <a className="chip-menu-item" href="/insights" role="menuitem">About you</a>
+          <a className="chip-menu-item" href="/mentor" role="menuitem">🎙 Talk to your mentor</a>
           <a className="chip-menu-item chip-menu-danger" href="/api/auth/logout" role="menuitem">Sign out</a>
         </div>
       )}

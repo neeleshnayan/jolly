@@ -960,6 +960,7 @@ a { color: var(--accent); }
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--paper);
+  color: var(--ink); /* without this the UA default (black) survives into dark mode */
   outline: none;
 }
 .f-box:focus { border-color: var(--accent); }
@@ -2740,3 +2741,58 @@ textarea.f { line-height: 1.55; }
 }
 .transition-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
 .transition-row span { color: var(--muted); }
+
+/* ---- dark-theme contrast sweep: greens/ambers that were hardcoded for light,
+   plus native form controls (pickers, calendars) rendering dark ---- */
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="dark"] .match-fit,
+[data-theme="dark"] .mentor-fit,
+[data-theme="dark"] .rec-fit-pct,
+[data-theme="dark"] .apply-confirm.done,
+[data-theme="dark"] .suggest-added,
+[data-theme="dark"] .proc-mark,
+[data-theme="dark"] .skillmap-group.have { color: #6ee7a0; }
+[data-theme="dark"] .rec-fit-unit { color: #4ade80; }
+[data-theme="dark"] .suggest-row.added { background: #10241a; border-color: #1d4230; }
+[data-theme="dark"] .suggest-add:disabled { background: #2a2f36; }
+[data-theme="dark"] .vb-btn.on,
+[data-theme="dark"] .vb-chip.active { background: #2b1d10; color: #f0b26a; border-color: #4a3218; }
+
+/* ---- the mentor circle, flattened onto the dashboard ---- */
+.mentor-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.mentor-strip-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px); text-decoration: none; color: var(--ink);
+  transition: transform 0.15s ease;
+}
+.mentor-strip-card:hover { transform: translateY(-2px); }
+.mentor-strip-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.mentor-strip-why { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- application card: the collapsible role detail + match chip ---- */
+.kanban-chip.fit { color: #15803d; border-color: #16a34a; font-weight: 650; }
+[data-theme="dark"] .kanban-chip.fit { color: #6ee7a0; border-color: #1d4230; }
+.kanban-detail-toggle {
+  display: block; margin-top: 7px; padding: 0; border: 0; background: none;
+  font: inherit; font-size: 11.5px; color: var(--muted); cursor: pointer; text-align: left;
+}
+.kanban-detail-toggle:hover { color: var(--accent); }
+.kanban-detail { margin-top: 6px; border-top: 1px dashed var(--line); padding-top: 7px; }
+.kanban-detail-summary { margin: 0 0 6px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.kanban-detail-skills { display: flex; flex-wrap: wrap; gap: 4px; }
+.kanban-detail-skills .rec-chip { font-size: 10px; padding: 2px 7px; }
+
+/* ---- apply kit: version picker + inline ATS verdict ---- */
+.applykit-resume-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.applykit-version-pick { display: flex; align-items: center; gap: 6px; }
+.applykit-version-pick .f-box { font-size: 12px; padding: 5px 8px; max-width: 240px; }
+.applykit-ats { font-size: 12.5px; padding: 7px 10px; border-radius: 9px; margin-bottom: 8px; border: 1px solid var(--line); }
+.applykit-ats.good { color: #15803d; background: color-mix(in srgb, #16a34a 8%, var(--paper)); }
+.applykit-ats.mid { color: #b45309; background: color-mix(in srgb, #d97706 8%, var(--paper)); }
+.applykit-ats.low { color: #dc2626; background: color-mix(in srgb, #dc2626 8%, var(--paper)); }
+.applykit-ats a { color: inherit; font-weight: 600; }
+[data-theme="dark"] .applykit-ats.good { color: #6ee7a0; }
+[data-theme="dark"] .applykit-ats.mid { color: #f0b26a; }
+[data-theme="dark"] .applykit-ats.low { color: #f28b82; }

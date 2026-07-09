@@ -155,8 +155,8 @@ async function main() {
     }
     await db
       .insert(mentorProfiles)
-      .values({ profileId, ...m.mentor, active: true })
-      .onConflictDoUpdate({ target: mentorProfiles.profileId, set: { ...m.mentor, active: true, updatedAt: new Date() } });
+      .values({ profileId, ...m.mentor, contactEmail: m.email, active: true })
+      .onConflictDoUpdate({ target: mentorProfiles.profileId, set: { ...m.mentor, contactEmail: m.email, active: true, updatedAt: new Date() } });
     console.log(`+ ${m.fullName} — ${m.mentor.headline}`);
   }
   console.log(`\nSeeded ${DEMO_MENTORS.length} demo mentors. Remove with: npx tsx tools/seed-demo-mentors.ts --remove`);

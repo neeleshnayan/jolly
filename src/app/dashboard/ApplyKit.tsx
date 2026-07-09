@@ -19,6 +19,9 @@ type Kit = {
   job: { title: string | null; company: string | null; url: string | null; jd: string } | null;
 };
 
+type PickVersion = { id: string; label: string | null; createdAt: string; theme: string | null };
+type AtsSummary = { score: number; required: { term: string; hit: boolean }[]; preferred: { term: string; hit: boolean }[] };
+
 export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: { userId: string; opportunityId: string; jobTitle: string; onClose: () => void }) {
   const [kit, setKit] = useState<Kit | null>(null);
   const [err, setErr] = useState("");
@@ -26,6 +29,14 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
   const [letterText, setLetterText] = useState("");
   const [letterBusy, setLetterBusy] = useState(false);
   const [docTab, setDocTab] = useState<"resume" | "letter">("resume");
+  // which résumé goes out: the live one, or any saved theme/version snapshot
+  const [versions, setVersions] = useState<PickVersion[]>([]);
+  const [pickedVersion, setPickedVersion] = useState("");
+  const [versionState, setVersionState] = useState<"idle" | "loading" | "done">("idle");
+  const [frameKey, setFrameKey] = useState(0); // bump to re-render the iframe after a restore
+  // how this résumé fares against THIS job's keyword screen
+  const [ats, setAts] = useState<AtsSummary | null>(null);
+  const [atsBusy, setAtsBusy] = useState(false);
 
   useEffect(() => {
     fetch(`/api/apply-kit?u=${userId}&opportunityId=${opportunityId}`, { cache: "no-store" })
@@ -36,7 +47,55 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
         setLetterText(j.letter?.content ?? "");
       })
       .catch((e) => setErr(e instanceof Error ? e.message : "Couldn't stage the kit"));
+    fetch(`/api/track/version?u=${userId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const themes = (j.themes ?? []) as { name: string; versions: Omit<PickVersion, "theme">[] }[];
+        const untagged = (j.untagged ?? []) as Omit<PickVersion, "theme">[];
+        setVersions([
+          ...themes.flatMap((t) => t.versions.map((v) => ({ ...v, theme: t.name }))),
+          ...untagged.map((v) => ({ ...v, theme: null })),
+        ]);
+      })
+      .catch(() => {});
   }, [userId, opportunityId]);
+
+  // swap the outgoing résumé: restore the snapshot into the live résumé, then
+  // re-render the preview. Reversible — every version stays saved.
+  async function useVersion() {
+    if (!pickedVersion) return;
+    setVersionState("loading");
+    try {
+      const r = await fetch("/api/track/version/restore", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, versionId: pickedVersion }),
+      });
+      if (!r.ok) throw new Error();
+      setFrameKey((k) => k + 1);
+      setAts(null); // the ATS result belongs to the previous résumé
+      setVersionState("done");
+      setTimeout(() => setVersionState("idle"), 2000);
+    } catch {
+      setVersionState("idle");
+    }
+  }
+
+  async function runAts() {
+    if (!kit?.job?.jd) return;
+    setAtsBusy(true);
+    try {
+      const r = await fetch("/api/resume/ats-check", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, jd: kit.job.jd }),
+      });
+      const j = await r.json();
+      if (r.ok) setAts(j);
+    } finally {
+      setAtsBusy(false);
+    }
+  }
 
   // Esc closes, like any window
   useEffect(() => {
@@ -99,6 +158,11 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
                 </button>
                 <span className="applykit-doc-actions">
                   {docTab === "resume" && (
+                    <a className="ghost-btn" href="/resume" title="Something to tweak? The editor keeps this kit's target — come back and re-check.">
+                      ✎ Edit
+                    </a>
+                  )}
+                  {docTab === "resume" && (
                     <a className="ghost-btn" href={`/api/resume/pdf?u=${userId}`} target="_blank" rel="noopener noreferrer">
                       ↓ PDF
                     </a>
@@ -117,8 +181,46 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
               </div>
               {docTab === "resume" ? (
                 <div className="applykit-resume-scroll">
+                  {/* which résumé goes out + how it fares against this job's screen */}
+                  <div className="applykit-resume-tools">
+                    {versions.length > 0 && (
+                      <span className="applykit-version-pick">
+                        <select className="f-box" value={pickedVersion} onChange={(e) => setPickedVersion(e.target.value)}>
+                          <option value="">Current résumé</option>
+                          {versions.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {(v.theme ? `${v.theme} · ` : "") + (v.label || new Date(v.createdAt).toLocaleDateString())}
+                            </option>
+                          ))}
+                        </select>
+                        {pickedVersion && (
+                          <button className="ghost-btn" onClick={() => void useVersion()} disabled={versionState === "loading"}>
+                            {versionState === "loading" ? "Loading…" : versionState === "done" ? "✓ Loaded" : "Use this version"}
+                          </button>
+                        )}
+                      </span>
+                    )}
+                    {kit.job?.jd && (
+                      <button className="ghost-btn" onClick={() => void runAts()} disabled={atsBusy}>
+                        {atsBusy ? "Checking…" : ats ? "↻ Re-check ATS" : "🎯 ATS check"}
+                      </button>
+                    )}
+                  </div>
+                  {ats && (
+                    <div className={`applykit-ats ${ats.score >= 70 ? "good" : ats.score >= 45 ? "mid" : "low"}`}>
+                      <b>{ats.score}% keyword match</b>
+                      {ats.required.filter((k) => !k.hit).length > 0 ? (
+                        <span>
+                          {" "}· missing: {ats.required.filter((k) => !k.hit).slice(0, 4).map((k) => k.term).join(", ")}
+                          {" "}<a href="/resume">✎ fix in the editor</a>
+                        </span>
+                      ) : (
+                        <span> · every required keyword is covered ✓</span>
+                      )}
+                    </div>
+                  )}
                   {/* the print page IS the document — true fidelity, zero drift */}
-                  <iframe className="applykit-resume-frame" src={`/resume/print?u=${userId}`} title="Your résumé" />
+                  <iframe key={frameKey} className="applykit-resume-frame" src={`/resume/print?u=${userId}`} title="Your résumé" />
                 </div>
               ) : letterText || letterBusy ? (
                 <textarea

@@ -283,8 +283,9 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
           {showRefine ? "Close" : "Refine ⚙"}
         </button>
       </div>
-      {showRefine && <RefinePanel prefs={prefs} saving={savingPrefs} onSave={savePrefs} />}
+      {/* reading order: what the market wants (skill gap) → your knobs (refine) → the jobs */}
       <SkillMap radar={radar} mode="filter" selected={skillFilter} onSelect={setSkillFilter} />
+      {showRefine && <RefinePanel prefs={prefs} saving={savingPrefs} onSave={savePrefs} />}
       {skillFilter && (
         <div className="skill-callout">
           {activeRadar && !activeRadar.have ? (
@@ -385,7 +386,11 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                     </span>
                   )}
                   {confirming[j.id] === "saving" && <span className="apply-confirm">Saving…</span>}
-                  {confirming[j.id] === "done" && <span className="apply-confirm done">✓ Tracked — outcomes update below</span>}
+                  {confirming[j.id] === "done" && (
+                    <span className="apply-confirm done">
+                      ✓ Tracked — follow it on <a href="/insights">About you</a>
+                    </span>
+                  )}
                 </div>
               )}
             </div>

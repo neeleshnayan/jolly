@@ -18,6 +18,9 @@ export async function persistOpportunity(opts: {
   addedByProfileId?: string | null;
 }) {
   const f = opts.extraction.facts;
+  // comp columns are integers; extraction sometimes returns decimals (hourly
+  // rates like 53.37) which Postgres rejects outright — round, don't lose the row
+  const toInt = (n: number | null | undefined) => (typeof n === "number" && Number.isFinite(n) ? Math.round(n) : null);
   const values = {
     source: opts.source ?? "pasted",
     externalId: opts.externalId ?? null,
@@ -26,8 +29,8 @@ export async function persistOpportunity(opts: {
     title: f.title || null,
     location: f.location ?? null,
     remote: f.remote,
-    compMin: f.comp_min ?? null,
-    compMax: f.comp_max ?? null,
+    compMin: toInt(f.comp_min),
+    compMax: toInt(f.comp_max),
     companyStage: f.company_stage,
     domain: f.domain || null,
     rawText: opts.jd,

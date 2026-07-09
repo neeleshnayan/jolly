@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import UserChip from "../UserChip";
+import ApplicationsBoard from "../ApplicationsBoard";
 import { displayCompany } from "@/lib/format/company";
 
 type Param = { score: number; rationale: string };
@@ -271,6 +272,12 @@ export default function InsightsReport({ userId }: { userId: string }) {
         ) : (
           <p className="dash-empty">No live roles ranked yet.</p>
         )}
+      </section>
+
+      {/* your applications are part of YOUR story — they live here, not on the feed */}
+      <section className="report-section">
+        <h2><span className="sec-num">{r.probes.length > 0 ? "06" : "05"}</span> Your applications</h2>
+        <ApplicationsBoard userId={userId} />
       </section>
     </main>
   );

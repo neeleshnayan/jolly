@@ -17,6 +17,7 @@ import {
   resumeVersions,
   applications,
   applicationEvents,
+  opportunities,
 } from "@/db/schema";
 import { getFullProfile } from "@/lib/profile/read";
 
@@ -283,7 +284,7 @@ export async function createApplication(
 
 export async function listApplications(userId: string) {
   const pid = await profileIdFor(userId);
-  return db
+  const rows = await db
     .select({
       id: applications.id,
       company: applications.company,
@@ -294,12 +295,24 @@ export async function listApplications(userId: string) {
       appliedAt: applications.appliedAt,
       resumeVersionId: applications.resumeVersionId,
       themeName: resumeThemes.name,
+      opportunityId: applications.opportunityId,
+      oppFacts: opportunities.facts,
     })
     .from(applications)
     .leftJoin(resumeVersions, eq(applications.resumeVersionId, resumeVersions.id))
     .leftJoin(resumeThemes, eq(resumeVersions.themeId, resumeThemes.id))
+    .leftJoin(opportunities, eq(applications.opportunityId, opportunities.id))
     .where(eq(applications.profileId, pid))
     .orderBy(desc(applications.appliedAt));
+  // flatten the joined role facts to what the card's collapsible needs
+  return rows.map(({ oppFacts, ...r }) => {
+    const f = (oppFacts ?? {}) as { summary?: string; must_have_skills?: string[]; nice_to_have_skills?: string[] };
+    return {
+      ...r,
+      summary: f.summary?.trim() || null,
+      skills: [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map((s) => String(s).toLowerCase().trim()).filter(Boolean))].slice(0, 10),
+    };
+  });
 }
 
 /** Kanban card edits — notes and the follow-up nudge date. */
