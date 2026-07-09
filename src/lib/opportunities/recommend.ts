@@ -331,7 +331,11 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
         title: r.title,
         company: r.company,
         location: r.location,
-        country: (f.country as string | null) ?? inferCountry(r.location), // model first, deterministic fallback (models routinely null it)
+        // deterministic FIRST: models bias to the company's home country (a US
+        // firm's Singapore/Zürich office → "United States"), which breaks work-auth
+        // gating. inferCountry parses the location correctly; the model only fills
+        // locations the regex doesn't recognize.
+        country: inferCountry(r.location) ?? (f.country as string | null) ?? null,
         remote: r.remote,
         compMin: r.compMin,
         compMax: r.compMax,

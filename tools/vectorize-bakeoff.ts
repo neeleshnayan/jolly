@@ -67,6 +67,11 @@ async function main() {
   const base = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
   const models = arg("models", "gemma4:latest").split(",").map((s) => s.trim()).filter(Boolean);
   const n = Number(arg("n", "5"));
+  const jdcap = Number(arg("jdcap", "12000")); // chars of JD fed to the model
+  const minjd = Number(arg("minjd", "600")); // only sample JDs at least this long
+  // must set before importing the provider (it reads OLLAMA_NUM_CTX at module load)
+  if (arg("ctx", "")) process.env.OLLAMA_NUM_CTX = arg("ctx", "");
+  console.log(`ctx=${process.env.OLLAMA_NUM_CTX ?? 8192} · jdcap=${jdcap} · minjd=${minjd}`);
 
   const { db } = await import("@/db");
   const { opportunities } = await import("@/db/schema");
@@ -78,7 +83,7 @@ async function main() {
   const rows = await db
     .select({ id: opportunities.id, title: opportunities.title, company: opportunities.company, location: opportunities.location, rawText: opportunities.rawText })
     .from(opportunities)
-    .where(and(isNotNull(opportunities.rawText), sql`length(${opportunities.rawText}) between 600 and 12000`))
+    .where(and(isNotNull(opportunities.rawText), sql`length(${opportunities.rawText}) >= ${minjd}`))
     .orderBy(sql`random()`)
     .limit(n);
 
@@ -92,7 +97,7 @@ async function main() {
   for (const model of models) {
     console.log(`\n### ${model} — loading & running ${rows.length} extractions…`);
     for (let i = 0; i < rows.length; i++) {
-      const jd = (rows[i].rawText ?? "").slice(0, 12000);
+      const jd = (rows[i].rawText ?? "").slice(0, jdcap);
       const t0 = Date.now();
       try {
         const res = await provider.extractStructured({

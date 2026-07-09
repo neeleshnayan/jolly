@@ -25,11 +25,12 @@ export const VECTORIZE_PROMPT = `Read this job description and produce two thing
 
 FACTS:
 - title, company, location, remote (onsite/hybrid/remote/unknown)
-- country: the country of the location. You already know which country every
-  city/region belongs to — infer it directly (Bangalore→India, Paris→France,
-  "New York, NY"→United States, Singapore→Singapore, Dubai→United Arab Emirates).
-  Full country name. Null ONLY when the JD gives no location at all (e.g. bare
-  "Remote" with no region) — a named city or region ALWAYS resolves.
+- country: the country of the ROLE'S LOCATION — NOT the company's home country.
+  A US company's Zürich office is in Switzerland; a UK firm's Bangalore team is in
+  India. You already know which country every city/region belongs to — infer it
+  directly from the LOCATION field (Zürich→Switzerland, Bangalore→India,
+  Paris→France, "New York, NY"→United States, Dubai→United Arab Emirates). Full
+  country name; "Remote" only if the JD truly gives no geographic location.
 - comp_min / comp_max (only if the JD states a range; else null)
 - comp_currency: ISO code ("USD","INR","GBP","EUR","SGD"…) for the comp range.
   Use the JD's explicit symbol/words if given; otherwise INFER from the location's
@@ -89,9 +90,16 @@ Job description:
 ---
 `;
 
+// Cap the JD fed to the model so input + prompt + output fits the context window
+// (num_ctx 8192). gemma3:27b truncated/emptied on long multi-location JDs beyond
+// this; the signal-rich part of a JD (summary + requirements) is up front anyway.
+// Tunable for larger-context models via env.
+const JD_CHARS = Number(process.env.OLLAMA_VECTORIZE_JD_CHARS ?? 6000);
+
 export const opportunityVectorizer: Agent<{ jd: string }, OpportunityExtraction> = {
   name: "opportunity-vectorizer",
   async run(input) {
+    const jd = input.jd.slice(0, JD_CHARS);
     // task-scoped so callers can pin this to Ollama (LLM_PROVIDER_VECTORIZE=ollama)
     // without touching the global LLM_PROVIDER other tasks read
     const provider = getProvider("vectorize");
@@ -103,7 +111,7 @@ export const opportunityVectorizer: Agent<{ jd: string }, OpportunityExtraction>
         const res = await provider.extractStructured({
           schemaName: SCHEMA_NAME,
           jsonSchema: vectorizeJsonSchema(),
-          prompt: VECTORIZE_PROMPT + input.jd,
+          prompt: VECTORIZE_PROMPT + jd,
           maxTokens: 4500, // 12-axis vector + rationales + facts truncated at 3000 on rich JDs
         });
         return { output: opportunityExtraction.parse(res.data), usage: res.usage };
