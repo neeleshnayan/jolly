@@ -55,12 +55,17 @@ export const opportunityFacts = z.object({
   domain: z.string().default(""),
   // a comprehensible plain-English read of the role — what the person would
   // actually DO day to day. Written for a candidate skimming a card, not a
-  // truncated slice of the raw JD.
-  summary: z.string().default(""),
+  // truncated slice of the raw JD. REQUIRED (min length) so small models can't
+  // skip it the way they skip optional fields — the card would be blank.
+  summary: z.string().min(40),
   // 3-6 concrete requirements a candidate would check themselves against
   // (skills, years of experience, domain knowledge) — NOT vague adjectives.
   core_requirements: z.array(z.string()).default([]),
-  must_have_skills: z.array(z.string()).default([]),
+  // REQUIRED, min 3: a defaulted array is optional in the JSON schema, so smaller
+  // models (granite) skip it and emit []. minItems forces the grammar to produce
+  // real skills — the same lever that made country reliable. Every real role has
+  // skills; this stops the "good summary, empty skills" failure.
+  must_have_skills: z.array(z.string()).min(3),
   nice_to_have_skills: z.array(z.string()).default([]),
 });
 
