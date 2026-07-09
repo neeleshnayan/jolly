@@ -218,7 +218,12 @@ export default function MentorCall({ userId }: { userId: string }) {
 
   // warm the models on page load; run the call timer while live
   useEffect(() => {
-    fetch("/api/voice/warmup", { method: "POST" }).catch(() => {});
+    fetch("/api/voice/warmup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId }), // dev ?u= fallback; session wins in prod
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (!live) return;
@@ -781,7 +786,7 @@ export default function MentorCall({ userId }: { userId: string }) {
     // the clock starts, so cold-start (often ~10s) costs the user nothing.
     try {
       const [, res] = await Promise.all([
-        fetch("/api/voice/warmup", { method: "POST" }).catch(() => null),
+        fetch("/api/voice/warmup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId }) }).catch(() => null),
         fetch("/api/voice/greeting", {
           method: "POST",
           headers: { "content-type": "application/json" },

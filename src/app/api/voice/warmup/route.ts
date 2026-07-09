@@ -14,9 +14,14 @@ const OLLAMA = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const LIVE_MODEL = process.env.OLLAMA_LIVE_MODEL ?? "qwen3:8b";
 const LIVE_KEEP_ALIVE = process.env.OLLAMA_LIVE_KEEP_ALIVE ?? "5m";
 
-export async function POST() {
-  // loads models into VRAM — signed-in users only
-  if (!(await resolveUserId(null))) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+export async function POST(req: Request) {
+  // loads models into VRAM — signed-in users only (body userId is the
+  // standard dev-only fallback; without it, dev ?u= rehearsal calls were
+  // silently skipping warmup and eating the ~10s cold start on turn one)
+  const body = await req.json().catch(() => ({}));
+  if (!(await resolveUserId(typeof body.userId === "string" ? body.userId : null))) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
   await Promise.allSettled([
     // load the live model without generating (Ollama loads on an empty request)
     fetch(`${OLLAMA}/api/generate`, {
