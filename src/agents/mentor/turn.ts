@@ -4,8 +4,9 @@
  * Agent<I,O> shape (that's for one-shot units); a voice turn is a stream.
  * Insight extraction (the SLOW PATH) is a separate agent that runs post-call.
  */
-import type { ChatMessage } from "@/llm";
+import type { ChatMessage, Usage } from "@/llm";
 import { getProvider, getProviderByName } from "@/llm";
+import { logSpend } from "@/lib/usage/log";
 import { getMentorMap } from "@/lib/profile/map";
 import { getCallSpectrum } from "@/lib/opportunities/recommend";
 import { deriveSeekerEdge, matchMentorsWithBackfill, type MentorMatch } from "@/lib/mentors/match";
@@ -71,10 +72,18 @@ export async function* mentorTurn(input: {
     asked: askedQuestions(input.messages),
   }, circle);
   const provider = getProviderByName(input.brain) ?? getProvider("mentor");
+  const startedAt = Date.now();
+  let usage: Usage | null = null;
   yield* provider.streamChat({
     systemCore: core,
     system: delta + brief,
     messages: input.messages,
     maxTokens: 400, // spoken turns should be short
+    onUsage: (u) => {
+      usage = u;
+    },
   });
+  // record this turn's token + $ spend (fire-and-forget) — the mentor is the
+  // biggest cost and previously bypassed runAgent, so it was invisible
+  logSpend({ userId: input.userId, agent: "mentor_turn", provider: provider.name, usage, durationMs: Date.now() - startedAt });
 }

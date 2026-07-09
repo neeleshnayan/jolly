@@ -16,6 +16,8 @@ export interface AgentUsage {
   model: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** real $ from the provider (OpenRouter), passed through to the spend log */
+  costUsd?: number;
 }
 
 export interface AgentResult<Output> {

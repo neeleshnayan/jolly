@@ -25,7 +25,7 @@ export async function GET() {
     for (const q of qs) out.push(await q());
     return out;
   };
-  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel, bookings, pastCalls] = await run<unknown>([
+  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel, spendByUser, bookings, pastCalls] = await run<unknown>([
     () => db.execute(sql`select count(*)::int as n from sources where kind = 'mentor_call'`),
     () => db.execute(sql`
       select coalesce(p.full_name, p.email, 'unknown') as who, count(*)::int as n, max(s.created_at) as last_at
@@ -63,14 +63,31 @@ export async function GET() {
         (select count(distinct profile_id)::int from sources where created_at > now() - interval '7 days') as active_week,
         (select count(*)::int from profiles) as registered,
         (select count(*)::int from profiles where created_at > now() - interval '7 days') as new_week`),
-    // per-model token totals — multiplied by a price map client-side for est. $
+    // per-model totals — real $ from OpenRouter (cost_usd) when logged, else the
+    // client multiplies tokens by a price map for an estimate
     () => db.execute(sql`
       select coalesce(model, '(unlogged)') as model,
              count(*)::int as runs,
              coalesce(sum(input_tokens), 0)::int as tokens_in,
-             coalesce(sum(output_tokens), 0)::int as tokens_out
+             coalesce(sum(output_tokens), 0)::int as tokens_out,
+             coalesce(sum(cost_usd), 0)::float8 as cost_usd
       from agent_runs
-      group by 1 order by runs desc`),
+      group by 1 order by cost_usd desc, runs desc`),
+    // per-USER spend — the ask: who costs what. Real $ when logged. Names
+    // resolve via the profileId FK OR the userId stashed in meta (worker/system
+    // runs have no profile).
+    () => db.execute(sql`
+      select coalesce(p.full_name, p.email, pm.full_name, pm.email, ar.meta->>'userId', 'system') as who,
+             count(*)::int as runs,
+             count(*) filter (where ar.agent = 'mentor_turn')::int as turns,
+             coalesce(sum(ar.cost_usd), 0)::float8 as cost_usd,
+             coalesce(sum(ar.input_tokens), 0)::int as tokens_in,
+             coalesce(sum(ar.output_tokens), 0)::int as tokens_out,
+             max(ar.created_at) as last_at
+      from agent_runs ar
+      left join profiles p on p.id = ar.profile_id
+      left join profiles pm on pm.user_id::text = (ar.meta->>'userId')
+      group by 1 order by cost_usd desc, runs desc limit 30`),
     // the mentor's diary: who's booked (upcoming) …
     () => db.execute(sql`
       select b.slot_at, coalesce(p.full_name, p.email, 'unknown') as who
@@ -92,6 +109,7 @@ export async function GET() {
     applications: (apps as unknown as { total: number; users: number; last7: number }[])[0] ?? { total: 0, users: 0, last7: 0 },
     activity: (activity as unknown as { active_today: number; active_week: number; registered: number; new_week: number }[])[0] ?? null,
     byModel,
+    spendByUser,
     agents,
     recentRuns,
     mentorDiary: { lane: queueStatus(), bookings, pastCalls },

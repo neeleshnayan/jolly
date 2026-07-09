@@ -21,6 +21,7 @@ import {
   boolean,
   real,
   integer,
+  numeric,
   jsonb,
   timestamp,
   uniqueIndex,
@@ -547,6 +548,7 @@ export const agentRuns = pgTable("agent_runs", {
   model: text("model"),
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
+  costUsd: numeric("cost_usd"), // real cost from OpenRouter when available; else est. client-side
   durationMs: integer("duration_ms"),
   error: text("error"),
   meta: jsonb("meta").$type<Record<string, unknown>>().default({}),

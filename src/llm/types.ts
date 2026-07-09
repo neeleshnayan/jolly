@@ -28,9 +28,17 @@ export interface StructuredRequest {
   think?: boolean;
 }
 
+export interface Usage {
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  /** real $ from the provider (OpenRouter usage.cost); undefined = estimate downstream */
+  costUsd?: number;
+}
+
 export interface StructuredResponse {
   data: unknown;
-  usage: { model: string; inputTokens?: number; outputTokens?: number };
+  usage: Usage;
 }
 
 export interface ChatMessage {
@@ -49,6 +57,9 @@ export interface ChatRequest {
   messages: ChatMessage[];
   maxTokens?: number;
   model?: string;
+  /** streaming has no return value, so usage (tokens + real cost) is delivered
+   *  here when the final chunk arrives — callers log spend from it */
+  onUsage?: (u: Usage) => void;
 }
 
 export interface LLMProvider {

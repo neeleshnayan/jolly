@@ -53,6 +53,7 @@ export const openrouterProvider: LLMProvider = {
       body: JSON.stringify({
         model,
         max_tokens: req.maxTokens ?? 4096,
+        usage: { include: true }, // ask OpenRouter to return the real $ cost
         messages: [
           ...(req.system ? [{ role: "system", content: req.system }] : []),
           { role: "user", content: userContent },
@@ -73,7 +74,7 @@ export const openrouterProvider: LLMProvider = {
     if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const json = (await res.json()) as {
       choices?: { message?: { tool_calls?: { function?: { arguments?: string } }[]; content?: string } }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
     };
     const args = json.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments ?? json.choices?.[0]?.message?.content;
     if (!args) throw new Error("OpenRouter returned no structured output");
@@ -83,6 +84,7 @@ export const openrouterProvider: LLMProvider = {
         model,
         inputTokens: json.usage?.prompt_tokens,
         outputTokens: json.usage?.completion_tokens,
+        costUsd: json.usage?.cost,
       },
     };
   },
@@ -102,10 +104,12 @@ export const openrouterProvider: LLMProvider = {
       ...(systemContent ? [{ role: "system", content: systemContent }] : []),
       ...req.messages.map((m) => ({ role: m.role, content: m.content })),
     ];
+    const model = req.model ?? LIVE_MODEL;
     const res = await fetch(`${BASE}/chat/completions`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ model: req.model ?? LIVE_MODEL, max_tokens: req.maxTokens ?? 1024, messages, stream: true }),
+      // include_usage → a final chunk carries token counts + real $ cost
+      body: JSON.stringify({ model, max_tokens: req.maxTokens ?? 1024, messages, stream: true, stream_options: { include_usage: true } }),
     });
     if (!res.ok || !res.body) throw new Error(`OpenRouter chat ${res.status}`);
 
@@ -124,9 +128,14 @@ export const openrouterProvider: LLMProvider = {
         const payload = line.slice(5).trim();
         if (payload === "[DONE]") return;
         try {
-          const ev = JSON.parse(payload) as { choices?: { delta?: { content?: string } }[] };
+          const ev = JSON.parse(payload) as {
+            choices?: { delta?: { content?: string } }[];
+            usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+          };
           const delta = ev.choices?.[0]?.delta?.content;
           if (delta) yield delta;
+          // the usage chunk (no choices) arrives last — hand spend to the caller
+          if (ev.usage) req.onUsage?.({ model, inputTokens: ev.usage.prompt_tokens, outputTokens: ev.usage.completion_tokens, costUsd: ev.usage.cost });
         } catch {
           /* ignore keepalive/comment lines */
         }

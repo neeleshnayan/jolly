@@ -202,9 +202,13 @@ export const ollamaProvider: LLMProvider = {
         buffer = buffer.slice(nl + 1);
         if (!line) continue;
         try {
-          const j = JSON.parse(line) as { message?: { content?: string }; done?: boolean };
+          const j = JSON.parse(line) as { message?: { content?: string }; done?: boolean; prompt_eval_count?: number; eval_count?: number };
           if (j.message?.content) yield j.message.content;
-          if (j.done) return;
+          if (j.done) {
+            // local → $0, but tokens still feed the ROI/usage view
+            req.onUsage?.({ model: req.model ?? LIVE_MODEL, inputTokens: j.prompt_eval_count, outputTokens: j.eval_count, costUsd: 0 });
+            return;
+          }
         } catch {
           /* ignore partial/non-JSON lines */
         }

@@ -49,6 +49,7 @@ export async function runAgent<I, O>(
             model: result.usage?.model,
             inputTokens: result.usage?.inputTokens,
             outputTokens: result.usage?.outputTokens,
+            costUsd: result.usage?.costUsd != null ? String(result.usage.costUsd) : null,
             durationMs: Date.now() - started,
             finishedAt: new Date(),
             meta: { userId: ctx.userId, ...ctx.meta, ...result.meta },

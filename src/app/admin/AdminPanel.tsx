@@ -8,7 +8,8 @@ type Metrics = {
   resumeEdits: { total: number; users: number };
   applications: { total: number; users: number; last7: number };
   activity: { active_today: number; active_week: number; registered: number; new_week: number } | null;
-  byModel: { model: string; runs: number; tokens_in: number; tokens_out: number }[];
+  byModel: { model: string; runs: number; tokens_in: number; tokens_out: number; cost_usd: number }[];
+  spendByUser: { who: string; runs: number; turns: number; cost_usd: number; tokens_in: number; tokens_out: number; last_at: string }[];
   agents: {
     agent: string;
     runs: number;
@@ -47,6 +48,9 @@ function estCost(model: string, tokensIn: number, tokensOut: number): number {
   if (!p) return 0;
   return (tokensIn / 1e6) * p.in + (tokensOut / 1e6) * p.out;
 }
+// prefer the REAL cost OpenRouter logged; fall back to the token estimate
+const rowCost = (r: { cost_usd?: number; model?: string; tokens_in: number; tokens_out: number }) =>
+  r.cost_usd && r.cost_usd > 0 ? r.cost_usd : estCost(r.model ?? "", r.tokens_in, r.tokens_out);
 
 type Tab = "usage" | "inference" | "jobs";
 
@@ -247,7 +251,7 @@ export default function AdminPanel() {
   if (err) return <div className="admin-wrap"><p className="ai-err">{err}</p></div>;
   if (!m) return <div className="admin-wrap"><p className="dash-empty">Loading metrics…</p></div>;
 
-  const totalSpend = m.byModel.reduce((s, x) => s + estCost(x.model, x.tokens_in, x.tokens_out), 0);
+  const totalSpend = m.byModel.reduce((s, x) => s + rowCost(x), 0);
 
   return (
     <div className="admin-wrap">
@@ -407,18 +411,44 @@ export default function AdminPanel() {
           </div>
 
           <section className="admin-section">
+            <h2>Spend by user <span className="admin-dim" style={{ fontWeight: 400, fontSize: 12 }}>— OpenRouter $ is real; local rows are $0</span></h2>
+            {m.spendByUser.length === 0 ? (
+              <p className="dash-empty">No agent runs logged yet.</p>
+            ) : (
+              <table className="admin-table">
+                <thead><tr><th>User</th><th>Runs</th><th>Mentor turns</th><th>Tokens in/out</th><th>Cost</th><th>Last</th></tr></thead>
+                <tbody>
+                  {m.spendByUser.map((u, i) => {
+                    const c = rowCost(u);
+                    return (
+                      <tr key={i}>
+                        <td>{u.who}</td>
+                        <td>{u.runs}</td>
+                        <td>{u.turns || "—"}</td>
+                        <td>{fmtK(u.tokens_in)} / {fmtK(u.tokens_out)}</td>
+                        <td>{c > 0 ? `$${c.toFixed(4)}` : "$0 (local)"}</td>
+                        <td>{fmtAgo(u.last_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section className="admin-section">
             <h2>Spend by model</h2>
             <table className="admin-table">
-              <thead><tr><th>Model</th><th>Runs</th><th>Tokens in/out</th><th>Est. cost</th></tr></thead>
+              <thead><tr><th>Model</th><th>Runs</th><th>Tokens in/out</th><th>Cost</th></tr></thead>
               <tbody>
                 {m.byModel.map((x) => {
-                  const c = estCost(x.model, x.tokens_in, x.tokens_out);
+                  const c = rowCost(x);
                   return (
                     <tr key={x.model}>
                       <td>{x.model}</td>
                       <td>{x.runs}</td>
                       <td>{fmtK(x.tokens_in)} / {fmtK(x.tokens_out)}</td>
-                      <td>{c > 0 ? `$${c.toFixed(3)}` : "$0 (local)"}</td>
+                      <td>{c > 0 ? `$${c.toFixed(3)}${x.cost_usd > 0 ? "" : " est"}` : "$0 (local)"}</td>
                     </tr>
                   );
                 })}
