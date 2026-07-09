@@ -5,7 +5,7 @@
  * waiting for the whole clip. GET so it can be an <audio> src.
  */
 import type { NextRequest } from "next/server";
-import { synthesizeStream } from "@/lib/voice/voicebox";
+import { synthesizeStream } from "@/lib/voice";
 import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";

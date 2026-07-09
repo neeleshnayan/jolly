@@ -104,7 +104,7 @@ async function waitForGeneration(id: string): Promise<string> {
 // Kokoro reads markdown literally ("asterisk asterisk"), so strip the symbols
 // the mentor might emit before handing text to TTS. Keeps the words, drops the
 // punctuation-as-formatting.
-function toSpeakable(text: string): string {
+export function toSpeakable(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, " ") // code fences
     .replace(/`([^`]+)`/g, "$1") // inline code

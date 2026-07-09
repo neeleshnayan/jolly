@@ -4,7 +4,7 @@
  * of the call is fast instead of eating a cold start. Best-effort and idempotent.
  */
 import { NextResponse } from "next/server";
-import { warmVoice } from "@/lib/voice/voicebox";
+import { warmVoice } from "@/lib/voice";
 import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";

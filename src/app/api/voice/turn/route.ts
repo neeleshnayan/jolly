@@ -6,7 +6,7 @@
  * reply as base64 audio.
  */
 import { NextResponse } from "next/server";
-import { transcribe } from "@/lib/voice/voicebox";
+import { transcribe } from "@/lib/voice";
 import { parseTiming, timingNote } from "@/lib/voice/timing";
 import { mentorTurn } from "@/agents/mentor/turn";
 import { requireAdmin } from "@/lib/auth/admin";

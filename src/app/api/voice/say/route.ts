@@ -3,7 +3,7 @@
  * "play that again". Body: { text }. Returns base64 audio for the browser to play.
  */
 import { NextResponse } from "next/server";
-import { synthesize } from "@/lib/voice/voicebox";
+import { synthesize } from "@/lib/voice";
 import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
