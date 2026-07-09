@@ -10,7 +10,10 @@
 import { toSpeakable } from "./voicebox";
 
 const BASE = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
-const STT_MODEL = process.env.OPENROUTER_STT_MODEL ?? "openai/whisper-large-v3";
+// large-v3-turbo, not large-v3: distilled, faster + cheaper ($0.04/hr), quality
+// near-identical for English — "plenty of horsepower" without the heaviest model.
+// (OpenRouter has no hosted "medium"; turbo is the right light equivalent.)
+const STT_MODEL = process.env.OPENROUTER_STT_MODEL ?? "openai/whisper-large-v3-turbo";
 const TTS_MODEL = process.env.OPENROUTER_TTS_MODEL ?? "hexgrad/kokoro-82m";
 const TTS_VOICE = process.env.OPENROUTER_TTS_VOICE ?? "am_michael";
 
