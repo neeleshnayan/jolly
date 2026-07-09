@@ -29,4 +29,12 @@ if ($Full) {
     Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
       ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction Stop; Write-Host "stopped listener on :$port" } catch {} }
   }
+  # 3. Killing the ollama listener ORPHANS its llama-server runners — they keep
+  #    holding VRAM + a CUDA context (measured: a 10GB zombie surviving restart).
+  #    Sweep them, or the next start inherits a wedged GPU.
+  Start-Sleep -Seconds 1
+  Get-Process llama-server -ErrorAction SilentlyContinue | ForEach-Object {
+    Stop-Process -Id $_.Id -Force
+    Write-Host "swept orphan llama-server (pid $($_.Id))"
+  }
 }

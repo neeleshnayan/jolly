@@ -26,9 +26,20 @@ if (Test-Path $lnk) {
 #    gemma4 CUDA fix ships in a stable Ollama; then delete ~/.drizzle/ollama-rc
 #    and revert OLLAMA_BASE_URL to 11434.
 if (-not (Test-Port 11500)) {
+  # A dead ollama can leave ORPHAN llama-server runners behind — they keep
+  # holding VRAM + a CUDA context (the "0xc0000409 / shared object
+  # initialization failed" wedge). Server down + runners alive = orphans.
+  $orphans = Get-Process llama-server -ErrorAction SilentlyContinue
+  if ($orphans) {
+    $orphans | Stop-Process -Force
+    Write-Host "killed $($orphans.Count) orphan llama-server runner(s) (VRAM/CUDA squatters)"
+  }
   # MAX_LOADED_MODELS=1: this box has ~15GB RAM — two models resident (or one
-  # loading beside another) thrashes the pagefile and can crash the system
-  Start-Process -FilePath "$env:USERPROFILE\.drizzle\ollama-rc\ollama.exe" -ArgumentList "serve" -WindowStyle Hidden -Environment @{ OLLAMA_HOST = "127.0.0.1:11500"; OLLAMA_MAX_LOADED_MODELS = "1" }
+  # loading beside another) thrashes the pagefile and can crash the system.
+  # GGML_CUDA_NO_PINNED=1: without it llama-server pins ~weights-size of HOST
+  # RAM as staging ("shared GPU memory" — measured 5.4GB for 3.2GB gemma4);
+  # the 4090 has VRAM to spare, the box does not have RAM to spare.
+  Start-Process -FilePath "$env:USERPROFILE\.drizzle\ollama-rc\ollama.exe" -ArgumentList "serve" -WindowStyle Hidden -Environment @{ OLLAMA_HOST = "127.0.0.1:11500"; OLLAMA_MAX_LOADED_MODELS = "1"; GGML_CUDA_NO_PINNED = "1" }
   Write-Host "ollama-rc starting on :11500"
 } else { Write-Host "ollama-rc already up" }
 

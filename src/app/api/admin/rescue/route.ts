@@ -69,7 +69,13 @@ async function evictStock(log: string[]) {
 async function restartOllama(log: string[]) {
   await ps(`$c = Get-NetTCPConnection -LocalPort 11500 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue }`);
   await sleep(2000);
-  await ps(`$env:OLLAMA_HOST='127.0.0.1:11500'; $env:OLLAMA_MAX_LOADED_MODELS='1'; Start-Process -FilePath '${RC_EXE}' -ArgumentList 'serve' -WindowStyle Hidden`);
+  // killing the listener ORPHANS its llama-server runners — they keep holding
+  // VRAM + a CUDA context (the exact wedge this rescue exists for). Sweep them
+  // before starting fresh, or the new server inherits a wedged GPU.
+  await ps(`Get-Process llama-server -ErrorAction SilentlyContinue | Stop-Process -Force`);
+  // GGML_CUDA_NO_PINNED: without it the runner pins ~weights-size of host RAM
+  // ("shared GPU memory") — this box needs its RAM more than fast model loads
+  await ps(`$env:OLLAMA_HOST='127.0.0.1:11500'; $env:OLLAMA_MAX_LOADED_MODELS='1'; $env:GGML_CUDA_NO_PINNED='1'; Start-Process -FilePath '${RC_EXE}' -ArgumentList 'serve' -WindowStyle Hidden`);
   for (let i = 0; i < 15; i++) {
     await sleep(2000);
     if (await portUp(11500)) {
