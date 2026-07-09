@@ -365,6 +365,12 @@ export const opportunities = pgTable(
     // null = fetched from a board but not yet vectorized (inference pending).
     // Lets the admin split cheap board-fetching from GPU-heavy inference.
     vectorizedAt: timestamp("vectorized_at", { withTimezone: true }),
+    // tiered vectorise: the fast model (granite) sets this when its extraction
+    // came back incomplete (empty skills); the strong model (gemma3) pass then
+    // picks these up. Persisted so a crashed run resumes without re-doing or
+    // missing rows. Which model produced the CURRENT facts lives in vectorizeModel.
+    needsStrongPass: boolean("needs_strong_pass").default(false),
+    vectorizeModel: text("vectorize_model"),
     addedByProfileId: uuid("added_by_profile_id").references(() => profiles.id, {
       onDelete: "set null",
     }),

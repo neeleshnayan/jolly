@@ -36,6 +36,8 @@ const statements = [
   `ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS cost_usd numeric`,
   `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS scoring_stale boolean DEFAULT false`,
   `ALTER TABLE cover_letters ADD COLUMN IF NOT EXISTS opportunity_id uuid`,
+  `ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS needs_strong_pass boolean DEFAULT false`,
+  `ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS vectorize_model text`,
   `CREATE TABLE IF NOT EXISTS mentor_calls (
      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
      profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
