@@ -8,7 +8,7 @@ import { db } from "@/db";
 import { certifications, education, experiences, insights, opportunities, profiles, rankingSignals, resumeThemes, skills } from "@/db/schema";
 import { deriveCandidateQuals, hardGate } from "./gates";
 import { applyQualOverrides } from "@/lib/profile/about";
-import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
+import { computeAndSaveScoring, getSavedScoring, recomputeScoringInBackground } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
 import { inferCurrency } from "@/lib/format/comp";
@@ -45,17 +45,32 @@ export type RankedJob = {
   why: string;
 };
 
-async function userVector(userId: string): Promise<ScoringVector | null> {
+async function userVector(userId: string, wait = false): Promise<ScoringVector | null> {
   const saved = await getSavedScoring(userId);
-  // fresh cache → serve it. Stale or missing → recompute (this is the "Refresh
-  // picks up your edits" path). If recompute fails, fall back to the cached
-  // (stale) vector so the user never loses their recommendations entirely.
+  // fresh cache → serve it.
   if (saved.scoring && !saved.stale) return saved.scoring as unknown as ScoringVector;
-  try {
-    return (await computeAndSaveScoring(userId)) as unknown as ScoringVector;
-  } catch {
-    return (saved.scoring ?? null) as unknown as ScoringVector | null;
+  // no vector at all (brand-new user) → must compute inline; there's nothing to
+  // show otherwise. Rare: it's computed on upload, so a vector normally exists.
+  if (!saved.scoring) {
+    try {
+      return (await computeAndSaveScoring(userId)) as unknown as ScoringVector;
+    } catch {
+      return null;
+    }
   }
+  // stale, but we HAVE a usable vector. Reads must not block on the big-model
+  // recompute — serve the cached one now and refresh in the background so the
+  // next read is fresh. Only an explicit user Refresh (wait) pays to see the
+  // updated ranking immediately.
+  if (wait) {
+    try {
+      return (await computeAndSaveScoring(userId)) as unknown as ScoringVector;
+    } catch {
+      return saved.scoring as unknown as ScoringVector;
+    }
+  }
+  recomputeScoringInBackground(userId);
+  return saved.scoring as unknown as ScoringVector;
 }
 
 function whySummary(m: { fit: number; reasons: string[]; gaps: string[] }): string {
@@ -167,8 +182,8 @@ export async function rankMatches(userId: string): Promise<RankedJob[]> {
   return (await rankMatchesWithMeta(userId)).matches;
 }
 
-export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> {
-  const base = await userVector(userId);
+export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolean }): Promise<RankOutcome> {
+  const base = await userVector(userId, opts?.wait ?? false);
   if (!base) return { matches: [], learning: { active: false, events: 0, confidence: 0 } };
   // visibility: global roles for everyone + THIS user's private bookmarks
   const [me] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);

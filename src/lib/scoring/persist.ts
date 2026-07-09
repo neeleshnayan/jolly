@@ -51,3 +51,21 @@ export async function invalidateScoring(userId: string): Promise<void> {
     /* invalidation is best-effort — worst case the recompute happens one edit later */
   }
 }
+
+// The scoring recompute is a big-model call. Ranking READS must never block on
+// it — they serve the cached (possibly stale) vector and kick the recompute off
+// here so the NEXT read is fresh. Deduped: the dashboard/editor/mentor screens
+// all poll matches, so without a guard a burst of polls would stack up N
+// concurrent LLM passes and thrash the one GPU. In-process Set is enough locally
+// (single Node); on a multi-instance deploy the scoring_stale flag still
+// converges once any instance's recompute wins.
+const recomputing = new Set<string>();
+export function recomputeScoringInBackground(userId: string): void {
+  if (recomputing.has(userId)) return;
+  recomputing.add(userId);
+  void computeAndSaveScoring(userId)
+    .catch(() => {
+      /* stale flag stays set → a later read retries; never surfaced to the user */
+    })
+    .finally(() => recomputing.delete(userId));
+}

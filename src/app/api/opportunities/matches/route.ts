@@ -1,7 +1,10 @@
 /**
  * GET /api/opportunities/matches?u=<userId> — roles ranked for this user, with a
- * per-role "why", plus a 3-role spectrum to open a mentor call with. Uses the
- * cached scoring vector, so it's cheap to poll from the dashboard.
+ * per-role "why", plus a 3-role spectrum to open a mentor call with. Serves the
+ * cached scoring vector, so it's cheap to poll. If the vector is stale (edited
+ * since), the recompute runs in the BACKGROUND and this returns the cached
+ * ranking instantly — reads never block on the big-model pass. Pass ?refresh=1
+ * (the explicit Refresh button) to wait for the fresh ranking.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
@@ -43,7 +46,8 @@ export async function GET(req: NextRequest) {
   const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { matches, learning } = await rankMatchesWithMeta(userId);
+  const wait = req.nextUrl.searchParams.get("refresh") === "1";
+  const { matches, learning } = await rankMatchesWithMeta(userId, { wait });
   const spectrum = pickSpectrum(matches);
   const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   const mySkills = p ? await db.select({ name: skills.name }).from(skills).where(eq(skills.profileId, p.id)) : [];

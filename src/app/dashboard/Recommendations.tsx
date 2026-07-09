@@ -80,13 +80,17 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
   const [prefs, setPrefs] = useState<Prefs>({});
   const [savingPrefs, setSavingPrefs] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     setLoading(true);
     try {
       // no-store: the ranking is already computed fresh server-side every call
       // (live DB query), but some browsers cache identical GET URLs anyway —
       // this guarantees a refresh actually shows new data.
-      const r = await fetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" });
+      // refresh=1 (explicit Refresh) waits for the scoring recompute if you've
+      // edited since; a passive load serves the cached ranking instantly and
+      // recomputes in the background.
+      const url = `/api/opportunities/matches?u=${userId}${refresh ? "&refresh=1" : ""}`;
+      const r = await fetch(url, { cache: "no-store" });
       const j = await r.json();
       setMatches(j.matches ?? []);
       setLearning(j.learning ?? null);
@@ -277,9 +281,9 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
         </span>
         <button
           className="refine-toggle"
-          onClick={() => void load()}
+          onClick={() => void load(true)}
           disabled={loading}
-          title="Re-rank now — pulls in roles vectorized since this page loaded (your bookmarks show up here once analyzed)"
+          title="Re-rank now — picks up your latest résumé edits and any roles vectorized since this page loaded"
         >
           {loading ? "Refreshing…" : "⟳ Refresh"}
         </button>
