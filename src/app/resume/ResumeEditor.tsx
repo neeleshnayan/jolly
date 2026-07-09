@@ -839,6 +839,13 @@ export default function ResumeEditor({
       })
       .catch(() => {});
   }, [userId]);
+  // have/missing is recomputed from the sheet's LIVE skill list on every render
+  // (same containment matcher as the server) — the server snapshot only knows
+  // what was on the résumé at page load, so edits wouldn't move the ✓/× split
+  const liveRadar: SkillMapEntry[] = (() => {
+    const mine = data.skills.map((s) => (s.name ?? "").toLowerCase().trim()).filter(Boolean);
+    return skillRadar.map((r) => ({ ...r, have: mine.some((m) => m === r.skill || m.includes(r.skill) || r.skill.includes(m)) }));
+  })();
   /** Used ONLY from the wizard, where the user explicitly ticked the skill —
    *  their attestation, not the model's guess. */
   async function addSkillExplicit(name: string) {
@@ -1591,7 +1598,12 @@ export default function ResumeEditor({
                     <InlineField
                       value={s.name}
                       placeholder="skill"
-                      onSave={(v) => save("skill", s.id, { name: v })}
+                      onSave={(v) => {
+                        save("skill", s.id, { name: v });
+                        // mirror into state: the skill map derives have/missing
+                        // from data.skills, so a rename must move the ✓ live
+                        setData((d) => ({ ...d, skills: d.skills.map((x) => (x.id === s.id ? { ...x, name: v } : x)) }));
+                      }}
                     />
                     <button className="chip-x no-print" title="Remove" onClick={() => removeEntry("skill", s.id)}>×</button>
                   </span>
@@ -1944,7 +1956,7 @@ export default function ResumeEditor({
                 ) : null}
 
                 {/* the market's skill demand — shown, never auto-added */}
-                <SkillMap radar={skillRadar} mode="view" />
+                <SkillMap radar={liveRadar} mode="view" />
               </div>
             </div>
         </aside>
@@ -1952,7 +1964,7 @@ export default function ResumeEditor({
       {wizardOpen && (
         <RedesignWizard
           targets={targetOptions}
-          missingSkills={skillRadar.filter((r) => !r.have)}
+          missingSkills={liveRadar.filter((r) => !r.have)}
           tips={tips?.filter((t) => !t.applied) ?? null}
           tipsLoading={tipsState === "loading"}
           onClose={() => setWizardOpen(false)}
