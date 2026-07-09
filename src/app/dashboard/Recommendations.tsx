@@ -6,6 +6,7 @@ import { displayCompany } from "@/lib/format/company";
 import ApplyKit from "./ApplyKit";
 import SkillMap from "../SkillMap";
 import DrizzleLoader from "../DrizzleLoader";
+import DropletFit from "../DropletFit";
 
 type Job = {
   id: string;
@@ -313,10 +314,8 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
       <div className="rec-list">
         {top.map((j) => (
           <div className="rec-card" key={j.id}>
-            <div className="rec-fit">
-              <span className="rec-fit-pct">{Math.round(j.fit * 100)}</span>
-              <span className="rec-fit-unit">% fit</span>
-            </div>
+            <DropletFit fit={j.fit} />
+
             <div className="rec-main">
               <div className="rec-title-row">
                 <div>
@@ -371,7 +370,6 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                 </div>
               )}
 
-              <div className="rec-why">{j.why}</div>
               {(j.reasons.length > 0 || j.gaps.length > 0) && (
                 <div className="rec-chips">
                   {j.reasons.slice(0, 3).map((r, i) => (
