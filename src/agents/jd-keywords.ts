@@ -29,8 +29,8 @@ const PROMPT = `Extract the concrete SKILL keywords an ATS (applicant tracking s
 - preferred: the same kinds of terms, but mentioned as nice-to-have / bonus / preferred (max 10).
 
 RULES:
-- Each keyword is a concrete NOUN a résumé keyword-scanner could match: "python", "kubernetes", "dbt", "financial modeling", "cfa", "series a fundraising".
-- Keep each SHORT (1-3 words), lowercase, in the JD's own vocabulary. One concept per entry.
+- Each keyword is a concrete NOUN a résumé keyword-scanner could match: "Python", "Kubernetes", "dbt", "financial modeling", "CFA", "Series A fundraising".
+- Keep each SHORT (1-3 words) with its CANONICAL capitalization (TypeScript, Next.js, PostgreSQL, dbt) — these can go onto a résumé, so casing matters. One concept per entry.
 - NO duration or seniority requirements ("5+ years", "senior", "3 years experience") — those are screened separately, not here.
 - NO degree/education requirements ("bachelor's", "master's degree", "phd").
 - NO soft skills ("communication", "team player"), NO generic duties ("write code", "collaborate"), NO company/benefits fluff.
@@ -49,12 +49,15 @@ export function sanitize(terms: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of terms) {
-    const t = raw.replace(/<[^>]*>/g, "").replace(/["'&]+/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+    // preserve canonical casing (these go onto résumés) — matching lowercases
+    // separately in the ATS check; only DEDUP is case-insensitive here
+    const t = raw.replace(/<[^>]*>/g, "").replace(/["&]/g, "").replace(/\s+/g, " ").trim();
     if (t.length < 2 || t.length > 40) continue; // empties, sentences
     if (DROP.test(t)) continue; // duration/seniority/education → screened elsewhere
     if (/^[\d+.\s-]+$/.test(t)) continue; // "5+", "3-5" and other bare numbers
-    if (seen.has(t)) continue;
-    seen.add(t);
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push(t);
   }
   return out;

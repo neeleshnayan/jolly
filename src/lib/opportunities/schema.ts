@@ -35,9 +35,11 @@ export const opportunityFacts = z.object({
   company: z.string().default(""),
   location: z.string().nullable().default(null),
   // country the role sits in, inferred from location ("Bangalore" → "India").
-  // Enables work-authorization gating and a clean location display without
-  // re-parsing the free-text location every time.
-  country: z.string().nullable().default(null),
+  // REQUIRED (no default) on purpose: a defaulted/nullable field is OPTIONAL in
+  // the JSON schema, so the model just omits it (it fills currency from the same
+  // location, so it clearly knows the country — it was taking the escape hatch).
+  // Required → Ollama's schema-constrained generation must emit it.
+  country: z.string(),
   remote: z.enum(["onsite", "hybrid", "remote", "unknown"]).default("unknown"),
   comp_min: z.number().nullable().default(null), // annual, in the JD's currency if stated
   comp_max: z.number().nullable().default(null),

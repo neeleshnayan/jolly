@@ -25,13 +25,16 @@ export const VECTORIZE_PROMPT = `Read this job description and produce two thing
 
 FACTS:
 - title, company, location, remote (onsite/hybrid/remote/unknown)
-- country: the country this role sits in, inferred from the location ("Bangalore"
-  → "India", "SF" / "New York, NY" → "United States", "London" → "United Kingdom").
-  Full country name. If fully remote with no country signal, or genuinely unclear,
-  null — never guess.
+- country: the country of the location. You already know which country every
+  city/region belongs to — infer it directly (Bangalore→India, Paris→France,
+  "New York, NY"→United States, Singapore→Singapore, Dubai→United Arab Emirates).
+  Full country name. Null ONLY when the JD gives no location at all (e.g. bare
+  "Remote" with no region) — a named city or region ALWAYS resolves.
 - comp_min / comp_max (only if the JD states a range; else null)
-- comp_currency: ISO code of that range ("USD","INR","GBP","EUR") if the JD or
-  its location makes it clear; else null. Never guess a symbol from habit.
+- comp_currency: ISO code ("USD","INR","GBP","EUR","SGD"…) for the comp range.
+  Use the JD's explicit symbol/words if given; otherwise INFER from the location's
+  market — you know a Bangalore salary is INR, London GBP, Berlin EUR, SF USD.
+  Null ONLY when no comp range is stated at all.
 - min_years_experience: the years REQUIRED (e.g. "8+ years" → 8); null if not
   stated. Use the overall/headline requirement, not per-skill sub-requirements.
 - required_credentials: degrees/licenses the JD makes MANDATORY, normalized to
@@ -58,7 +61,11 @@ FACTS:
   themselves against (e.g. "5+ years backend Go/Java", "has shipped a
   consumer product 0-to-1", "comfortable owning on-call for a service").
   Concrete and checkable — never vague adjectives like "strong communicator".
-- must_have_skills / nice_to_have_skills
+- must_have_skills / nice_to_have_skills: concrete skills, tools, languages,
+  frameworks. Use each name's CANONICAL capitalization (TypeScript, Next.js,
+  PostgreSQL, Kubernetes, React, dbt, gRPC) — this text can go straight onto a
+  candidate's résumé, so "typescript" or "NEXTJS" reads wrong. Short noun phrases,
+  not sentences.
 
 VECTOR — what the role REQUIRES (0 = low/left, 1 = high/right):
 - req_seniority (entry → executive level the role needs)
@@ -97,7 +104,7 @@ export const opportunityVectorizer: Agent<{ jd: string }, OpportunityExtraction>
           schemaName: SCHEMA_NAME,
           jsonSchema: vectorizeJsonSchema(),
           prompt: VECTORIZE_PROMPT + input.jd,
-          maxTokens: 3000,
+          maxTokens: 4500, // 12-axis vector + rationales + facts truncated at 3000 on rich JDs
         });
         return { output: opportunityExtraction.parse(res.data), usage: res.usage };
       } catch (e) {
