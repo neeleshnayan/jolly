@@ -57,6 +57,13 @@ const SKILLS = [
   { name: "workflow orchestration", w: "38%", n: "2 roles" },
 ];
 const HAVE = ["python ×20", "sql ×11", "react ×6", "dbt ×4", "aws ×3", "airflow ×3"];
+const PEERS = [
+  { initials: "PS", name: "Priya S.", now: "Data Platform Eng · Stripe", from: "Data Analyst", to: "Data Platform Eng", shared: "4 skills in common", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
+  { initials: "MO", name: "Marcus O.", now: "ML Engineer · Ramp", from: "Backend SWE", to: "ML Engineer", shared: "made the leap last year", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
+  { initials: "LK", name: "Lena K.", now: "Founding Engineer · seed startup", from: "Product Manager", to: "Founding Engineer", shared: "open to referrals", grad: "linear-gradient(140deg,#8FA36E,#5F7A44)" },
+];
+const sageSm = { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, background: "rgba(166,192,131,0.10)", color: "#A6C083", border: "1px solid rgba(166,192,131,0.18)" } as const;
+const stackAv = { width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#F3ECDE", border: "2px solid #1A1712" } as const;
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   if (await getSessionUserId()) redirect("/dashboard");
@@ -84,6 +91,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <div style={{ display: "flex", alignItems: "center", gap: 30, fontSize: 14.5 }}>
                 <a className="lp-link" href="#how">How it works</a>
                 <a className="lp-link" href="#fit">Honest matching</a>
+                <a className="lp-link" href="#community">Community</a>
                 <a className="lp-link" href="#cost">At cost</a>
               </div>
               <a className="lp-cta" href="/api/auth/linkedin" style={{ background: ACCENT, color: "#14120E", fontWeight: 700, fontSize: 14.5, padding: "10px 20px", borderRadius: 11, boxShadow: "0 10px 26px -12px rgba(208,122,84,0.7)" }}>Get started</a>
@@ -231,6 +239,50 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                   <span key={h} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, background: "rgba(166,192,131,0.10)", color: "#A6C083", border: "1px solid rgba(166,192,131,0.18)" }}><span style={{ color: "#A6C083" }}>✓</span> {h}</span>
                 ))}
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* COMMUNITY — mentor connect */}
+        <section id="community" style={{ position: "relative", zIndex: 1, background: "#1A1712", borderTop: "1px solid rgba(230,210,170,0.07)", padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)" }}>
+          <div style={{ maxWidth: 1160, margin: "0 auto" }}>
+            <div style={{ maxWidth: 660, marginBottom: 52 }}>
+              <div style={kicker}>You&apos;re not alone in this</div>
+              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.6vw,50px)", lineHeight: 1.08, margin: "0 0 20px" }}>Walk the path with people <span style={{ fontStyle: "italic", color: "#D98E6A" }}>already on it.</span></h2>
+              <p style={{ fontSize: 16.5, lineHeight: 1.6, color: "#A79E8D", margin: 0, maxWidth: 600 }}>drizzle introduces you to people one or two steps ahead on the same trajectory — for honest advice, warm referrals, and the reminder that the leap you&apos;re making has been made before.</p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20, marginBottom: 32 }}>
+              {PEERS.map((p) => (
+                <div key={p.name} className="lp-pillar" style={{ ...pillar, padding: "26px 26px 22px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "50%", flexShrink: 0, background: p.grad, display: "flex", alignItems: "center", justifyContent: "center", color: "#F3ECDE", fontWeight: 700, fontSize: 15, border: "1px solid rgba(255,240,210,0.12)" }}>{p.initials}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 16, color: HEADING }}>{p.name}</div>
+                      <div style={{ fontSize: 13, color: "#948B7C" }}>{p.now}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", background: "rgba(230,210,170,0.04)", border: "1px solid rgba(230,210,170,0.08)", borderRadius: 11, padding: "11px 13px", marginBottom: 18 }}>
+                    <span style={{ fontSize: 13, color: "#948B7C" }}>{p.from}</span>
+                    <span style={{ color: ACCENT, fontWeight: 700 }}>→</span>
+                    <span style={{ fontSize: 13, color: "#E7DECD", fontWeight: 600 }}>{p.to}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <span style={sageSm}><span style={{ color: "#A6C083" }}>✓</span> {p.shared}</span>
+                    <a className="lp-ghost" href="/api/auth/linkedin" style={{ border: "1px solid rgba(230,210,170,0.18)", color: "#D6CCBA", fontWeight: 600, fontSize: 13, padding: "8px 16px", borderRadius: 10 }}>Connect</a>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ display: "flex" }}>
+                <div style={{ ...stackAv, background: "linear-gradient(140deg,#D98E6A,#C15F3C)" }}>RN</div>
+                <div style={{ ...stackAv, background: "linear-gradient(140deg,#C89B6A,#A9673A)", marginLeft: -10 }}>TF</div>
+                <div style={{ ...stackAv, background: "linear-gradient(140deg,#8FA36E,#5F7A44)", marginLeft: -10 }}>JK</div>
+                <div style={{ ...stackAv, background: "rgba(230,210,170,0.10)", color: "#C9BFAD", marginLeft: -10 }}>+</div>
+              </div>
+              <span style={{ fontSize: 14.5, color: "#948B7C" }}><span style={{ color: "#C9BFAD", fontWeight: 600 }}>200+ people</span> one step ahead on your exact path.</span>
             </div>
           </div>
         </section>
