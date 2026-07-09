@@ -31,6 +31,13 @@ const DISPLAY: Record<string, string> = {
   sigmoid: "Sigmoid",
   monzo: "Monzo",
   gocardless: "GoCardless",
+  klaviyo: "Klaviyo",
+  braze: "Braze",
+  intercom: "Intercom",
+  typeform: "Typeform",
+  contentful: "Contentful",
+  calendly: "Calendly",
+  palantir: "Palantir",
 };
 
 /** "janestreet" → "Jane Street"; unknown slugs get simple capitalization. */

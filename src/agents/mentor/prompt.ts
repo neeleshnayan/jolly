@@ -14,6 +14,7 @@ const DIMENSIONS = [
 ];
 
 export type CallRole = { kind: string; title: string; company: string; why: string };
+export type CircleMentor = { name: string; move: string; expertise: string };
 
 // A repertoire of genuinely different moves. One is SUGGESTED per turn
 // (rotating deterministically) so the conversation can't collapse into the
@@ -32,6 +33,7 @@ export function buildMentorSystemPrompt(
   spectrum: CallRole[] = [],
   secondsLeft?: number,
   turn?: { index: number; asked: string[] },
+  circle: CircleMentor[] = [],
 ): string {
   // time awareness + how to end the call well
   const timeHint =
@@ -76,6 +78,14 @@ If time has fully run out mid-thread, bounce politely: acknowledge the thread is
   const rolesBlock = spectrum.length
     ? `\n\nTHREE ROLES YOU'VE LINED UP TO DISCUSS (across the spectrum — a strong fit, a different path, a pivot). Don't dump them as a list; bring ONE up when it's natural, NAMING THE TITLE AND COMPANY exactly (the screen shows them cards when you do), and use it to probe — "between building something from scratch and leading a team, which pulls at you more, and why?". Let their reaction teach you what they actually want:${midpointNudge}\n${spectrum
         .map((r) => `- [${r.kind}] ${r.title} at ${r.company} — ${r.why}`)
+        .join("\n")}`
+    : "";
+
+  // the human circle: a second kind of concrete help. Roles test trajectory;
+  // people who MADE the move offer the lived answer. Either, both, any order.
+  const circleBlock = circle.length
+    ? `\n\nTHE MENTOR CIRCLE — real people on drizzle who've walked paths near theirs. You now hold TWO kinds of concrete help: the roles above (to test trajectory fit) and these humans (for the lived version). Weave in either or both, in whatever order the conversation calls for. When their thread touches a move one of these people made — or they sound stuck or alone in a decision — offer the intro naturally, BY NAME and by their move ("someone in the drizzle circle, ${circle[0]?.name}, made exactly that jump — want me to set up an intro?"). The screen handles the actual request. Never invent people not on this list:\n${circle
+        .map((c) => `- ${c.name} — ${c.move}${c.expertise ? ` (knows: ${c.expertise})` : ""}`)
         .join("\n")}`
     : "";
 
@@ -178,7 +188,7 @@ Understanding so far:
 ${known}${prevCallsBlock}${activityBlock}
 
 WHERE YOUR CURIOSITY IS THIN (drift here when it feels natural — never interrogate):
-${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${askedBlock}${turnBlock}${closingBlock}${timeHint}
+${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${circleBlock}${askedBlock}${turnBlock}${closingBlock}${timeHint}
 
 Keep each turn to a sentence or two. This is a conversation, not a monologue — and it should feel alive, like talking to someone who really gets it, not like filling out a form.`;
 }

@@ -5,7 +5,7 @@
  */
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { certifications, education, experiences, opportunities, profiles, rankingSignals } from "@/db/schema";
+import { certifications, education, experiences, opportunities, profiles, rankingSignals, resumeThemes } from "@/db/schema";
 import { deriveCandidateQuals, hardGate } from "./gates";
 import { applyQualOverrides } from "@/lib/profile/about";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
@@ -151,18 +151,37 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
     deriveCandidateQuals({ experiences: candExps, education: candEdu, certifications: candCerts }),
     (candProfile[0]?.aboutOverrides ?? null) as Parameters<typeof applyQualOverrides>[1],
   );
+  // the direction agreed on the mentor call: when a call lands on a target
+  // role, fillTargetTheme writes it — and the ranking should FOLLOW the call.
+  // Roles whose title/domain matches the agreed direction float up with an
+  // explicit "why" so the user sees the conversation change their list.
+  const targetWords: string[] = me
+    ? await db
+        .select({ latentAttributes: resumeThemes.latentAttributes })
+        .from(resumeThemes)
+        .where(eq(resumeThemes.profileId, me.id))
+        .then((rows) => {
+          const t = rows.map((r) => r.latentAttributes as { kind?: string; role?: string; pending?: boolean } | null).find((a) => a?.kind === "target_role" && a.role && !a.pending);
+          return t?.role ? t.role.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2) : [];
+        })
+        .catch(() => [])
+    : [];
   const visible = me
     ? or(eq(opportunities.visibility, "global"), eq(opportunities.addedByProfileId, me.id))
     : eq(opportunities.visibility, "global");
   const [allRoles, pref] = await Promise.all([
     // only vectorized roles — a pending row's empty vector would fake 0.5 on
-    // every axis and rank as a meaningless mid-pack match
+    // every axis and rank as a meaningless mid-pack match.
+    // 500-row window: newest-first limit(100) was silently DROPPING older
+    // roles from ranking as new batches vectorized (they vanished from the
+    // user's list). Scoring is in-process arithmetic, so the real cost is
+    // payload — revisit with per-user precomputed scores past ~1k roles.
     db
       .select()
       .from(opportunities)
       .where(and(isNotNull(opportunities.vectorizedAt), visible))
       .orderBy(desc(opportunities.createdAt))
-      .limit(100),
+      .limit(500),
     getPreferences(userId),
   ]);
   // "Not for me" is a promise: dismissed roles never rank again for this user.
@@ -193,8 +212,12 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
       const m = scoreMatch(vec, v);
       const c = compRefine(pref, r.compMin, r.compMax, f.comp_currency ?? inferCurrency(r.location));
       const l = locationRefine(pref, r.remote, r.location);
+      // target-role boost: the call's conclusion visibly reorders the list
+      const roleText = ` ${(r.title ?? "").toLowerCase()} ${(r.domain ?? "").toLowerCase()} `;
+      const targetHit = targetWords.length ? targetWords.filter((w) => roleText.includes(w)).length / targetWords.length : 0;
+      const targetFactor = 1 + 0.12 * targetHit;
       // concrete notes lead — they're the explicit knobs the user just set
-      const reasons = [c.reason, l.reason, ...m.reasons].filter(Boolean) as string[];
+      const reasons = [targetHit >= 0.5 ? "The direction you set with your mentor" : null, c.reason, l.reason, ...m.reasons].filter(Boolean) as string[];
       const gaps = [gate.marginal?.gap, c.gap, l.gap, ...m.gaps].filter(Boolean) as string[];
       // older rows predate the summary/core_requirements fields — fall back to
       // a trimmed JD slice so the card never shows a blank description
@@ -216,7 +239,7 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         summary,
         coreRequirements,
         skills: [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map((s) => String(s).toLowerCase().trim()).filter(Boolean))],
-        fit: m.fit * c.factor * l.factor * (gate.marginal?.penalty ?? 1),
+        fit: Math.min(1, m.fit * c.factor * l.factor * targetFactor * (gate.marginal?.penalty ?? 1)),
         qualification: m.qualification,
         desire: m.desire,
         novelty: v.off_domain_novelty?.score ?? 0.3,

@@ -29,11 +29,18 @@ export const COMPANIES: { source: Source; slug: string }[] = [
   // finance & quant
   { source: "greenhouse", slug: "point72" },
   { source: "greenhouse", slug: "janestreet" },
-  // marketing / content / education
+  // marketing / content / education (probed live 2026-07-09)
   { source: "greenhouse", slug: "sproutsocial" },
   { source: "greenhouse", slug: "hootsuite" },
   { source: "greenhouse", slug: "coursera" },
   { source: "greenhouse", slug: "outschool" },
+  { source: "greenhouse", slug: "klaviyo" },
+  { source: "greenhouse", slug: "braze" },
+  { source: "greenhouse", slug: "intercom" },
+  { source: "greenhouse", slug: "typeform" },
+  { source: "greenhouse", slug: "contentful" },
+  { source: "greenhouse", slug: "calendly" },
+  { source: "lever", slug: "palantir" },
   // remote-first (the side-hustle / work-from-anywhere pool)
   { source: "greenhouse", slug: "gitlab" },
   { source: "greenhouse", slug: "remotecom" },

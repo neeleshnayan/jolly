@@ -8,7 +8,8 @@ import type { ChatMessage } from "@/llm";
 import { getProvider, getProviderByName } from "@/llm";
 import { getMentorMap } from "@/lib/profile/map";
 import { getCallSpectrum } from "@/lib/opportunities/recommend";
-import { buildMentorSystemPrompt } from "./prompt";
+import { deriveSeekerEdge, matchMentorsWithBackfill, type MentorMatch } from "@/lib/mentors/match";
+import { buildMentorSystemPrompt, type CircleMentor } from "./prompt";
 import { capabilityBrief } from "./capabilities";
 
 // Per-call context cache: the map + spectrum barely change between turns, but
@@ -16,14 +17,25 @@ import { capabilityBrief } from "./capabilities";
 // a flaky pooler, and pure waste at scale. 3-min TTL ≈ one conversation's
 // stretch; a mid-call résumé edit shows up next call, which is fine.
 const CTX_TTL_MS = 3 * 60 * 1000;
-const ctxCache = new Map<string, { at: number; map: Awaited<ReturnType<typeof getMentorMap>>; spectrum: Awaited<ReturnType<typeof getCallSpectrum>> }>();
+const ctxCache = new Map<string, { at: number; map: Awaited<ReturnType<typeof getMentorMap>>; spectrum: Awaited<ReturnType<typeof getCallSpectrum>>; circle: CircleMentor[] }>();
 
 async function callContext(userId: string) {
   const hit = ctxCache.get(userId);
   if (hit && Date.now() - hit.at < CTX_TTL_MS) return hit;
   const map = await getMentorMap(userId);
   const spectrum = await getCallSpectrum(userId).catch(() => []);
-  const entry = { at: Date.now(), map, spectrum };
+  // the human circle: real mentors the AI may offer as intros mid-call
+  const circle: CircleMentor[] = await deriveSeekerEdge(userId)
+    .then((edge) => (edge ? matchMentorsWithBackfill(userId, edge) : []))
+    .then((ms: MentorMatch[]) =>
+      ms.slice(0, 3).map((m) => ({
+        name: m.name ?? "a mentor",
+        move: m.transitions?.[0] ? `${m.transitions[0].from} → ${m.transitions[0].to}` : (m.headline ?? ""),
+        expertise: (m.expertise ?? []).slice(0, 3).join(", "),
+      })),
+    )
+    .catch(() => []);
+  const entry = { at: Date.now(), map, spectrum, circle };
   ctxCache.set(userId, entry);
   if (ctxCache.size > 200) ctxCache.delete(ctxCache.keys().next().value!); // bound memory
   return entry;
@@ -47,7 +59,7 @@ export async function* mentorTurn(input: {
   // Callers are responsible for gating WHO may set this (see /api/voice/turn).
   brain?: string;
 }): AsyncIterable<string> {
-  const { map, spectrum } = await callContext(input.userId);
+  const { map, spectrum, circle } = await callContext(input.userId);
   const turnIndex = input.messages.filter((m) => m.role === "assistant").length;
   // capabilities: when the user names a role from their world, this turn's
   // prompt gains a focused dossier (deterministic detection, cheap, cached)
@@ -56,7 +68,7 @@ export async function* mentorTurn(input: {
     buildMentorSystemPrompt(map, spectrum, input.secondsLeft, {
       index: turnIndex,
       asked: askedQuestions(input.messages),
-    }) + brief;
+    }, circle) + brief;
   const provider = getProviderByName(input.brain) ?? getProvider("mentor");
   yield* provider.streamChat({
     system,

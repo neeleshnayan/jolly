@@ -128,6 +128,40 @@ export async function matchMentors(userId: string, edge: SeekerEdge): Promise<Me
     .slice(0, 5);
 }
 
+/** matchMentors + an honest backfill: while the circle is young, fewer than 3
+ *  real matches means the page feels dead — so fill with other ACTIVE mentors,
+ *  labeled truthfully as different-path perspectives (never fake fit). */
+export async function matchMentorsWithBackfill(userId: string, edge: SeekerEdge): Promise<MentorMatch[]> {
+  const matched = await matchMentors(userId, edge);
+  if (matched.length >= 3) return matched;
+  const [me] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const rows = await db
+    .select({ m: mentorProfiles, name: profiles.fullName, avatarUrl: profiles.avatarUrl })
+    .from(mentorProfiles)
+    .innerJoin(profiles, eq(profiles.id, mentorProfiles.profileId))
+    .where(me ? and(eq(mentorProfiles.active, true), ne(mentorProfiles.profileId, me.id)) : eq(mentorProfiles.active, true));
+  const seen = new Set(matched.map((m) => m.id));
+  const extras: MentorMatch[] = rows
+    .filter((r) => !seen.has(r.m.id))
+    .slice(0, 5 - matched.length)
+    .map((r) => ({
+      id: r.m.id,
+      name: r.name,
+      avatarUrl: r.avatarUrl,
+      headline: r.m.headline,
+      journey: r.m.journey,
+      expertise: r.m.expertise ?? [],
+      transitions: r.m.transitions ?? [],
+      availability: r.m.availability,
+      feeHr: r.m.feeHr,
+      languages: r.m.languages,
+      timezone: r.m.timezone,
+      score: 0,
+      why: ["New in the circle — a different path can be the sharpest mirror"],
+    }));
+  return [...matched, ...extras];
+}
+
 /** The one-pager a mentor receives with every intro — assembled from the
  *  diagnosis, zero LLM cost. This is why intros here beat cold LinkedIn DMs. */
 export async function buildPrebrief(userId: string, note?: string): Promise<string> {

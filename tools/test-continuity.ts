@@ -57,13 +57,17 @@ async function main() {
   assert("first call has NO continuity blocks", !fresh.includes("YOUR PREVIOUS CALLS") && !fresh.includes("DONE SINCE"));
 
   // ---- 2. capability seam against the real pool (read-only) ----
+  // dynamic: name the user's CURRENT top match, so the test survives pool churn
   const userId = "80f8584f-99b0-403e-82e5-fa4d1cee9eb2";
+  const { rankMatches } = await import("@/lib/opportunities/recommend");
+  const top = (await rankMatches(userId))[0];
+  assert("ranked pool non-empty", !!top?.title);
   const brief = await capabilityBrief(userId, [
     { role: "assistant", content: "What's been on your mind?" },
-    { role: "user", content: "I keep thinking about that incident response manager role at Anthropic — am I even ready for it?" },
+    { role: "user", content: `I keep thinking about that ${top.title} role at ${top.company} — am I even ready for it?` },
   ]);
   assert("dossier fired on a named role", brief.includes("LIVE BRIEF"));
-  assert("dossier names the role", /Incident Response Manager/i.test(brief));
+  assert("dossier names the role", brief.toLowerCase().includes((top.title ?? "").toLowerCase()));
   assert("dossier carries requirements", brief.includes("WHAT THE SCREEN ASKS FOR"));
   assert("dossier coaches prep", brief.includes("HOW TO PREP"));
   const silent = await capabilityBrief(userId, [{ role: "user", content: "I had a nice weekend with family." }]);

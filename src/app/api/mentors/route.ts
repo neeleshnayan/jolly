@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { experiences, mentorProfiles, profiles, skills } from "@/db/schema";
-import { deriveSeekerEdge, matchMentors, buildPrebrief } from "@/lib/mentors/match";
+import { deriveSeekerEdge, matchMentorsWithBackfill, buildPrebrief } from "@/lib/mentors/match";
 import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 
   const [me] = await db.select().from(mentorProfiles).where(eq(mentorProfiles.profileId, p.id)).limit(1);
   const edge = await deriveSeekerEdge(userId);
-  const matches = edge ? await matchMentors(userId, edge) : [];
+  const matches = edge ? await matchMentorsWithBackfill(userId, edge) : [];
   const prebriefPreview = await buildPrebrief(userId);
   const suggested = me ? null : await buildSuggested(p.id);
 
