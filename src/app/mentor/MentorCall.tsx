@@ -283,6 +283,17 @@ export default function MentorCall({ userId }: { userId: string }) {
   // the caption reveal falls back to a words-per-second estimate.
   function playText(text: string) {
     audioRef.current?.pause();
+    // stage directions sneak past the prompt on small models — "(Pause,
+    // letting the silence hang)" would be SPOKEN by TTS and shown in the
+    // caption. Strip parentheticals that OPEN with an acting verb; ones
+    // carrying real content ("(TxB's first marketplace)") are untouched.
+    text = text
+      .replace(
+        /\s*[(*\[]\s*(?:pauses?|pausing|beat\b|silence|laughs?|laughing|chuckles?|chuckling|sighs?|sighing|smiles?|smiling|nods?|nodding|leans?|leaning|softly|gently|warmly|quietly|thoughtfully|clears throat|takes a (?:deep )?breath|lets? the silence)[^)*\]]*[)*\]]\s*/gi,
+        " ",
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
     maybeRevealRoles(text); // if the mentor named a role, surface the cards
     if (!text.trim()) {
       if (liveRef.current) {
@@ -344,14 +355,33 @@ export default function MentorCall({ userId }: { userId: string }) {
       }
     };
     audio.onended = done;
-    audio.onerror = () => {
-      lastAudioErrRef.current = `audio element error (code ${audio.error?.code ?? "?"}: ${audio.error?.message || "unknown"}) at ${new Date().toLocaleTimeString()}`;
+    // "no supported source" = the stream endpoint fumbled its first chunk
+    // (voicebox hiccup) — ONE fresh attempt beats a silent turn. Never retry
+    // once real playback started; that would restart the sentence.
+    const failedLoad = (msg: string) => {
+      lastAudioErrRef.current = `${msg} at ${new Date().toLocaleTimeString()}`;
+      const neverPlayed = !audio.currentTime || audio.currentTime < 0.3;
+      if (neverPlayed && !audio.dataset.retried && liveRef.current) {
+        audio.dataset.retried = "1";
+        window.setTimeout(() => {
+          if (audioRef.current !== audio) return; // a newer turn took over
+          const again = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}&retry=1`);
+          again.dataset.retried = "1";
+          audioRef.current = again;
+          again.ontimeupdate = audio.ontimeupdate;
+          again.onended = done;
+          again.onerror = () => {
+            lastAudioErrRef.current = `audio retry failed (code ${again.error?.code ?? "?"}) at ${new Date().toLocaleTimeString()}`;
+            done();
+          };
+          void again.play().catch(() => done());
+        }, 450);
+        return;
+      }
       done();
     };
-    void audio.play().catch((e) => {
-      lastAudioErrRef.current = `play() rejected: ${e instanceof Error ? e.message : String(e)} at ${new Date().toLocaleTimeString()}`;
-      done();
-    });
+    audio.onerror = () => failedLoad(`audio element error (code ${audio.error?.code ?? "?"}: ${audio.error?.message || "unknown"})`);
+    void audio.play().catch((e) => failedLoad(`play() rejected: ${e instanceof Error ? e.message : String(e)}`));
   }
 
   // ---- signal helpers ----
