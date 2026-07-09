@@ -63,10 +63,13 @@ FACTS:
   consumer product 0-to-1", "comfortable owning on-call for a service").
   Concrete and checkable — never vague adjectives like "strong communicator".
 - must_have_skills / nice_to_have_skills: concrete skills, tools, languages,
-  frameworks. Use each name's CANONICAL capitalization (TypeScript, Next.js,
-  PostgreSQL, Kubernetes, React, dbt, gRPC) — this text can go straight onto a
-  candidate's résumé, so "typescript" or "NEXTJS" reads wrong. Short noun phrases,
-  not sentences.
+  frameworks, methodologies. Use each name's CANONICAL capitalization (TypeScript,
+  Next.js, PostgreSQL, Kubernetes, React, dbt, gRPC) — this text goes straight
+  onto a candidate's résumé, so "typescript" or "NEXTJS" reads wrong. Each entry
+  is ONE atomic skill as a short noun phrase — NOT a full sentence, NOT a
+  duration/experience requirement ("5+ years experience"), NOT a degree/credential
+  ("Bachelor's degree"): those live in min_years_experience / required_credentials.
+  Just the skill itself ("Site Reliability Engineering", "CI/CD", "Product Marketing").
 
 VECTOR — what the role REQUIRES (0 = low/left, 1 = high/right):
 - req_seniority (entry → executive level the role needs)

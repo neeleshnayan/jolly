@@ -44,9 +44,16 @@ const COUNTRY_HINTS: [RegExp, string][] = [
   [/sweden|stockholm|gothenburg/i, "Sweden"],
   [/poland|warsaw|krakow|kraków|wroclaw/i, "Poland"],
   [/singapore/i, "Singapore"],
+  [/\bjapan\b|tokyo|osaka|kyoto/i, "Japan"],
+  [/south korea|\bkorea\b|seoul/i, "South Korea"],
   [/australia|sydney|melbourne|brisbane|perth/i, "Australia"],
+  [/new zealand|auckland|wellington/i, "New Zealand"],
   [/\buae\b|dubai|abu dhabi/i, "United Arab Emirates"],
+  [/israel|tel aviv|\bhaifa\b/i, "Israel"],
   [/morocco|casablanca|rabat/i, "Morocco"],
+  [/\bbrazil\b|são paulo|sao paulo|rio de janeiro/i, "Brazil"],
+  [/\bmexico\b|mexico city|guadalajara/i, "Mexico"],
+  [/romania|bucharest|cluj/i, "Romania"],
   [/canada|toronto|vancouver|montreal|montréal|ottawa|calgary|waterloo/i, "Canada"],
 ];
 
