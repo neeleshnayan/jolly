@@ -2027,7 +2027,12 @@ export default function ResumeEditor({
               ? [
                   ...ats.required.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "required" as const })),
                   ...ats.preferred.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "preferred" as const })),
-                ].slice(0, 10)
+                ]
+                  // drop duration/experience/credential REQUIREMENTS — they're not
+                  // skills you can tick "genuinely yours" and add to your Skills
+                  // list ("5+ years experience" is nonsense as a skill chip).
+                  .filter((g) => !/\b(years?|experience|degree|bachelor'?s?|master'?s?|phd|diploma)\b/i.test(g.term))
+                  .slice(0, 10)
               : undefined
           }
           jobLabel={targetJob?.title ?? null}
