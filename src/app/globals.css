@@ -264,10 +264,14 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  font-family: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+/* the design kit's editorial display face, for the big warm headings */
+:root { --font-serif: "Newsreader", Georgia, "Times New Roman", serif; }
+.dash-hello, .dash-section-head h2, .skillmap-title,
+.rec-fit-pct, .ats-ring-num { font-family: var(--font-serif); }
 
 /* ---------- glass UI ----------
    The ambient aurora lives on <body> (multi-layer fixed gradients) so the
