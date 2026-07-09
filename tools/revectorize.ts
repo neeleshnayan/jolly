@@ -30,12 +30,25 @@ function loadEnvLocal() {
 const BATCH = 5; // rows between cooldowns
 const COOLDOWN_MS = 15000;
 
+function arg(name: string): string | undefined {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.split("=").slice(1).join("=") : undefined;
+}
+
 async function main() {
   loadEnvLocal();
   process.env.LLM_PROVIDER_VECTORIZE = "ollama";
+  // --model=gemma3:27b to re-vectorise with the bake-off winner. Keep it WARM
+  // across rows (default keep_alive is 0 = unload after each → a 17GB reload
+  // per row). --limit caps the run for a validation pass.
+  const model = arg("model");
+  if (model) process.env.OLLAMA_MODEL = model;
+  process.env.OLLAMA_EXTRACT_KEEP_ALIVE = arg("keepAlive") ?? "15m";
+  const limit = arg("limit") ? Number(arg("limit")) : Infinity;
+  console.log(`Model: ${process.env.OLLAMA_MODEL} · keep_alive: ${process.env.OLLAMA_EXTRACT_KEEP_ALIVE}${Number.isFinite(limit) ? ` · limit: ${limit}` : ""}`);
   const { db } = await import("@/db");
   const { opportunities } = await import("@/db/schema");
-  const { and, asc, eq, isNotNull, lt, sql } = await import("drizzle-orm");
+  const { and, asc, eq, isNotNull, lt, ne, sql } = await import("drizzle-orm");
   const { runAgent } = await import("@/agents/run");
   const { opportunityVectorizer } = await import("@/agents/opportunity-vectorizer");
 
@@ -48,7 +61,7 @@ async function main() {
     db
       .select()
       .from(opportunities)
-      .where(and(isNotNull(opportunities.vectorizedAt), lt(opportunities.vectorizedAt, cutoff)))
+      .where(and(isNotNull(opportunities.vectorizedAt), lt(opportunities.vectorizedAt, cutoff), ne(opportunities.source, "sample")))
       .orderBy(asc(opportunities.vectorizedAt))
       .limit(BATCH);
   const [{ n: total }] = await db
@@ -60,9 +73,11 @@ async function main() {
   let done = 0;
   let failed = 0;
   for (;;) {
+    if (done + failed >= limit) break;
     const batch = await stale();
     if (!batch.length) break;
     for (const row of batch) {
+      if (done + failed >= limit) break;
       try {
         const { output } = await runAgent(opportunityVectorizer, { jd: row.rawText ?? "" }, { userId: "revectorize" });
         // board rows: the ATS's own fields are authoritative (same rule as runInference)

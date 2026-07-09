@@ -11,7 +11,7 @@ import { applyQualOverrides } from "@/lib/profile/about";
 import { computeAndSaveScoring, getSavedScoring, recomputeScoringInBackground } from "@/lib/scoring/persist";
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
-import { inferCurrency } from "@/lib/format/comp";
+import { inferCurrency, inferCountry } from "@/lib/format/comp";
 import { scoreMatch } from "./match";
 import type { ScoringVector } from "@/lib/scoring/schema";
 import type { OpportunityVector, OpportunityFacts } from "./schema";
@@ -331,7 +331,7 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
         title: r.title,
         company: r.company,
         location: r.location,
-        country: (f.country as string | null) ?? null, // populated by the (re-)vectorise pass
+        country: (f.country as string | null) ?? inferCountry(r.location), // model first, deterministic fallback (models routinely null it)
         remote: r.remote,
         compMin: r.compMin,
         compMax: r.compMax,
