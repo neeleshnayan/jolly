@@ -70,7 +70,10 @@ async function main() {
   const idx = ranked.findIndex((j) => j.id === role.id);
   const j = ranked[idx];
   if (j) {
-    console.log(`SHOWN IN APP: rank #${idx + 1}, fit ${pc(j.fit)}`);
+    const opt = (n: number | null) => (n === null ? "—" : pc(n));
+    console.log(
+      `SHOWN IN APP: rank #${idx + 1}, fit ${pc(j.fit)} (desire ${pc(j.desire)}, evidence ${opt(j.evidence)}, trajectory ${opt(j.trajectory)})`,
+    );
     console.log(`  reasons: ${j.reasons.join(" | ")}`);
     console.log(`  gaps:    ${j.gaps.join(" | ") || "(none)"}`);
   } else {

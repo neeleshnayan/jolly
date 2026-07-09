@@ -13,7 +13,8 @@ import type { OpportunityVector } from "@/lib/opportunities/schema";
 type Axis = { key: string; label: string; user: number; role: number; weight: number; fit: number };
 
 export interface MatchResult {
-  fit: number; // 0–1 overall
+  fit: number; // 0–1 overall (gate × desire — callers may blend further)
+  gate: number; // 0–1 qualification gate, exposed so rankers can blend components
   qualification: number; // 0–1
   desire: number; // 0–1
   reasons: string[]; // strongest alignments ("why it fits")
@@ -42,8 +43,9 @@ export function scoreMatch(user: ScoringVector, opp: OpportunityVector): MatchRe
   const qualification = mean(qual.map((a) => a.fit));
   const gate = Math.min(1, qualification / 0.85); // comfortable clearance → ~1
 
-  // ---- desire: the ranker. Squared deviation so a big mismatch on something
-  // they care about bites hard; weighted by preference strength. ----
+  // ---- desire: the ranker. LINEAR deviation — the old squared softener let a
+  // 0.3 mismatch still score 0.91, which compressed the whole pool into the
+  // 90s and made the percentage meaningless. Weighted by preference strength. ----
   const alignPairs: [string, number, number][] = [
     ["building", s(user.builder_energy), s(opp.off_building)],
     ["people leadership", s(user.people_energy), s(opp.off_people_leadership)],
@@ -59,7 +61,7 @@ export function scoreMatch(user: ScoringVector, opp: OpportunityVector): MatchRe
     user: u,
     role: r,
     weight: Math.abs(u - 0.5) * 2, // how strongly they feel
-    fit: 1 - Math.abs(u - r) ** 2, // squared → strong mismatches punished
+    fit: 1 - Math.abs(u - r), // linear — every mismatch costs what it is
   }));
   // comp: they always want more; penalty is how far the role falls short, weighted
   // by how much they prioritise comp. High comp is never a "mismatch".
@@ -70,7 +72,7 @@ export function scoreMatch(user: ScoringVector, opp: OpportunityVector): MatchRe
     user: s(user.comp_priority),
     role: compLevel,
     weight: s(user.comp_priority),
-    fit: 1 - (1 - compLevel) ** 2,
+    fit: compLevel, // linear shortfall, same de-compression as the other axes
   });
   const desire = weightedMean(desireAxes);
 
@@ -96,7 +98,7 @@ export function scoreMatch(user: ScoringVector, opp: OpportunityVector): MatchRe
     .slice(0, 3)
     .map((x) => phrase(x.a, false));
 
-  return { fit, qualification, desire, reasons, gaps, breakdown };
+  return { fit, gate, qualification, desire, reasons, gaps, breakdown };
 }
 
 function phrase(a: Axis, positive: boolean): string {

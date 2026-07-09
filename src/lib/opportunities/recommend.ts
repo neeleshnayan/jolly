@@ -5,7 +5,7 @@
  */
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { certifications, education, experiences, opportunities, profiles, rankingSignals, resumeThemes } from "@/db/schema";
+import { certifications, education, experiences, insights, opportunities, profiles, rankingSignals, resumeThemes, skills } from "@/db/schema";
 import { deriveCandidateQuals, hardGate } from "./gates";
 import { applyQualOverrides } from "@/lib/profile/about";
 import { computeAndSaveScoring, getSavedScoring } from "@/lib/scoring/persist";
@@ -35,6 +35,8 @@ export type RankedJob = {
   fit: number;
   qualification: number;
   desire: number;
+  evidence: number | null; // résumé-proven skill overlap (null = role lists no skills)
+  trajectory: number | null; // toward who they're becoming (null = no direction set yet)
   novelty: number;
   building: number;
   peopleLeadership: number;
@@ -60,6 +62,40 @@ function whySummary(m: { fit: number; reasons: string[]; gaps: string[] }): stri
     return `${pct}% fit — ${r}${m.gaps.length ? `. Watch: ${m.gaps[0].toLowerCase()}` : ""}.`;
   }
   return `${pct}% fit for where you are right now.`;
+}
+
+// ---- evidence: what the résumé PROVES, not what the persona suggests ----
+// Same containment matcher as the skill radar — "data mining & modelling"
+// counts for "data mining"; "python" counts inside "python scripting".
+const normSkill = (s: unknown) => String(s ?? "").toLowerCase().trim();
+function skillEvidence(mine: string[], must: string[], nice: string[]) {
+  const have = (s: string) => mine.some((m) => m === s || m.includes(s) || s.includes(m));
+  const mustHave = must.filter(have);
+  const niceHave = nice.filter(have);
+  const mustHit = must.length ? mustHave.length / must.length : null;
+  const niceHit = nice.length ? niceHave.length / nice.length : null;
+  // a role that lists nothing gives no evidence either way → null (blend skips it)
+  if (mustHit === null && niceHit === null) return { evidence: null as number | null, missing: [] as string[], proven: 0, of: 0 };
+  // floor 0.35: a zero-overlap role sinks hard but stays visible with an honest gap
+  const evidence = mustHit !== null ? 0.35 + 0.55 * mustHit + 0.1 * (niceHit ?? mustHit) : 0.5 + 0.5 * (niceHit as number);
+  return { evidence, missing: must.filter((s) => !have(s)), proven: mustHave.length, of: must.length };
+}
+
+// ---- trajectory: does this role land closer to who they're becoming? ----
+// Direction = the target role agreed on a mentor call (strong, explicit) +
+// their latest aspiration/value insights (soft prose). Lexical overlap is a
+// heuristic — floor 0.5 so a false negative dents, never buries.
+const STOP = new Set(["the", "and", "for", "with", "that", "this", "who", "how", "their", "more", "than", "over", "across", "from", "into", "being", "want", "wants", "them", "they", "what", "when", "where", "will", "work"]);
+const contentWords = (t: string) =>
+  t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 3 && !STOP.has(w));
+function trajectoryFit(roleText: string, targetWords: string[], aspireWords: string[]): { score: number | null; targetHit: number } {
+  const targetHit = targetWords.length ? targetWords.filter((w) => roleText.includes(w)).length / targetWords.length : 0;
+  if (!targetWords.length && !aspireWords.length) return { score: null, targetHit: 0 };
+  const aspireHits = aspireWords.filter((w) => roleText.includes(w)).length;
+  const aspire = aspireWords.length ? Math.min(1, aspireHits / 4) : null;
+  const combined =
+    targetWords.length && aspire !== null ? 0.7 * targetHit + 0.3 * aspire : targetWords.length ? targetHit : (aspire as number);
+  return { score: 0.5 + 0.5 * combined, targetHit };
 }
 
 // ---- concrete refinements the user states explicitly (comp + where/how) ----
@@ -166,6 +202,30 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         })
         .catch(() => [])
     : [];
+  // the soft half of direction: their latest aspiration/value stances (the same
+  // signals the growth trajectory is built from)
+  const aspireWords: string[] = me
+    ? await db
+        .select({ dimension: insights.dimension, content: insights.content })
+        .from(insights)
+        .where(eq(insights.profileId, me.id))
+        .orderBy(desc(insights.createdAt))
+        .limit(20)
+        .then((rows) => {
+          const picks = rows.filter((r) => r.dimension === "aspiration" || r.dimension === "value").slice(0, 2);
+          return [...new Set(picks.flatMap((p) => contentWords(p.content ?? "")))];
+        })
+        .catch(() => [])
+    : [];
+  // what the résumé PROVES — the evidence half of fit
+  const mySkills: string[] = me
+    ? await db
+        .select({ name: skills.name })
+        .from(skills)
+        .where(eq(skills.profileId, me.id))
+        .then((rows) => rows.map((r) => normSkill(r.name)).filter(Boolean))
+        .catch(() => [])
+    : [];
   const visible = me
     ? or(eq(opportunities.visibility, "global"), eq(opportunities.addedByProfileId, me.id))
     : eq(opportunities.visibility, "global");
@@ -212,13 +272,37 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
       const m = scoreMatch(vec, v);
       const c = compRefine(pref, r.compMin, r.compMax, f.comp_currency ?? inferCurrency(r.location));
       const l = locationRefine(pref, r.remote, r.location);
-      // target-role boost: the call's conclusion visibly reorders the list
-      const roleText = ` ${(r.title ?? "").toLowerCase()} ${(r.domain ?? "").toLowerCase()} `;
-      const targetHit = targetWords.length ? targetWords.filter((w) => roleText.includes(w)).length / targetWords.length : 0;
-      const targetFactor = 1 + 0.12 * targetHit;
+      // evidence: the role's asked-for skills vs what the résumé proves
+      const roleSkills = [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map(normSkill).filter(Boolean))];
+      const ev = skillEvidence(mySkills, (f.must_have_skills ?? []).map(normSkill).filter(Boolean), (f.nice_to_have_skills ?? []).map(normSkill).filter(Boolean));
+      // trajectory: title+domain+summary vs the direction they're heading
+      const roleText = ` ${(r.title ?? "").toLowerCase()} ${(r.domain ?? "").toLowerCase()} ${(f.summary ?? "").toLowerCase()} ${roleSkills.join(" ")} `;
+      const traj = trajectoryFit(roleText, targetWords, aspireWords);
+      // fit = gate × blend(desire, evidence, trajectory) × concrete refinements.
+      // Weights renormalize when a component is null, so missing data never
+      // silently counts as a good (or bad) score.
+      const parts: [number, number][] = [[m.desire, 0.45]];
+      if (ev.evidence !== null) parts.push([ev.evidence, 0.35]);
+      if (traj.score !== null) parts.push([traj.score, 0.2]);
+      const core = parts.reduce((a, [x, w]) => a + x * w, 0) / parts.reduce((a, [, w]) => a + w, 0);
+      const fit = Math.min(1, m.gate * core * c.factor * l.factor * (gate.marginal?.penalty ?? 1));
       // concrete notes lead — they're the explicit knobs the user just set
-      const reasons = [targetHit >= 0.5 ? "The direction you set with your mentor" : null, c.reason, l.reason, ...m.reasons].filter(Boolean) as string[];
-      const gaps = [gate.marginal?.gap, c.gap, l.gap, ...m.gaps].filter(Boolean) as string[];
+      const reasons = [
+        traj.targetHit >= 0.5 ? "The direction you set with your mentor" : null,
+        ev.evidence !== null && ev.of > 0 && ev.proven / ev.of >= 0.7 ? `Your résumé shows ${ev.proven} of ${ev.of} required skills` : null,
+        c.reason,
+        l.reason,
+        ...m.reasons,
+      ].filter(Boolean) as string[];
+      const gaps = [
+        gate.marginal?.gap,
+        ev.evidence !== null && ev.of > 0 && ev.proven / ev.of < 0.5 && ev.missing.length
+          ? `Asks for ${ev.missing.slice(0, 3).join(", ")} — not on your résumé`
+          : null,
+        c.gap,
+        l.gap,
+        ...m.gaps,
+      ].filter(Boolean) as string[];
       // older rows predate the summary/core_requirements fields — fall back to
       // a trimmed JD slice so the card never shows a blank description
       const summary = f.summary?.trim() || (r.rawText ?? "").replace(/\s+/g, " ").trim().slice(0, 220);
@@ -238,16 +322,18 @@ export async function rankMatchesWithMeta(userId: string): Promise<RankOutcome> 
         source: r.source,
         summary,
         coreRequirements,
-        skills: [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map((s) => String(s).toLowerCase().trim()).filter(Boolean))],
-        fit: Math.min(1, m.fit * c.factor * l.factor * targetFactor * (gate.marginal?.penalty ?? 1)),
+        skills: roleSkills,
+        fit,
         qualification: m.qualification,
         desire: m.desire,
+        evidence: ev.evidence,
+        trajectory: traj.score,
         novelty: v.off_domain_novelty?.score ?? 0.3,
         building: v.off_building?.score ?? 0.5,
         peopleLeadership: v.off_people_leadership?.score ?? 0.3,
         reasons,
         gaps,
-        why: whySummary(m),
+        why: whySummary({ fit, reasons, gaps }),
       };
     })
     .filter((j): j is NonNullable<typeof j> => j !== null)
