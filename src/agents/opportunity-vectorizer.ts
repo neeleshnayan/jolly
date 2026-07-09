@@ -24,6 +24,10 @@ const PROMPT = `Read this job description and produce two things: hard FACTS (fo
 
 FACTS:
 - title, company, location, remote (onsite/hybrid/remote/unknown)
+- country: the country this role sits in, inferred from the location ("Bangalore"
+  → "India", "SF" / "New York, NY" → "United States", "London" → "United Kingdom").
+  Full country name. If fully remote with no country signal, or genuinely unclear,
+  null — never guess.
 - comp_min / comp_max (only if the JD states a range; else null)
 - comp_currency: ISO code of that range ("USD","INR","GBP","EUR") if the JD or
   its location makes it clear; else null. Never guess a symbol from habit.

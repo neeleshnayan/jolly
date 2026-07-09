@@ -240,6 +240,7 @@ export function sampleExtraction(j: SampleJob): OpportunityExtraction {
       title: j.title,
       company: j.company,
       location: j.location,
+      country: "India", // curated samples are India-based (₹)
       remote: j.remote,
       comp_min: j.compMin,
       comp_max: j.compMax,

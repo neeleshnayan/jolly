@@ -42,8 +42,10 @@ JOB DESCRIPTION:
 
 // The small model still leaks the odd duration/degree phrase or HTML crumb;
 // scrub deterministically so the chips and the wizard's add-list stay clean.
+// Exported so the ATS check can apply the SAME scrub to skills it reads straight
+// from the vectorised opportunity (must_have/nice_to_have) — one clean source.
 const DROP = /\b(years?|yrs?|experience|senior|junior|mid-?level|entry-?level|bachelor'?s?|master'?s?|phd|ph\.d|doctorate|degree|diploma|gpa)\b/i;
-function sanitize(terms: string[]): string[] {
+export function sanitize(terms: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of terms) {

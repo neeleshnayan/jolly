@@ -144,7 +144,8 @@ export default function ApplyKit({
       const r = await fetch("/api/resume/ats-check", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, jd }),
+        // opportunityId lets the server reuse the job's vectorised skills — no LLM
+        body: JSON.stringify({ userId, jd, opportunityId }),
       });
       const j = await r.json();
       if (r.ok) {

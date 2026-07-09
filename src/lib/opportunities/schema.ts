@@ -34,6 +34,10 @@ export const opportunityFacts = z.object({
   title: z.string().default(""),
   company: z.string().default(""),
   location: z.string().nullable().default(null),
+  // country the role sits in, inferred from location ("Bangalore" → "India").
+  // Enables work-authorization gating and a clean location display without
+  // re-parsing the free-text location every time.
+  country: z.string().nullable().default(null),
   remote: z.enum(["onsite", "hybrid", "remote", "unknown"]).default("unknown"),
   comp_min: z.number().nullable().default(null), // annual, in the JD's currency if stated
   comp_max: z.number().nullable().default(null),

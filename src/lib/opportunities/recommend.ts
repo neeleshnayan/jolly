@@ -21,6 +21,7 @@ export type RankedJob = {
   title: string | null;
   company: string | null;
   location: string | null;
+  country: string | null; // extraction's country, else inferred from location
   remote: string | null;
   compMin: number | null;
   compMax: number | null;
@@ -330,6 +331,7 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
         title: r.title,
         company: r.company,
         location: r.location,
+        country: (f.country as string | null) ?? null, // populated by the (re-)vectorise pass
         remote: r.remote,
         compMin: r.compMin,
         compMax: r.compMax,

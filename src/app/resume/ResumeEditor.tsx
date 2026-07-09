@@ -460,7 +460,7 @@ export default function ResumeEditor({
           setJobOpen(true);
           setTargetJob({ title: kit.job.title ?? null, company: kit.job.company ?? null });
           setTargetJobId(id);
-          void checkAts(kit.job.jd);
+          void checkAts(kit.job.jd, id); // stored job → reuse its vectorised skills
         }
       } catch {
         /* editor still opens; just not pre-aimed */
@@ -515,7 +515,7 @@ export default function ResumeEditor({
     a.click();
     URL.revokeObjectURL(a.href);
   }
-  async function checkAts(explicitJd?: string) {
+  async function checkAts(explicitJd?: string, oppId?: string) {
     const jdText = (explicitJd ?? jd).trim();
     if (!jdText) return;
     setAtsBusy(true);
@@ -524,7 +524,10 @@ export default function ResumeEditor({
       const r = await fetch("/api/resume/ats-check", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, jd: jdText }),
+        // pass opportunityId ONLY when checking a stored job's own JD (the
+        // handoff) so the server reuses its vectorised skills with no LLM; a
+        // pasted/edited JD sends none and runs the on-demand extractor
+        body: JSON.stringify({ userId, jd: jdText, ...(oppId ? { opportunityId: oppId } : {}) }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Check failed");
