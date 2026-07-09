@@ -14,8 +14,9 @@ const BASE = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
 // near-identical for English — "plenty of horsepower" without the heaviest model.
 // (OpenRouter has no hosted "medium"; turbo is the right light equivalent.)
 const STT_MODEL = process.env.OPENROUTER_STT_MODEL ?? "openai/whisper-large-v3-turbo";
-const TTS_MODEL = process.env.OPENROUTER_TTS_MODEL ?? "hexgrad/kokoro-82m";
-const TTS_VOICE = process.env.OPENROUTER_TTS_VOICE ?? "am_michael";
+// grok-voice-tts: warm, expressive, ~3-4s. Named voices: Eve, Ara, Rex, Sal, Leo.
+const TTS_MODEL = process.env.OPENROUTER_TTS_MODEL ?? "x-ai/grok-voice-tts-1.0";
+const TTS_VOICE = process.env.OPENROUTER_TTS_VOICE ?? "Leo";
 
 function authKey(): string {
   const k = process.env.OPENROUTER_API_KEY;
