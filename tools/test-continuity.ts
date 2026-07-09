@@ -85,6 +85,20 @@ async function main() {
   );
   assert("day granularity inside one month", sameMonth.length === 2 && /8 Jul/.test(sameMonth[0].period));
 
+  // the timing channel (pure): strong deviations noted, quiet turns silent
+  const { timingNote, parseTiming } = await import("@/lib/voice/timing");
+  const slow = timingNote({ answerDelaySec: 8.2, speechSec: 10, barged: false }, "I guess I just feel stuck and unsure");
+  assert("long silence noted", slow.includes("8 seconds") && slow.startsWith("[how they said it:"));
+  assert("slow delivery noted", /slowly/.test(slow));
+  const quick = timingNote({ answerDelaySec: 0.8, speechSec: 3, barged: false }, "yes absolutely I already talked to them twice about it and loved it");
+  assert("energetic answer noted", /fast|energy/.test(quick));
+  const normal = timingNote({ answerDelaySec: 1.2, speechSec: 5, barged: false }, "I spent most of my time on the data platform work there");
+  assert("normal turn gets NO note", normal === "");
+  const barge = timingNote({ answerDelaySec: null, speechSec: 2, barged: true }, "wait no");
+  assert("barge-in noted", /jumped in/.test(barge));
+  assert("garbage timing parses to null", parseTiming("not json") === null && parseTiming(undefined) === null);
+  assert("prompt coaches tone-not-numbers", prompt.includes("how they said it") && prompt.includes("NEVER mention the note"));
+
   // ---- 2. capability seam against the real pool (read-only) ----
   // dynamic: name the user's CURRENT top match, so the test survives pool churn
   const userId = "80f8584f-99b0-403e-82e5-fa4d1cee9eb2";

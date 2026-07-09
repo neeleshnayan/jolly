@@ -120,6 +120,11 @@ export default function MentorCall({ userId }: { userId: string }) {
   const busyRef = useRef(false);
   const speakingRef = useRef(false);
   const speechStartRef = useRef(0);
+  // timing channel: WHEN they speak carries meaning the transcript loses —
+  // an 8-second silence before "I guess..." is half the message. Captured
+  // here (no ML), summarized server-side, fed to the mentor as a tone note.
+  const promptEndRef = useRef(0); // when the mentor's voice finished
+  const turnMetaRef = useRef<{ answerDelaySec: number | null; speechSec: number | null; barged: boolean }>({ answerDelaySec: null, speechSec: null, barged: false });
   const lastVoiceRef = useRef(0);
   // conversation
   const turnsRef = useRef<Turn[]>([]);
@@ -386,6 +391,7 @@ export default function MentorCall({ userId }: { userId: string }) {
     };
     const done = () => {
       setRevealFrac(1);
+      promptEndRef.current = performance.now(); // the answer-delay clock starts now
       if (pendingEndRef.current) {
         pendingEndRef.current = false;
         endSessionRef.current(); // the mentor's closing line just finished
@@ -486,6 +492,7 @@ export default function MentorCall({ userId }: { userId: string }) {
         if (++bargeCountRef.current >= BARGE_FRAMES) {
           bargeCountRef.current = 0;
           audioRef.current?.pause();
+          turnMetaRef.current = { answerDelaySec: null, speechSec: null, barged: true }; // they took the floor
           beginRecording(now);
         }
       } else {
@@ -497,6 +504,12 @@ export default function MentorCall({ userId }: { userId: string }) {
       if (voiced) lastVoiceRef.current = now;
       if (now - lastVoiceRef.current >= SILENCE_HANG_MS) endRecording(now);
     } else if (voiced) {
+      // normal turn-taking: how long they sat with the question before speaking
+      turnMetaRef.current = {
+        answerDelaySec: promptEndRef.current ? Math.round(((now - promptEndRef.current) / 1000) * 10) / 10 : null,
+        speechSec: null,
+        barged: false,
+      };
       beginRecording(now);
     }
   }
@@ -537,6 +550,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       setStatus("Listening — just start talking.");
       return;
     }
+    turnMetaRef.current.speechSec = Math.round(((now - speechStartRef.current) / 1000) * 10) / 10;
     try {
       mr.stop(); // → onstop → submitTurn
     } catch {}
@@ -566,6 +580,7 @@ export default function MentorCall({ userId }: { userId: string }) {
         ? Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000))
         : limitRef.current; // clock not started yet — report a full tank
       fd.append("secondsLeft", String(secondsLeft));
+      fd.append("timing", JSON.stringify(turnMetaRef.current)); // HOW they spoke, not what they said
       fd.append("brain", brainRef.current); // debug A/B — server ignores unless dev/admin
       const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
       const json = await res.json();
@@ -715,6 +730,14 @@ export default function MentorCall({ userId }: { userId: string }) {
     setLive(true);
     enter("thinking");
     setStatus("Getting your mentor on the line…");
+    // a fresh call starts with a clean stage — cards revealed LAST call must
+    // not carry over (the component survives between calls on this page)
+    setRoleCards(null);
+    setMentorCards(null);
+    setIntroState({});
+    spectrumRef.current = [];
+    circleRef.current = [];
+    promptEndRef.current = 0;
     vadTimerRef.current = window.setInterval(vadTick, POLL_MS);
 
     // silently pre-load the 3-role spectrum; it's revealed only if the mentor

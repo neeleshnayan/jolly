@@ -7,6 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { transcribe } from "@/lib/voice/voicebox";
+import { parseTiming, timingNote } from "@/lib/voice/timing";
 import { mentorTurn } from "@/agents/mentor/turn";
 import { requireAdmin } from "@/lib/auth/admin";
 import { resolveUserId } from "@/lib/auth/user";
@@ -56,7 +57,11 @@ export async function POST(req: Request) {
     // 2. text -> mentor reply (collect the streamed turn). The audio is streamed
     // separately via /api/voice/stream so playback starts as soon as the reply
     // is ready, instead of waiting for the whole clip.
-    const messages: ChatMessage[] = [...history, { role: "user", content: userText }];
+    // The timing channel rides ONLY the current turn (history stays clean):
+    // a strong deviation — long silence, slow/fast delivery, a barge-in —
+    // becomes a one-line tone note ahead of the transcript.
+    const note = timingNote(parseTiming(form.get("timing")), userText);
+    const messages: ChatMessage[] = [...history, { role: "user", content: `${note}${userText}` }];
     let replyText = "";
     for await (const delta of mentorTurn({ userId: resolvedUserId, messages, secondsLeft, brain })) replyText += delta;
     replyText = replyText.trim();
