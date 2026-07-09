@@ -952,6 +952,25 @@ a { color: var(--accent); }
 .dash-hint { font-size: 12px; color: var(--muted); }
 .dash-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
 .dash-empty.small { padding: 2px 0; font-size: 12.5px; }
+
+/* ---- drizzle loader: the brand droplet filling with liquid (DrizzleLoader.tsx) ---- */
+.drizzle-loader { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; }
+.drizzle-loader.row { flex-direction: row; gap: 9px; padding: 2px 0; }
+.drizzle-loader-mark { display: block; overflow: visible; }
+.drizzle-loader-label { color: var(--muted); font-size: 13px; text-align: center; }
+.dl-back { fill: #c15f3c; opacity: 0.14; }
+.dl-outline { fill: none; stroke: #c15f3c; stroke-width: 6; }
+.dl-liquid { fill: #c15f3c; animation: dl-fill 2.2s ease-in-out infinite; }
+.dl-group { transform-box: fill-box; transform-origin: 50% 62%; animation: dl-pulse 2.2s ease-in-out infinite; }
+.dl-drip { fill: #c15f3c; opacity: 0; animation: dl-drip 2.2s ease-in infinite; }
+@keyframes dl-fill { 0% { transform: translateY(120px); } 55% { transform: translateY(6px); } 100% { transform: translateY(120px); } }
+@keyframes dl-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
+@keyframes dl-drip { 0%, 62% { transform: translateY(0); opacity: 0; } 72% { opacity: 0.9; } 100% { transform: translateY(46px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .dl-liquid { animation: none; transform: translateY(46px); }
+  .dl-group, .dl-drip { animation: none; }
+  .dl-drip { opacity: 0; }
+}
 .app-new { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .f-box {
   font: inherit;

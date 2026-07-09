@@ -12,6 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import AtsRing from "../AtsRing";
+import DrizzleLoader from "../DrizzleLoader";
 
 type Answer = { key: string; label: string; value: string | null };
 type Kit = {
@@ -235,7 +236,7 @@ export default function ApplyKit({
         <p className="applykit-sub">The form is open in the next tab — everything you need is staged here. You review, you submit.</p>
 
         {err && <div className="ai-err">{err}</div>}
-        {!kit && !err && <p className="dash-empty">Staging your pack…</p>}
+        {!kit && !err && <DrizzleLoader label="Staging your pack…" />}
 
         {kit && (
           <div className="applykit-panes">
@@ -300,7 +301,7 @@ export default function ApplyKit({
 
                   {/* diagnostics: two honest dials on the same document */}
                   <div className="applykit-diag">
-                    {atsBusy && !ats && <p className="dash-empty">Reading this résumé the way the screening robot will…</p>}
+                    {atsBusy && !ats && <DrizzleLoader row size={26} label="Reading this résumé the way the screening robot will…" />}
                     {ats && (
                       <div className="diag-dial">
                         <AtsRing score={simulated.size ? simScore : ats.score} />

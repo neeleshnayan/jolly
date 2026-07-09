@@ -5,6 +5,7 @@ import { formatComp } from "@/lib/format/comp";
 import { displayCompany } from "@/lib/format/company";
 import ApplyKit from "./ApplyKit";
 import SkillMap from "../SkillMap";
+import DrizzleLoader from "../DrizzleLoader";
 
 type Job = {
   id: string;
@@ -248,7 +249,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     return (
       <section className="dash-section">
         <div className="dash-section-head"><h2>Recommended for you</h2></div>
-        <p className="dash-empty">Finding roles that fit…</p>
+        <DrizzleLoader label="Finding roles that fit…" />
       </section>
     );
   }

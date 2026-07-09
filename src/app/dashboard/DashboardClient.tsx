@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Recommendations from "./Recommendations";
+import DrizzleLoader from "../DrizzleLoader";
 import Brand from "../Brand";
 import UserChip from "../UserChip";
 
@@ -84,7 +85,7 @@ function MentorStrip({ userId }: { userId: string }) {
         <a className="refine-toggle" href="/mentors">Open Mentor Connect →</a>
       </div>
       {matches === null ? (
-        <p className="dash-empty">Finding people who&apos;ve walked your path…</p>
+        <DrizzleLoader label="Finding people who've walked your path…" />
       ) : matches.length === 0 ? (
         <p className="dash-empty">No mentors to connect yet — the circle is still forming. Know someone who&apos;s made your move? Invite them via Mentor Connect.</p>
       ) : (
