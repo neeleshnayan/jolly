@@ -35,12 +35,7 @@ const STRONG = arg("strong") ?? "gemma3:27b";
 const LIMIT = arg("limit") ? Number(arg("limit")) : Infinity;
 const BATCH = 5;
 
-type Facts = { must_have_skills?: string[]; summary?: string };
-/** A usable extraction: the fast model routinely writes a good summary but drops
- *  the skills arrays — skills are what ATS/ranking need, so that's the gate. */
-function complete(f: Facts): boolean {
-  return (f.must_have_skills?.length ?? 0) > 0 && (f.summary?.trim().length ?? 0) > 20;
-}
+type Facts = { must_have_skills?: string[]; nice_to_have_skills?: string[]; summary?: string };
 
 async function main() {
   loadEnvLocal();
@@ -54,6 +49,19 @@ async function main() {
   const { getProvider } = await import("@/llm");
   const { VECTORIZE_PROMPT, vectorizeJsonSchema } = await import("@/agents/opportunity-vectorizer");
   const { opportunityExtraction } = await import("@/lib/opportunities/schema");
+  const { sanitize } = await import("@/agents/jd-keywords");
+
+  // scrub the model's skills (drops sentences/traits/degree/duration; a 55-char
+  // cap keeps compound skills like "Advanced Retrieval Augmented Generation").
+  // Mutates facts to the clean lists and returns the surviving must-skill count —
+  // <2 means the fast model gave mostly junk, so escalate to the strong model.
+  function cleanSkills(facts: Facts): number {
+    const must = sanitize(facts.must_have_skills ?? [], 55);
+    facts.must_have_skills = must;
+    facts.nice_to_have_skills = sanitize(facts.nice_to_have_skills ?? [], 55);
+    return must.length;
+  }
+  const summaryOk = (f: Facts) => (f.summary?.trim().length ?? 0) > 20;
 
   const provider = getProvider("vectorize");
   const schema = vectorizeJsonSchema();
@@ -116,14 +124,15 @@ async function main() {
       processed++;
       try {
         const out = await runOne(row, FAST);
-        if (complete(out.facts)) {
+        const clean = cleanSkills(out.facts as Facts); // scrub + count real skills
+        if (clean >= 2 && summaryOk(out.facts as Facts)) {
           await write(row, out, FAST);
           done1++;
-          console.log(`  ✓ ${row.title} — ${out.facts.must_have_skills?.length ?? 0} skills`);
+          console.log(`  ✓ ${row.title} — ${clean} skills`);
         } else {
           await db.update(opportunities).set({ needsStrongPass: true }).where(eq(opportunities.id, row.id));
           escalated++;
-          console.log(`  ↑ ${row.title} — incomplete, escalated`);
+          console.log(`  ↑ ${row.title} — ${clean} clean skills, escalated`);
         }
       } catch (e) {
         await db.update(opportunities).set({ needsStrongPass: true }).where(eq(opportunities.id, row.id));
@@ -151,9 +160,10 @@ async function main() {
       processed2++;
       try {
         const out = await runOne(row, STRONG);
+        const clean = cleanSkills(out.facts as Facts); // scrub the strong model's skills too
         await write(row, out, STRONG); // write clears needs_strong_pass
         done2++;
-        console.log(`  ✓ ${row.title} — ${out.facts.must_have_skills?.length ?? 0} skills`);
+        console.log(`  ✓ ${row.title} — ${clean} skills`);
       } catch (e) {
         failed2++;
         console.log(`  ! ${row.title} — ${(e as Error).message.slice(0, 60)} (stays flagged, retried next run)`);

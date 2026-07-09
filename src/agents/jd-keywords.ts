@@ -45,14 +45,14 @@ JOB DESCRIPTION:
 // Exported so the ATS check can apply the SAME scrub to skills it reads straight
 // from the vectorised opportunity (must_have/nice_to_have) — one clean source.
 const DROP = /\b(years?|yrs?|experience|senior|junior|mid-?level|entry-?level|bachelor'?s?|master'?s?|phd|ph\.d|doctorate|degree|diploma|gpa)\b/i;
-export function sanitize(terms: string[]): string[] {
+export function sanitize(terms: string[], maxLen = 40): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of terms) {
     // preserve canonical casing (these go onto résumés) — matching lowercases
     // separately in the ATS check; only DEDUP is case-insensitive here
     const t = raw.replace(/<[^>]*>/g, "").replace(/["&]/g, "").replace(/\s+/g, " ").trim();
-    if (t.length < 2 || t.length > 40) continue; // empties, sentences
+    if (t.length < 2 || t.length > maxLen) continue; // empties, sentences
     if (DROP.test(t)) continue; // duration/seniority/education → screened elsewhere
     if (/^[\d+.\s-]+$/.test(t)) continue; // "5+", "3-5" and other bare numbers
     const key = t.toLowerCase();
