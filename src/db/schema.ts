@@ -470,6 +470,9 @@ export const coverLetters = pgTable("cover_letters", {
   label: text("label"),
   content: text("content").notNull(),
   jd: text("jd"), // the job it targets, if any
+  // the opportunity this letter was written for — so Apply Kit shows THIS job's
+  // letter, never the newest one written for a different role. Null = general.
+  opportunityId: uuid("opportunity_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

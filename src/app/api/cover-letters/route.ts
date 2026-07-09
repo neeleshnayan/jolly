@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { u?: string; content?: string; label?: string; jd?: string };
+  const body = (await req.json().catch(() => ({}))) as { u?: string; content?: string; label?: string; jd?: string; opportunityId?: string };
   const userId = await resolveUserId(body.u);
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const content = (body.content ?? "").trim();
@@ -40,7 +40,13 @@ export async function POST(req: NextRequest) {
   if (!pid) return NextResponse.json({ error: "No profile" }, { status: 404 });
   const [row] = await db
     .insert(coverLetters)
-    .values({ profileId: pid, content, label: body.label?.slice(0, 80) || null, jd: body.jd?.slice(0, 12000) || null })
+    .values({
+      profileId: pid,
+      content,
+      label: body.label?.slice(0, 80) || null,
+      jd: body.jd?.slice(0, 12000) || null,
+      opportunityId: typeof body.opportunityId === "string" ? body.opportunityId : null,
+    })
     .returning({ id: coverLetters.id });
   return NextResponse.json({ ok: true, id: row.id });
 }

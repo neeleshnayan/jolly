@@ -9,7 +9,7 @@
  * EEOC/demographic questions are none of our business — never staged.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { coverLetters, opportunities, profiles } from "@/db/schema";
 import { resolveUserId } from "@/lib/auth/user";
@@ -40,12 +40,22 @@ export async function GET(req: NextRequest) {
 
     const [about, [letter], job] = await Promise.all([
       getAboutFacts(userId),
-      db
-        .select({ content: coverLetters.content, label: coverLetters.label })
-        .from(coverLetters)
-        .where(eq(coverLetters.profileId, p.id))
-        .orderBy(desc(coverLetters.createdAt))
-        .limit(1),
+      // THIS job's letter only — never the newest letter written for a different
+      // role. No letter for this opportunity → null → the drawer offers to write
+      // one. (A general letter, opportunityId null, is not shown against a job.)
+      opportunityId
+        ? db
+            .select({ content: coverLetters.content, label: coverLetters.label })
+            .from(coverLetters)
+            .where(and(eq(coverLetters.profileId, p.id), eq(coverLetters.opportunityId, opportunityId)))
+            .orderBy(desc(coverLetters.createdAt))
+            .limit(1)
+        : db
+            .select({ content: coverLetters.content, label: coverLetters.label })
+            .from(coverLetters)
+            .where(eq(coverLetters.profileId, p.id))
+            .orderBy(desc(coverLetters.createdAt))
+            .limit(1),
       opportunityId
         ? db
             .select({ title: opportunities.title, company: opportunities.company, url: opportunities.url, rawText: opportunities.rawText })

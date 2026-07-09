@@ -53,6 +53,8 @@ const DEFAULT_STYLE: StyleConfig = {
 function RedesignWizard({
   targets,
   missingSkills,
+  jobGaps,
+  jobLabel,
   tips,
   tipsLoading,
   onClose,
@@ -60,6 +62,11 @@ function RedesignWizard({
 }: {
   targets: { id: string; title: string | null; company: string | null }[];
   missingSkills: { skill: string; demand: number }[];
+  // when the editor is aimed at a specific job, these are the keywords THAT
+  // role's screen wants and the résumé doesn't show — far more relevant than
+  // the market-wide radar. Falls back to missingSkills when absent.
+  jobGaps?: { term: string; kind: "required" | "preferred" }[];
+  jobLabel?: string | null;
   tips: { text: string; entryLabel: string | null }[] | null;
   tipsLoading: boolean;
   onClose: () => void;
@@ -127,7 +134,20 @@ function RedesignWizard({
 
         {step === 2 && (
           <div className="wizard-body">
-            {missingSkills.length === 0 ? (
+            {jobGaps && jobGaps.length > 0 ? (
+              <>
+                <p className="wizard-note">
+                  These are the keywords <b>{jobLabel || "this role"}</b>&apos;s screen looks for that your résumé doesn&apos;t show yet.
+                  Tick <b>only what&apos;s genuinely yours</b> — ticking adds it to your Skills and lets the rewrite use the term. Nothing is ever added for you.
+                </p>
+                {jobGaps.map((g) => (
+                  <label key={g.term} className={`wizard-option${pickedSkills.has(g.term) ? " on" : ""}`}>
+                    <input type="checkbox" checked={pickedSkills.has(g.term)} onChange={() => setPickedSkills((p) => toggle(p, g.term))} />
+                    <span><b>{g.term}</b> <span className="wizard-dim">· {g.kind === "required" ? "required by this role" : "preferred"}</span></span>
+                  </label>
+                ))}
+              </>
+            ) : missingSkills.length === 0 ? (
               <p className="dash-empty">No gaps — your résumé already shows every skill your matches keep asking for.</p>
             ) : (
               <>
@@ -395,6 +415,7 @@ export default function ResumeEditor({
   const [jd, setJd] = useState("");
   // handoff from the Apply Kit's Edit: /resume?job=<id> aims the panel at that role
   const [targetJob, setTargetJob] = useState<{ title: string | null; company: string | null } | null>(null);
+  const [targetJobId, setTargetJobId] = useState<string | null>(null); // stamps letters saved while aimed here
   const [letter, setLetter] = useState<{ text: string; hooks: string[] } | null>(null);
   const [letterBusy, setLetterBusy] = useState(false);
   const [letterErr, setLetterErr] = useState("");
@@ -438,6 +459,7 @@ export default function ResumeEditor({
           setJd(kit.job.jd);
           setJobOpen(true);
           setTargetJob({ title: kit.job.title ?? null, company: kit.job.company ?? null });
+          setTargetJobId(id);
           void checkAts(kit.job.jd);
         }
       } catch {
@@ -457,7 +479,7 @@ export default function ResumeEditor({
       const r = await fetch("/api/cover-letters", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ u: userId, content: letterText, label, jd: jd.trim() || undefined }),
+        body: JSON.stringify({ u: userId, content: letterText, label, jd: jd.trim() || undefined, opportunityId: targetJobId ?? undefined }),
       });
       const j = await r.json();
       if (r.ok) setLetterVersions((v) => [{ id: j.id, label, content: letterText, createdAt: new Date().toISOString() }, ...v]);
@@ -930,7 +952,7 @@ export default function ResumeEditor({
             const sv = await fetch("/api/cover-letters", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ u: userId, content: j.letter, label, jd: jdText || undefined }),
+              body: JSON.stringify({ u: userId, content: j.letter, label, jd: jdText || undefined, opportunityId: cfg.opportunityId }),
             })
               .then((x) => x.json())
               .catch(() => null);
@@ -2000,6 +2022,15 @@ export default function ResumeEditor({
         <RedesignWizard
           targets={targetOptions}
           missingSkills={liveRadar.filter((r) => !r.have)}
+          jobGaps={
+            ats
+              ? [
+                  ...ats.required.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "required" as const })),
+                  ...ats.preferred.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "preferred" as const })),
+                ].slice(0, 10)
+              : undefined
+          }
+          jobLabel={targetJob?.title ?? null}
           tips={tips?.filter((t) => !t.applied) ?? null}
           tipsLoading={tipsState === "loading"}
           onClose={() => setWizardOpen(false)}

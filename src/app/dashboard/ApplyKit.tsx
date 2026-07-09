@@ -187,11 +187,30 @@ export default function ApplyKit({
       if (r.ok && j.letter) {
         setLetterText(j.letter);
         setLetterHooks(j.hooks ?? []); // the WHY behind the letter, shown above it
+        // remember it against THIS job so reopening the kit shows it, not a redraft
+        const label = kit.job.title ? `For ${kit.job.title}` : "For this job";
+        void fetch("/api/cover-letters", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ u: userId, content: j.letter, label, jd: kit.job.jd, opportunityId }),
+        }).catch(() => {});
       }
     } finally {
       setLetterBusy(false);
     }
   }
+
+  // The kit's promise is "everything staged." We no longer prefill a letter
+  // written for another job, so the first time the user opens the Cover-letter
+  // tab with nothing saved for THIS role, draft it now (lazily — never on kit
+  // open, so we don't spend a model call on a tab they may never visit).
+  const [letterAutoTried, setLetterAutoTried] = useState(false);
+  useEffect(() => {
+    if (docTab !== "letter" || letterAutoTried) return;
+    setLetterAutoTried(true);
+    if (!letterText && !letterBusy && kit?.job?.jd) void generateLetter();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docTab]);
 
   // letterhead built from the answers already staged — makes the draft read as
   // a real letter (name + contact + date), not a naked block of body text
