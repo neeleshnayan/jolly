@@ -51,16 +51,37 @@ export async function fetchPublic(rawUrl: string, init?: RequestInit & { maxHops
   return null; // hop limit or a hop resolved to a private target
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  mdash: "—", ndash: "–", hellip: "…", rsquo: "'", lsquo: "'",
+  rdquo: '"', ldquo: '"', times: "×", trade: "™", reg: "®", copy: "©",
+};
+
+/** Decode HTML entities — named (&quot; &lt; &amp;…), decimal (&#39;) and hex
+ *  (&#x2019;). JD sources (greenhouse especially) are riddled with these. */
+export function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&([a-z]+);/gi, (m, name) => NAMED_ENTITIES[name.toLowerCase()] ?? m);
+}
+
+/** HTML → readable text: drop script/style, decode entities, THEN strip tags
+ *  (decode first so entity-encoded tags like &lt;div&gt; also get removed). */
 export const strip = (html: string) =>
-  html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+  decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " "),
+  )
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&#\d+;/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+/** Clean a JD that may ALREADY be stored with tags/entities (older rows,
+ *  samples) — safe to run on plain text too. Use before display AND before
+ *  keyword extraction so both see readable prose, not markup. */
+export const cleanJd = (text: string): string => (text ? strip(text) : "");
 
 export function looksLikeCode(text: string): boolean {
   const sample = text.slice(0, 4000);

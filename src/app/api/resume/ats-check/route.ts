@@ -12,6 +12,7 @@ import { jdKeywordExtractor } from "@/agents/jd-keywords";
 import { getFullProfile } from "@/lib/profile/read";
 import { buildProfileText } from "@/lib/scoring/profileText";
 import { resolveUserId } from "@/lib/auth/user";
+import { cleanJd } from "@/lib/jobs/jd";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -34,7 +35,9 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as { userId?: string; jd?: string };
     const userId = await resolveUserId(body.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-    const jd = typeof body.jd === "string" ? body.jd.trim().slice(0, 12000) : "";
+    // decode/strip any HTML the JD arrived with — a pasted or stored JD full of
+    // &quot;/<div> noise otherwise poisons keyword extraction
+    const jd = typeof body.jd === "string" ? cleanJd(body.jd).slice(0, 12000) : "";
     if (jd.length < 80) return NextResponse.json({ error: "Paste the full job description first" }, { status: 400 });
 
     const full = await getFullProfile(userId);

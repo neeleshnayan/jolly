@@ -14,6 +14,7 @@ import { db } from "@/db";
 import { coverLetters, opportunities, profiles } from "@/db/schema";
 import { resolveUserId } from "@/lib/auth/user";
 import { getAboutFacts } from "@/lib/profile/about";
+import { cleanJd } from "@/lib/jobs/jd";
 
 export const runtime = "nodejs";
 
@@ -87,7 +88,9 @@ export async function GET(req: NextRequest) {
       ok: true,
       answers,
       letter: letter ? { content: letter.content, label: letter.label } : null,
-      job: job ? { title: job.title, company: job.company, url: job.url, jd: (job.rawText ?? "").slice(0, 6000) } : null,
+      // clean the JD so both the readable panel and the ATS extractor see
+      // prose, not the HTML/entity noise some sources (greenhouse) store
+      job: job ? { title: job.title, company: job.company, url: job.url, jd: cleanJd(job.rawText ?? "").slice(0, 6000) } : null,
     });
   } catch (err) {
     console.error("[/api/apply-kit]", err);
