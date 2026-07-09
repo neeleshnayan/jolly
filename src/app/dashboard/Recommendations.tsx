@@ -314,10 +314,10 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
       <div className="rec-list">
         {top.map((j) => (
           <div className="rec-card" key={j.id}>
-            <DropletFit fit={j.fit} />
-
-            <div className="rec-main">
-              <div className="rec-title-row">
+            <div className="rec-head">
+              <DropletFit fit={j.fit} />
+              <div className="rec-head-main">
+                <div className="rec-title-row">
                 <div>
                   <div className="rec-title">{j.title}</div>
                   <div className="rec-co">{displayCompany(j.company)}</div>
@@ -330,7 +330,20 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                 </span>
               </div>
 
-              <div className="rec-facts">
+              {(j.reasons.length > 0 || j.gaps.length > 0) && (
+                <div className="rec-chips rec-chips-top">
+                  {j.reasons.slice(0, 3).map((r, i) => (
+                    <span className="rec-chip good" key={`r${i}`}><span className="rec-chip-ic">✓</span>{r}</span>
+                  ))}
+                  {j.gaps.slice(0, 1).map((g, i) => (
+                    <span className="rec-chip gap" key={`g${i}`}><span className="rec-chip-ic">!</span>{g}</span>
+                  ))}
+                </div>
+              )}
+              </div>
+            </div>
+
+            <div className="rec-facts">
                 {formatComp(j.compMin, j.compMax, j.location, j.compCurrency) && (
                   <div className="rec-fact">
                     <span className="rec-fact-label">Comp</span>
@@ -370,16 +383,6 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                 </div>
               )}
 
-              {(j.reasons.length > 0 || j.gaps.length > 0) && (
-                <div className="rec-chips">
-                  {j.reasons.slice(0, 3).map((r, i) => (
-                    <span className="rec-chip good" key={`r${i}`}>{r}</span>
-                  ))}
-                  {j.gaps.slice(0, 1).map((g, i) => (
-                    <span className="rec-chip gap" key={`g${i}`}>{g}</span>
-                  ))}
-                </div>
-              )}
               {j.url && (
                 <div className="rec-apply-row">
                   <a className="rec-apply" href={j.url} target="_blank" rel="noopener noreferrer" onClick={() => onApplyClick(j.id, j.title)}>
@@ -400,7 +403,6 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                   )}
                 </div>
               )}
-            </div>
           </div>
         ))}
       </div>

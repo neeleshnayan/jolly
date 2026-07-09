@@ -36,8 +36,10 @@
 [data-theme="dark"] .rec-card { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
 /* green fit-ring + chips: swap pastel tints for deep tints in dark */
 [data-theme="dark"] .rec-fit { background: #10241a; border-color: #1d4230; }
-[data-theme="dark"] .rec-chip.good { background: #10241a; color: #6ee7a0; }
-[data-theme="dark"] .rec-chip.gap { background: #2b1d10; color: #f0b26a; }
+[data-theme="dark"] .rec-chip.good { background: rgba(166,192,131,0.13); color: #B6CE95; border-color: rgba(166,192,131,0.24); }
+[data-theme="dark"] .rec-chip.good .rec-chip-ic { background: rgba(166,192,131,0.22); color: #B6CE95; }
+[data-theme="dark"] .rec-chip.gap { background: rgba(219,164,65,0.13); color: #E0B45C; border-color: rgba(219,164,65,0.26); }
+[data-theme="dark"] .rec-chip.gap .rec-chip-ic { background: rgba(219,164,65,0.22); color: #E0B45C; }
 /* pale accent tints use color-mix(var(--accent) N%, var(--paper)) throughout —
    they derive from the theme's own tokens, so dark mode gets deep tints for free */
 
@@ -1580,16 +1582,17 @@ a.start-tile:hover { border-color: var(--accent); }
 
 .rec-list { display: flex; flex-direction: column; gap: 12px; }
 .rec-card {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
+  display: block;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px 18px;
+  border-radius: 16px;
+  padding: 20px 22px;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
-.rec-card:hover { border-color: #cdd8ea; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05); }
+.rec-card:hover { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05); }
+/* header band: droplet fit + title/company + reason chips (full-width body below) */
+.rec-head { display: flex; gap: 18px; align-items: flex-start; }
+.rec-head-main { min-width: 0; flex: 1; }
 .rec-fit {
   flex: 0 0 auto;
   width: 58px;
@@ -1621,19 +1624,16 @@ a.start-tile:hover { border-color: var(--accent); }
 
 /* fact strip — separate small boxes for comp / location / work style / stage,
    instead of one run-on line, so each is scannable at a glance */
-.rec-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+/* the 4 facts as one even, well-spaced bordered band (job-card design) */
+.rec-facts { display: flex; flex-wrap: wrap; margin-top: 15px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .rec-fact {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  min-width: 76px;
+  flex: 1; min-width: 132px; padding: 11px 16px;
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 4px;
 }
-.rec-fact-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.rec-fact-value { font-size: 13px; font-weight: 600; color: var(--ink); }
+.rec-fact:last-child { border-right: none; }
+.rec-fact-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.rec-fact-value { font-size: 14px; font-weight: 600; color: var(--ink); }
 
 .rec-summary { font-size: 13.5px; color: var(--ink); line-height: 1.55; margin-top: 12px; }
 
@@ -1643,7 +1643,8 @@ a.start-tile:hover { border-color: var(--accent); }
 .rec-reqs li { font-size: 12.5px; color: var(--ink); line-height: 1.6; }
 
 .rec-why { font-size: 13.5px; color: var(--ink); margin-top: 10px; line-height: 1.5; padding-top: 10px; border-top: 1px solid var(--line); }
-.rec-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.rec-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.rec-chips-top { margin-top: 14px; }
 .rec-apply {
   display: inline-block;
   margin-top: 12px;
@@ -1971,9 +1972,12 @@ a.start-tile:hover { border-color: var(--accent); }
 .refine-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
 .refine-note { font-size: 12px; color: var(--muted); }
 @media (max-width: 560px) { .refine-grid { grid-template-columns: 1fr; } }
-.rec-chip { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; }
-.rec-chip.good { background: #f0fdf4; color: #15803d; border: 1px solid #dcfce7; }
-.rec-chip.gap { background: #fffbeb; color: #b45309; border: 1px solid #fef3c7; }
+.rec-chip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; padding: 6px 12px 6px 8px; border-radius: 999px; }
+.rec-chip-ic { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 4px; font-size: 10px; font-weight: 800; flex-shrink: 0; }
+.rec-chip.good { background: #EFF1E9; color: #4E6642; border: 1px solid #CBD8BC; }
+.rec-chip.good .rec-chip-ic { background: #CBD8BC; color: #3F5334; }
+.rec-chip.gap { background: #F6EFE0; color: #93692B; border: 1px solid #E7CFA6; }
+.rec-chip.gap .rec-chip-ic { background: #E7CFA6; color: #7A551F; }
 
 /* signed-in chip (topbars) */
 .user-chip { position: relative; display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink); }
