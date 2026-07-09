@@ -37,6 +37,7 @@ const AVAIL_LABEL: Record<string, string> = { occasionally: "Occasionally", "par
 
 export default function MentorsClient({ userId }: { userId: string }) {
   const [me, setMe] = useState<MentorMe>(null);
+  const [identity, setIdentity] = useState<{ name: string | null; avatarUrl: string | null }>({ name: null, avatarUrl: null });
   const [matches, setMatches] = useState<Match[]>([]);
   const [edge, setEdge] = useState<Edge>(null);
   const [prebrief, setPrebrief] = useState("");
@@ -44,6 +45,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
   const [loaded, setLoaded] = useState(false);
   const [showPrebrief, setShowPrebrief] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(false); // an existing mentor sees their CARD; this opens the form
 
   const load = useCallback(async () => {
     try {
@@ -51,6 +53,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
       const j = await r.json();
       if (r.ok) {
         setMe(j.me);
+        setIdentity(j.identity ?? { name: null, avatarUrl: null });
         setMatches(j.matches ?? []);
         setEdge(j.edge);
         setPrebrief(j.prebriefPreview ?? "");
@@ -194,7 +197,46 @@ export default function MentorsClient({ userId }: { userId: string }) {
         {!showForm && !me && (
           <button className="btn-primary" onClick={() => setShowForm(true)}>I&apos;d like to mentor →</button>
         )}
-        {(showForm || me) && (
+        {/* an existing mentor sees their card EXACTLY as seekers do — editing is a deliberate step */}
+        {me && !editing && (
+          <div className="mentor-card mentor-card-own">
+            <div className="mentor-own-kicker">
+              <span>how seekers see you{me.active ? "" : " (currently hidden — not visible to seekers)"}</span>
+              <button className="ghost-btn" onClick={() => setEditing(true)}>✎ Edit your card</button>
+            </div>
+            <div className="mentor-card-head">
+              {identity.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="mentor-avatar" src={identity.avatarUrl} alt="" />
+              ) : (
+                <span className="mentor-avatar mentor-avatar-fallback">{(identity.name ?? "?").slice(0, 1)}</span>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="mentor-name">{identity.name ?? "You"}</div>
+                <div className="mentor-headline">{me.headline ?? ""}</div>
+                <div className="mentor-meta">
+                  {AVAIL_LABEL[me.availability] ?? me.availability} · {me.feeHr ? `₹${me.feeHr.toLocaleString()}/hr` : "Free (founding mentor)"}
+                </div>
+              </div>
+            </div>
+            {me.transitions.length > 0 && (
+              <div className="mentor-transitions">
+                {me.transitions.map((t, i) => (
+                  <span className="mentor-transition" key={i}>{t.from} → {t.to}</span>
+                ))}
+              </div>
+            )}
+            {me.journey && <p className="mentor-journey">{me.journey.slice(0, 260)}</p>}
+            {me.expertise.length > 0 && (
+              <div className="mentor-transitions">
+                {me.expertise.map((e) => (
+                  <span className="rec-chip" key={e}>{e}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {(showForm || (me && editing)) && (
           <MentorForm
             userId={userId}
             initial={
@@ -204,7 +246,11 @@ export default function MentorsClient({ userId }: { userId: string }) {
                 : null)
             }
             exists={!!me}
-            onSaved={load}
+            onSaved={async () => {
+              await load();
+              setEditing(false); // back to the card — the point is seeing what changed
+              setShowForm(false);
+            }}
           />
         )}
         {showForm && !me && suggested && (

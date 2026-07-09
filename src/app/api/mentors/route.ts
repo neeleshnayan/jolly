@@ -55,7 +55,11 @@ async function buildSuggested(profileId: string) {
 export async function GET(req: NextRequest) {
   const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const [p] = await db
+    .select({ id: profiles.id, fullName: profiles.fullName, avatarUrl: profiles.avatarUrl })
+    .from(profiles)
+    .where(eq(profiles.userId, userId))
+    .limit(1);
   if (!p) return NextResponse.json({ error: "No profile" }, { status: 404 });
 
   const [me] = await db.select().from(mentorProfiles).where(eq(mentorProfiles.profileId, p.id)).limit(1);
@@ -64,7 +68,16 @@ export async function GET(req: NextRequest) {
   const prebriefPreview = await buildPrebrief(userId);
   const suggested = me ? null : await buildSuggested(p.id);
 
-  return NextResponse.json({ ok: true, me: me ?? null, suggested, edge, matches, prebriefPreview });
+  return NextResponse.json({
+    ok: true,
+    me: me ?? null,
+    // for the "how seekers see you" card preview on the mentor's own profile
+    identity: { name: p.fullName, avatarUrl: p.avatarUrl },
+    suggested,
+    edge,
+    matches,
+    prebriefPreview,
+  });
 }
 
 export async function POST(req: NextRequest) {

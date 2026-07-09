@@ -147,9 +147,16 @@ export default function InsightsReport({ userId }: { userId: string }) {
 
       {r.trajectory.length >= 2 && <GrowthCard profile={r.profile} trajectory={r.trajectory} />}
 
+      {/* applications lead: the live campaign is what you check daily — the
+          diagnosis below is the slower-moving context behind it */}
+      <section className="report-section">
+        <h2><span className="sec-num">01</span> Your applications</h2>
+        <ApplicationsBoard userId={userId} />
+      </section>
+
       <section className="report-section">
         <div className="report-sec-head">
-          <h2><span className="sec-num">01</span> Executive read</h2>
+          <h2><span className="sec-num">02</span> Executive read</h2>
           {!exec && (
             <button className="btn-primary" onClick={() => void generateExec()} disabled={execBusy}>
               {execBusy ? "Reading your file…" : "Generate"}
@@ -180,7 +187,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
       </section>
 
       <section className="report-section">
-        <h2><span className="sec-num">02</span> Work-style profile</h2>
+        <h2><span className="sec-num">03</span> Work-style profile</h2>
         {Object.keys(scoring).length === 0 ? (
           <p className="dash-empty">No profile read yet — upload a résumé and it computes automatically.</p>
         ) : (
@@ -214,7 +221,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
       </section>
 
       <section className="report-section">
-        <h2><span className="sec-num">03</span> What your mentor has learned</h2>
+        <h2><span className="sec-num">04</span> What your mentor has learned</h2>
         {r.insights.length === 0 ? (
           <p className="dash-empty">Nothing yet — this fills in as you talk. <a href="/mentor">Take a call →</a></p>
         ) : (
@@ -238,7 +245,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
 
       {r.probes.length > 0 && (
         <section className="report-section">
-          <h2><span className="sec-num">04</span> Still being tested</h2>
+          <h2><span className="sec-num">05</span> Still being tested</h2>
           <p className="report-blurb">Open questions your story raises — the mentor works these into future calls.</p>
           <ul className="probe-list">
             {r.probes.map((p, i) => (
@@ -252,7 +259,7 @@ export default function InsightsReport({ userId }: { userId: string }) {
       )}
 
       <section className="report-section">
-        <h2><span className="sec-num">{r.probes.length > 0 ? "05" : "04"}</span> Where this points</h2>
+        <h2><span className="sec-num">{r.probes.length > 0 ? "06" : "05"}</span> Where this points</h2>
         {r.targetRole && (
           <div className="target-box">
             <div className="target-role">🎯 {r.targetRole.role}</div>
@@ -274,11 +281,6 @@ export default function InsightsReport({ userId }: { userId: string }) {
         )}
       </section>
 
-      {/* your applications are part of YOUR story — they live here, not on the feed */}
-      <section className="report-section">
-        <h2><span className="sec-num">{r.probes.length > 0 ? "06" : "05"}</span> Your applications</h2>
-        <ApplicationsBoard userId={userId} />
-      </section>
     </main>
   );
 }

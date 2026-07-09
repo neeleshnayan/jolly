@@ -2794,3 +2794,11 @@ textarea.f { line-height: 1.55; }
 .applykit-ats-miss a { color: var(--accent); font-weight: 600; }
 .applykit-ats-ok { color: #15803d; }
 [data-theme="dark"] .applykit-ats-ok { color: #6ee7a0; }
+
+/* the mentor's own card — exactly the seeker view, plus an edit affordance */
+.mentor-card-own { margin-top: 4px; }
+.mentor-own-kicker {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+  margin-bottom: 10px;
+}
