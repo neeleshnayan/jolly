@@ -26,6 +26,9 @@ export interface StructuredRequest {
    *  extractions on think-capable models (gemma4/qwen3) want false — hidden
    *  reasoning turns a sub-second call into a 15s stall. */
   think?: boolean;
+  /** override the context window (Ollama num_ctx) for THIS call. Job vectorisation
+   *  needs a big window (long JDs); the voice/live path wants a small one. */
+  numCtx?: number;
 }
 
 export interface Usage {

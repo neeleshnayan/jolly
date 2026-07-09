@@ -90,11 +90,12 @@ Job description:
 ---
 `;
 
-// Cap the JD fed to the model so input + prompt + output fits the context window
-// (num_ctx 8192). gemma3:27b truncated/emptied on long multi-location JDs beyond
-// this; the signal-rich part of a JD (summary + requirements) is up front anyway.
-// Tunable for larger-context models via env.
-const JD_CHARS = Number(process.env.OLLAMA_VECTORIZE_JD_CHARS ?? 6000);
+// Vectorisation runs on a BIG context window (num_ctx below) so full JDs fit —
+// this is a per-JD batch job with the GPU to itself, not the latency-sensitive
+// voice path (which keeps the small default). The JD cap is now just a backstop
+// against a pathological outlier, not the every-JD limiter it was at num_ctx 8192.
+const VECTORIZE_NUM_CTX = Number(process.env.OLLAMA_VECTORIZE_NUM_CTX ?? 16384);
+const JD_CHARS = Number(process.env.OLLAMA_VECTORIZE_JD_CHARS ?? 16000);
 
 export const opportunityVectorizer: Agent<{ jd: string }, OpportunityExtraction> = {
   name: "opportunity-vectorizer",
@@ -112,6 +113,7 @@ export const opportunityVectorizer: Agent<{ jd: string }, OpportunityExtraction>
           schemaName: SCHEMA_NAME,
           jsonSchema: vectorizeJsonSchema(),
           prompt: VECTORIZE_PROMPT + jd,
+          numCtx: VECTORIZE_NUM_CTX, // big window so full JDs never truncate
           maxTokens: 4500, // 12-axis vector + rationales + facts truncated at 3000 on rich JDs
         });
         return { output: opportunityExtraction.parse(res.data), usage: res.usage };

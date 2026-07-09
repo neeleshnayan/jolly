@@ -117,7 +117,7 @@ export const ollamaProvider: LLMProvider = {
       format: req.jsonSchema, // structured outputs: constrain to the schema
       options: ollamaOptions({
         temperature: 0,
-        numCtx: NUM_CTX,
+        numCtx: req.numCtx ?? NUM_CTX, // vectorise asks for a big window; voice keeps the small default
         numPredict: NUM_PREDICT ?? req.maxTokens,
       }),
       messages: [
