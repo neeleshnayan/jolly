@@ -13,9 +13,9 @@ export const metadata: Metadata = {
   },
 };
 
-// Runs before paint: applies the saved (or OS-preferred) theme so there's no
-// light-flash on load. Kept tiny and inline for that reason.
-const themeInit = `(function(){try{var t=localStorage.getItem("drizzle-theme");if(!t){t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){}})()`;
+// Runs before paint: applies the saved theme so there's no flash on load. Dark
+// is the default — the warm-dark look is drizzle's premium face; light is opt-in.
+const themeInit = `(function(){try{var t=localStorage.getItem("drizzle-theme")||"dark";document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}})()`;
 
 export default function RootLayout({
   children,

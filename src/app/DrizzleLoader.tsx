@@ -1,19 +1,17 @@
 /**
- * The drizzle loader — the brand droplet filling with liquid, for any "we're
- * working on it" moment. Pure SVG + CSS (keyframes live in globals.css), so it
- * drops into server or client components with no JS. Brand orange on any bg,
- * theme-agnostic; respects prefers-reduced-motion.
+ * The drizzle "thinking" indicator — the brand drop, alive while we work.
+ * A gentle squash-bob, ripple rings at its base, a breathing halo, and a
+ * shimmering label. Implemented from the "Drizzle Thinking" design; pure SVG +
+ * CSS (keyframes in globals.css), themed off --accent so it glows in warm-dark.
  *
- *   <DrizzleLoader label="Finding roles that fit…" />        // centered, default
- *   <DrizzleLoader size={28} row label="Checking…" />        // inline beside text
- *
- * The clip-path id is shared on purpose: every instance clips to the SAME
- * droplet shape, so an id collision across multiple loaders is harmless.
+ *   <DrizzleLoader label="Finding roles that fit…" />   // centered, default
+ *   <DrizzleLoader size={22} row label="Checking…" />   // inline beside text
  */
-const DROP = "M60 24 C60 24 26 76 26 110 a34 34 0 0 0 68 0 C94 76 60 24 60 24 Z";
+const DROP = "M20 2C20 2 5 19.5 5 31a15 15 0 0 0 30 0C35 19.5 20 2 20 2Z";
+const HIGHLIGHT = "M13 30a7 7 0 0 0 3.2 5.9";
 
 export default function DrizzleLoader({
-  size = 72,
+  size = 38,
   label,
   row = false,
   className,
@@ -23,6 +21,7 @@ export default function DrizzleLoader({
   row?: boolean;
   className?: string;
 }) {
+  const h = Math.round(size * 1.2);
   return (
     <div
       className={`drizzle-loader${row ? " row" : ""}${className ? " " + className : ""}`}
@@ -30,28 +29,18 @@ export default function DrizzleLoader({
       aria-live="polite"
       aria-label={label ?? "Loading"}
     >
-      <svg
-        className="drizzle-loader-mark"
-        width={size}
-        height={Math.round(size * 1.3)}
-        viewBox="0 0 120 156"
-        aria-hidden="true"
-      >
-        <defs>
-          <clipPath id="drizzle-loader-clip">
-            <path d={DROP} />
-          </clipPath>
-        </defs>
-        <g className="dl-group">
-          <path className="dl-back" d={DROP} />
-          <g clipPath="url(#drizzle-loader-clip)">
-            <rect className="dl-liquid" x="24" y="28" width="72" height="132" />
-          </g>
-          <path className="dl-outline" d={DROP} />
-        </g>
-        <circle className="dl-drip" cx="60" cy="150" r="5" />
-      </svg>
-      {label && <span className="drizzle-loader-label">{label}</span>}
+      <span className="dz-mark" style={{ width: size, height: h }} aria-hidden="true">
+        <span className="dz-halo" />
+        <span className="dz-ripple" />
+        <span className="dz-ripple dz-ripple2" />
+        <span className="dz-drop">
+          <svg width={size} height={h} viewBox="0 0 40 48" fill="none">
+            <path d={DROP} fill="currentColor" />
+            <path d={HIGHLIGHT} stroke="rgba(255,255,255,0.6)" strokeWidth="2.4" strokeLinecap="round" />
+          </svg>
+        </span>
+      </span>
+      {label && <span className="drizzle-loader-label dz-shimmer">{label}</span>}
     </div>
   );
 }

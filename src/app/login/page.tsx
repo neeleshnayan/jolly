@@ -16,14 +16,16 @@ export default async function LoginPage({
 
   return (
     <main className="auth-wrap">
-      <div className="auth-card">
+      <div className="auth-hero">
         <span className="brand-lockup auth-lockup">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/drizzle-lockup.svg" alt="drizzle" className="brand-light" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/drizzle-lockup-white.svg" alt="" aria-hidden className="brand-dark" />
         </span>
-        <p className="brand-tag">the first rain after the drought — action over inaction</p>
+
+        <p className="auth-kicker">action over inaction</p>
+        <h1 className="auth-headline">The first rain<br />after the drought.</h1>
 
         <p className="auth-thesis">
           A mentor that understands you deeply <b>once</b> — then puts that understanding to work on everything your search needs.
@@ -44,10 +46,6 @@ export default async function LoginPage({
           </li>
         </ul>
 
-        <p className="auth-mission">
-          Built after watching too many good people face a lost job alone. drizzle runs <b>at cost</b> — you pay what it costs to keep the lights on, nothing more.
-        </p>
-
         {error && (
           <p className="status-line error">
             Sign-in didn&apos;t complete ({error}). Please try again.
@@ -58,6 +56,10 @@ export default async function LoginPage({
           Continue with LinkedIn
         </a>
         <p className="auth-fine">We only read your name, email, and photo to set up your account.</p>
+
+        <p className="auth-mission">
+          Built after watching too many good people face a lost job alone. drizzle runs <b>at cost</b> — you pay what it costs to keep the lights on, nothing more.
+        </p>
       </div>
     </main>
   );

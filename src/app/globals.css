@@ -1,33 +1,36 @@
+/* Warm palette — terracotta on cream (light) / on warm near-black (dark).
+   Dark is the default face (see layout.tsx). The whole app themes off these. */
 :root {
-  --ink: #1a1a1a;
-  --muted: #6b7280;
-  --line: #e5e7eb;
-  --accent: #2563eb;
-  --bg: #f6f7f9;
-  --paper: #ffffff;
-  --surface: #fafafa; /* subtle inset panels (fact boxes, tips, refine) */
+  --ink: #2a2521;
+  --muted: #8a8175;
+  --line: #e6e0d5;
+  --accent: #c15f3c;
+  --bg: #f1ede4;
+  --paper: #fbf9f5;
+  --surface: #f4f0e8; /* subtle inset panels (fact boxes, tips, refine) */
   --sheet: #ffffff; /* the résumé page — a DOCUMENT, never theme-flipped */
   --sheet-ink: #1a1a1a;
   /* glass tokens — frosted panes over the body aurora */
-  --glass: rgba(255, 255, 255, 0.6);
-  --glass-strong: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.72);
-  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+  --glass: rgba(251, 249, 245, 0.62);
+  --glass-strong: rgba(251, 249, 245, 0.84);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 8px 32px rgba(120, 72, 45, 0.1);
 }
 
-/* dark mode — applied pre-paint via html[data-theme] (see layout.tsx) */
+/* dark mode — applied pre-paint via html[data-theme] (see layout.tsx). WARM
+   near-black, never cold grey: the near-black keeps drizzle's soul in the dark. */
 [data-theme="dark"] {
-  --ink: #e8eaef;
-  --muted: #98a0ad;
-  --line: #2a303c;
-  --accent: #7aa5f8;
-  --bg: #0c0f15;
-  --paper: #151a23;
-  --surface: #1c2230;
-  --glass: rgba(21, 26, 35, 0.55);
-  --glass-strong: rgba(24, 30, 41, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.09);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --ink: #ede7dd;
+  --muted: #968d7f;
+  --line: #2e2b26;
+  --accent: #d6714a;
+  --bg: #100f0d;
+  --paper: #1a1916;
+  --surface: #201e1a;
+  --glass: rgba(26, 25, 22, 0.58);
+  --glass-strong: rgba(30, 28, 24, 0.84);
+  --glass-border: rgba(255, 240, 224, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 [data-theme="dark"] .upload-card,
 [data-theme="dark"] .rec-card { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
@@ -273,17 +276,17 @@ html, body {
    never get glassed. */
 body {
   background:
-    radial-gradient(640px 460px at 10% -6%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    radial-gradient(720px 520px at 104% 12%, rgba(13, 148, 136, 0.13), transparent 70%),
-    radial-gradient(900px 640px at 46% 112%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%),
+    radial-gradient(640px 460px at 10% -6%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 70%),
+    radial-gradient(720px 520px at 104% 12%, rgba(217, 119, 6, 0.10), transparent 70%),
+    radial-gradient(900px 640px at 46% 112%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%),
     var(--bg);
   background-attachment: fixed;
 }
 [data-theme="dark"] body {
   background:
-    radial-gradient(640px 460px at 10% -6%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
-    radial-gradient(720px 520px at 104% 12%, rgba(13, 148, 136, 0.2), transparent 70%),
-    radial-gradient(900px 640px at 46% 112%, rgba(99, 102, 241, 0.16), transparent 72%),
+    radial-gradient(700px 500px at 8% -8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 68%),
+    radial-gradient(760px 560px at 106% 10%, rgba(217, 119, 6, 0.14), transparent 70%),
+    radial-gradient(920px 660px at 48% 114%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%),
     var(--bg);
   background-attachment: fixed;
 }
@@ -883,47 +886,42 @@ a { color: var(--accent); }
 .suggest-added { color: #15803d; font-weight: 600; font-size: 13px; white-space: nowrap; }
 .suggest-dismissed { color: var(--muted); font-size: 13px; white-space: nowrap; }
 
-/* sign-in */
-.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.auth-card {
+/* sign-in — the premium warm hero over the ambient aurora */
+.auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 40px 24px; }
+.auth-hero {
   width: 100%;
-  max-width: 400px;
+  max-width: 500px;
   text-align: center;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 40px 32px;
-  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.08);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 46px 42px 38px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
 }
-.auth-card h1 { font-size: 24px; font-weight: 700; margin: 0 0 8px; }
-.auth-card .sub { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+.auth-kicker {
+  font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--accent); font-weight: 600; margin: 4px 0 12px;
+}
+.auth-headline {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(29px, 6vw, 37px); line-height: 1.08; font-weight: 500;
+  letter-spacing: -0.012em; margin: 0 0 18px; color: var(--ink);
+}
 .linkedin-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 20px;
-  background: #0a66c2;
-  color: #fff;
-  font-weight: 600;
-  font-size: 15px;
-  border-radius: 10px;
-  text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 13px 20px; margin-top: 4px;
+  background: #0a66c2; color: #fff; font-weight: 600; font-size: 15px;
+  border-radius: 12px; text-decoration: none; transition: background 0.15s, transform 0.1s;
 }
-.linkedin-btn:hover { background: #08528f; }
+.linkedin-btn:hover { background: #0959a8; }
+.linkedin-btn:active { transform: scale(0.99); }
 .in-badge {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  background: var(--paper);
-  color: #0a66c2;
-  border-radius: 4px;
-  font-weight: 800;
-  font-size: 13px;
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  background: #fff; color: #0a66c2; border-radius: 4px; font-weight: 800; font-size: 13px;
 }
-.auth-fine { color: var(--muted); font-size: 12px; margin: 16px 0 0; }
+.auth-fine { color: var(--muted); font-size: 11.5px; margin: 14px 0 0; opacity: 0.85; }
 
 /* ---------- dashboard ---------- */
 .dash { max-width: 920px; margin: 0 auto; padding: 20px 24px 80px; }
@@ -953,23 +951,37 @@ a { color: var(--accent); }
 .dash-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
 .dash-empty.small { padding: 2px 0; font-size: 12.5px; }
 
-/* ---- drizzle loader: the brand droplet filling with liquid (DrizzleLoader.tsx) ---- */
-.drizzle-loader { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; }
-.drizzle-loader.row { flex-direction: row; gap: 9px; padding: 2px 0; }
-.drizzle-loader-mark { display: block; overflow: visible; }
-.drizzle-loader-label { color: var(--muted); font-size: 13px; text-align: center; }
-.dl-back { fill: #c15f3c; opacity: 0.14; }
-.dl-outline { fill: none; stroke: #c15f3c; stroke-width: 6; }
-.dl-liquid { fill: #c15f3c; animation: dl-fill 2.2s ease-in-out infinite; }
-.dl-group { transform-box: fill-box; transform-origin: 50% 62%; animation: dl-pulse 2.2s ease-in-out infinite; }
-.dl-drip { fill: #c15f3c; opacity: 0; animation: dl-drip 2.2s ease-in infinite; }
-@keyframes dl-fill { 0% { transform: translateY(120px); } 55% { transform: translateY(6px); } 100% { transform: translateY(120px); } }
-@keyframes dl-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.045); } }
-@keyframes dl-drip { 0%, 62% { transform: translateY(0); opacity: 0; } 72% { opacity: 0.9; } 100% { transform: translateY(46px); opacity: 0; } }
+/* ---- drizzle "thinking" indicator: the brand drop, alive (DrizzleLoader.tsx) ----
+   Squash-bob + ripple rings + breathing halo + shimmer label. Themed off --accent. */
+.drizzle-loader { display: inline-flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0; color: var(--accent); }
+.drizzle-loader.row { flex-direction: row; gap: 11px; padding: 2px 0; }
+.dz-mark { position: relative; display: flex; align-items: flex-end; justify-content: center; }
+.dz-halo {
+  position: absolute; top: 6%; left: 50%; width: 82%; aspect-ratio: 1; transform: translateX(-50%);
+  border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%);
+  animation: dz-breathe 2.4s ease-in-out infinite;
+}
+.dz-ripple {
+  position: absolute; bottom: 2%; left: 50%; width: 70%; height: 22%; transform: translateX(-50%);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 50%;
+  animation: dz-ripple 2.4s ease-out infinite;
+}
+.dz-ripple2 { animation-delay: 1.2s; }
+.dz-drop { position: relative; display: flex; transform-origin: center bottom; animation: dz-bob 2.4s cubic-bezier(0.5, 0, 0.5, 1) infinite; }
+.dz-drop svg { display: block; }
+.drizzle-loader-label { color: var(--muted); font-size: 13.5px; font-weight: 600; text-align: center; }
+.dz-shimmer {
+  background: linear-gradient(90deg, var(--muted) 0%, var(--muted) 35%, var(--accent) 50%, var(--muted) 65%, var(--muted) 100%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: dz-shimmer 2.6s linear infinite;
+}
+@keyframes dz-bob { 0%, 100% { transform: translateY(0) scaleY(1) scaleX(1); } 30% { transform: translateY(-6px) scaleY(1.08) scaleX(0.94); } 60% { transform: translateY(1px) scaleY(0.92) scaleX(1.06); } }
+@keyframes dz-ripple { 0% { transform: translateX(-50%) scale(0.3); opacity: 0; } 25% { opacity: 0.5; } 100% { transform: translateX(-50%) scale(1.5); opacity: 0; } }
+@keyframes dz-breathe { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.9; } 50% { transform: translateX(-50%) scale(1.14); opacity: 0.45; } }
+@keyframes dz-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .dl-liquid { animation: none; transform: translateY(46px); }
-  .dl-group, .dl-drip { animation: none; }
-  .dl-drip { opacity: 0; }
+  .dz-drop, .dz-halo, .dz-ripple { animation: none; }
+  .dz-shimmer { animation: none; color: var(--accent); -webkit-text-fill-color: var(--accent); }
 }
 .app-new { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .f-box {
@@ -1219,16 +1231,21 @@ a { color: var(--accent); }
 .diary-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
 @media (max-width: 720px) { .diary-grid { grid-template-columns: 1fr; } }
 
-/* signup — the ethos, minimally */
-.auth-thesis { font-size: 15.5px; line-height: 1.55; margin: 14px 0 16px; letter-spacing: -0.005em; }
-.auth-ethos { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 11px; text-align: left; }
-.auth-ethos li { display: flex; gap: 10px; font-size: 13px; line-height: 1.55; color: var(--ink); }
-.auth-ethos-icon { flex: 0 0 auto; font-size: 15px; margin-top: 1px; }
-.auth-ethos b { font-weight: 700; }
-.auth-mission {
-  font-size: 12px; line-height: 1.6; color: var(--muted);
-  border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; margin: 0 0 18px; text-align: left;
+/* signup — the ethos, elevated */
+.auth-thesis { font-size: 15px; line-height: 1.62; margin: 0 auto 26px; max-width: 42ch; color: var(--muted); letter-spacing: -0.003em; }
+.auth-thesis b { color: var(--ink); font-weight: 600; }
+.auth-ethos { list-style: none; margin: 0 0 26px; padding: 0; display: flex; flex-direction: column; gap: 15px; text-align: left; }
+.auth-ethos li { display: flex; gap: 13px; font-size: 13.5px; line-height: 1.5; color: var(--muted); align-items: flex-start; }
+.auth-ethos-icon {
+  flex: 0 0 auto; width: 32px; height: 32px; display: grid; place-items: center; font-size: 15px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent); border-radius: 10px;
 }
+.auth-ethos b { color: var(--ink); font-weight: 600; }
+.auth-mission {
+  font-size: 12px; line-height: 1.6; color: var(--muted); max-width: 44ch; margin: 22px auto 0;
+  border-top: 1px solid var(--line); padding-top: 18px;
+}
+.auth-mission b { color: var(--ink); font-weight: 600; }
 
 /* skill map — the overlap lens, designed to feel warm not clinical */
 .skillmap {

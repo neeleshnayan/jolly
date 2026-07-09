@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="360" height="128" viewBox="0 0 360 128" fill="none">
   <defs>
-    <linearGradient id="g" x1="22" y1="16" x2="110" y2="112" gradientUnits="userSpaceOnUse"><stop stop-color="#2f80ff"></stop><stop offset="1" stop-color="#6c4cf1"></stop></linearGradient>
+    <linearGradient id="g" x1="22" y1="16" x2="110" y2="112" gradientUnits="userSpaceOnUse"><stop stop-color="#E0824F"></stop><stop offset="1" stop-color="#B85230"></stop></linearGradient>
     <mask id="m"><rect width="128" height="128" fill="#fff"></rect><path d="M63 42 C55 58 50 66 50 75 a13 13 0 1 0 26 0 C76 66 71 58 63 42 Z" fill="#000"></path></mask>
     
   </defs>
   <path d="M60 18 C90 18 108 39 108 64 C108 89 90 110 60 110 L30 110 Q24 110 24 104 L24 24 Q24 18 30 18 Z" fill="url(#g)" mask="url(#m)"></path>
-  <text x="128" y="80" font-family="Poppins, sans-serif" font-weight="600" font-size="52" letter-spacing="-1.5" fill="#16213a">drizzle</text>
+  <text x="128" y="80" font-family="Poppins, sans-serif" font-weight="600" font-size="52" letter-spacing="-1.5" fill="#2a2521">drizzle</text>
 </svg>
