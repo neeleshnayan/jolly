@@ -190,6 +190,18 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
   const [confirming, setConfirming] = useState<Record<string, "ask" | "saving" | "done">>({});
   // the Apply Kit rides the same click that opens the ATS tab
   const [kitFor, setKitFor] = useState<{ id: string; title: string } | null>(null);
+  // deep link from the résumé editor's redesign handoff: /dashboard?applykit=<id>
+  // opens the kit for that role with the freshly tailored documents
+  useEffect(() => {
+    if (!matches?.length) return;
+    const id = new URLSearchParams(window.location.search).get("applykit");
+    if (!id) return;
+    const m = matches.find((j) => j.id === id);
+    if (m) setKitFor({ id: m.id, title: m.title ?? "this role" });
+    const url = new URL(window.location.href);
+    url.searchParams.delete("applykit"); // one-shot: a reload shouldn't re-open it
+    window.history.replaceState({}, "", url);
+  }, [matches]);
   function onApplyClick(id: string, title?: string | null) {
     signal("apply_click", id);
     setKitFor({ id, title: title ?? "this role" });

@@ -791,6 +791,26 @@ a { color: var(--accent); }
 .diff-col { background: #e9edf2; border-radius: 12px; padding: 12px; }
 .diff-label { text-align: center; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; }
 .diff-label.proposed { color: var(--accent); }
+/* the post-accept next step: Apply Kit with the freshly tailored documents */
+.handoff-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 12px auto;
+  max-width: 980px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--glass-shadow);
+  font-size: 14px;
+}
+.handoff-actions { display: flex; gap: 10px; align-items: center; }
+.handoff-actions .btn-primary { text-decoration: none; }
+
 /* fit each sheet to its column instead of the fixed 210mm A4 width */
 .diff-col .resume.ro {
   width: 100%;

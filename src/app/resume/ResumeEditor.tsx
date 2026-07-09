@@ -62,7 +62,7 @@ function RedesignWizard({
   tips: { text: string; entryLabel: string | null }[] | null;
   tipsLoading: boolean;
   onClose: () => void;
-  onRun: (cfg: { opportunityId?: string; pastedJd?: string; addSkills: string[]; guidance: string[] }) => void;
+  onRun: (cfg: { opportunityId?: string; pastedJd?: string; addSkills: string[]; guidance: string[]; wantLetter: boolean }) => void;
 }) {
   const [step, setStep] = useState(1);
   const [targetKind, setTargetKind] = useState<"general" | "match" | "paste">("general");
@@ -70,6 +70,7 @@ function RedesignWizard({
   const [pasted, setPasted] = useState("");
   const [pickedSkills, setPickedSkills] = useState<Set<string>>(new Set());
   const [pickedTips, setPickedTips] = useState<Set<string> | null>(null); // null = default all
+  const [wantLetter, setWantLetter] = useState(true); // both documents by default — untick to skip
 
   const tipTexts = (tips ?? []).map((t) => t.text);
   const effectiveTips = pickedTips ?? new Set(tipTexts);
@@ -161,6 +162,15 @@ function RedesignWizard({
                 ))}
               </>
             )}
+            <label className={`wizard-option${wantLetter ? " on" : ""}`}>
+              <input type="checkbox" checked={wantLetter} onChange={() => setWantLetter((v) => !v)} />
+              <span>
+                <b>✉ Also draft a cover letter</b>{" "}
+                <span className="wizard-dim">
+                  — {targetKind === "general" ? "a general one from your story" : "tailored to this role"}; it lands in the Cover letter tab with its own version history
+                </span>
+              </span>
+            </label>
           </div>
         )}
 
@@ -183,6 +193,7 @@ function RedesignWizard({
                   pastedJd: targetKind === "paste" ? pasted : undefined,
                   addSkills: [...pickedSkills],
                   guidance: [...effectiveTips],
+                  wantLetter,
                 })
               }
             >
@@ -374,6 +385,10 @@ export default function ResumeEditor({
   const [overhaul, setOverhaul] = useState<Overhaul | null>(null);
   const [redesigning, setRedesigning] = useState(false);
   const [redesignErr, setRedesignErr] = useState("");
+  // when the wizard targeted a specific match, accepting the overhaul offers
+  // the next step: Apply Kit with the freshly tailored documents — or keep editing
+  const pendingHandoff = useRef<{ id: string; title: string; letter: boolean } | null>(null);
+  const [handoff, setHandoff] = useState<{ id: string; title: string; letter: boolean } | null>(null);
   // the mentor's recommended target role (from the filled TBD theme), if any
   const [targetRole, setTargetRole] = useState<{ role: string; rationale: string } | null>(null);
   const [targetOpen, setTargetOpen] = useState(false);
@@ -624,10 +639,14 @@ export default function ResumeEditor({
   function overwriteOverhaul() {
     applyOverhaul();
     setOverhaul(null);
+    setHandoff(pendingHandoff.current);
+    pendingHandoff.current = null;
   }
   function saveOverhaulAsNew() {
     applyOverhaul();
     setOverhaul(null);
+    setHandoff(pendingHandoff.current);
+    pendingHandoff.current = null;
     void openSaveVersion();
   }
 
@@ -855,7 +874,7 @@ export default function ResumeEditor({
     setWizardOpen(true);
     if (tips === null && tipsState === "idle") void loadTips(); // step 3 material
   }
-  async function runRedesignWizard(cfg: { opportunityId?: string; pastedJd?: string; addSkills: string[]; guidance: string[] }) {
+  async function runRedesignWizard(cfg: { opportunityId?: string; pastedJd?: string; addSkills: string[]; guidance: string[]; wantLetter: boolean }) {
     setWizardOpen(false);
     setStatus("Preparing redesign…");
     try {
@@ -863,12 +882,46 @@ export default function ResumeEditor({
       for (const s of cfg.addSkills) await addSkillExplicit(s);
       // 2) resolve the target JD (a picked opportunity reuses the apply-kit read)
       let jdText = cfg.pastedJd?.trim() || undefined;
-      if (!jdText && cfg.opportunityId) {
+      let jobTitle: string | undefined;
+      if (cfg.opportunityId) {
         const kit = await fetch(`/api/apply-kit?u=${userId}&opportunityId=${cfg.opportunityId}`, { cache: "no-store" }).then((r) => r.json());
-        jdText = kit.job?.jd || undefined;
+        jdText = jdText || kit.job?.jd || undefined;
+        jobTitle = kit.job?.title || targetOptions.find((t) => t.id === cfg.opportunityId)?.title || undefined;
       }
+      // set BEFORE the slow letter draft — the user may accept the diff first
+      pendingHandoff.current = cfg.opportunityId && jobTitle ? { id: cfg.opportunityId, title: jobTitle, letter: false } : null;
       setStatus("");
       await redesign(jdText, cfg.addSkills.length ? cfg.addSkills : undefined, cfg.guidance);
+      // 3) the letter drafts while the diff is on screen; it lands in the ✉ tab
+      //    with its own saved version — a failed letter never voids the redesign
+      if (cfg.wantLetter) {
+        setStatus("Drafting your cover letter…");
+        try {
+          const r = await fetch("/api/resume/cover-letter", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ userId, ...(jdText ? { jd: jdText } : {}) }),
+          });
+          const j = await r.json();
+          if (r.ok && j.letter) {
+            setLetterText(j.letter);
+            const label = jobTitle ? `For ${jobTitle}` : "AI draft";
+            const sv = await fetch("/api/cover-letters", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ u: userId, content: j.letter, label, jd: jdText || undefined }),
+            })
+              .then((x) => x.json())
+              .catch(() => null);
+            if (sv?.id) setLetterVersions((v) => [{ id: sv.id, label, content: j.letter, createdAt: new Date().toISOString() }, ...v]);
+            if (pendingHandoff.current) pendingHandoff.current = { ...pendingHandoff.current, letter: true };
+            setHandoff((h) => (h && h.id === cfg.opportunityId ? { ...h, letter: true } : h));
+          }
+        } catch {
+          /* letter is a bonus — the redesign already landed */
+        }
+        setStatus("");
+      }
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Redesign failed");
     }
@@ -1108,7 +1161,15 @@ export default function ResumeEditor({
               )}
             </div>
             <div className="diff-actions">
-              <button className="ghost-btn" onClick={() => setOverhaul(null)}>Keep original</button>
+              <button
+                className="ghost-btn"
+                onClick={() => {
+                  setOverhaul(null);
+                  pendingHandoff.current = null;
+                }}
+              >
+                Keep original
+              </button>
               <button className="btn-primary" onClick={overwriteOverhaul}>Overwrite my résumé</button>
               <button className="vb-btn primary" onClick={saveOverhaulAsNew}>Save as new version</button>
             </div>
@@ -1122,6 +1183,18 @@ export default function ResumeEditor({
               <div className="diff-label proposed">Proposed</div>
               <ResumeSheet data={overhaul.proposed} />
             </div>
+          </div>
+        </div>
+      )}
+      {handoff && (
+        <div className="handoff-bar no-print">
+          <span>
+            🎯 Tailored for <b>{handoff.title}</b>
+            {handoff.letter ? " — cover letter drafted in the ✉ tab" : ""}. Ready to apply?
+          </span>
+          <div className="handoff-actions">
+            <a className="btn-primary" href={`/dashboard?applykit=${handoff.id}`}>→ Continue in Apply Kit</a>
+            <button className="ghost-btn" onClick={() => setHandoff(null)}>Keep editing</button>
           </div>
         </div>
       )}
