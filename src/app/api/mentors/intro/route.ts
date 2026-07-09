@@ -18,14 +18,9 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   if (!body.mentorId) return NextResponse.json({ error: "Missing mentorId" }, { status: 400 });
 
-  const [p] = await db.select({ id: profiles.id, name: profiles.fullName }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!p) return NextResponse.json({ error: "No profile" }, { status: 404 });
-  const [mentor] = await db
-    .select({ id: mentorProfiles.id, contactEmail: mentorProfiles.contactEmail, name: profiles.fullName })
-    .from(mentorProfiles)
-    .innerJoin(profiles, eq(profiles.id, mentorProfiles.profileId))
-    .where(eq(mentorProfiles.id, body.mentorId))
-    .limit(1);
+  const [mentor] = await db.select({ id: mentorProfiles.id }).from(mentorProfiles).where(eq(mentorProfiles.id, body.mentorId)).limit(1);
   if (!mentor) return NextResponse.json({ error: "Mentor not found" }, { status: 404 });
 
   // one open request per mentor per seeker — no spamming
@@ -34,23 +29,13 @@ export async function POST(req: NextRequest) {
     .from(mentorIntros)
     .where(and(eq(mentorIntros.seekerProfileId, p.id), eq(mentorIntros.mentorProfileId, mentor.id), eq(mentorIntros.status, "requested")))
     .limit(1);
+  if (existing) return NextResponse.json({ ok: true, already: true });
+
   const note = (body.note ?? "").slice(0, 500);
   const prebrief = await buildPrebrief(userId, note || undefined);
-
-  // the request is logged either way; when the mentor shared a contact email,
-  // ALSO hand back a ready-to-send draft (mailto) — the seeker sends it from
-  // their own mail client, drizzle never emails anyone on their behalf
-  const mailto = mentor.contactEmail
-    ? `mailto:${mentor.contactEmail}?subject=${encodeURIComponent(
-        `Mentorship request — ${p.name ?? "a drizzle seeker"}`,
-      )}&body=${encodeURIComponent(
-        `Hi ${(mentor.name ?? "").split(" ")[0] || "there"},\n\n${
-          note || "I'd love to learn from the move you've made — could we talk?"
-        }\n\nA short brief about me:\n\n${prebrief.slice(0, 900)}\n\n— ${p.name ?? ""} (matched via drizzle)`,
-      )}`
-    : null;
-
-  if (existing) return NextResponse.json({ ok: true, already: true, mailto });
+  // mentor_profiles.contact_email is where drizzle will SEND the request
+  // (brokered, on the seeker's behalf) once the email flow is built — the
+  // seeker never gets the address, and never mails the mentor directly
   await db.insert(mentorIntros).values({ seekerProfileId: p.id, mentorProfileId: mentor.id, prebrief, note: note || null });
-  return NextResponse.json({ ok: true, mailto });
+  return NextResponse.json({ ok: true });
 }

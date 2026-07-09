@@ -64,12 +64,10 @@ export default function MentorsClient({ userId }: { userId: string }) {
     void load();
   }, [load]);
 
-  // intro requests
+  // intro requests — brokered: drizzle will email the mentor on the seeker's
+  // behalf (send flow lands later); the seeker never gets the address
   const [introState, setIntroState] = useState<Record<string, "ask" | "sending" | "sent">>({});
   const [introNote, setIntroNote] = useState("");
-  // when the mentor shared a contact email, the request comes back with a
-  // ready-to-send draft — the seeker sends it from their own mail client
-  const [mailtos, setMailtos] = useState<Record<string, string>>({});
   async function requestIntro(mentorId: string) {
     setIntroState((s) => ({ ...s, [mentorId]: "sending" }));
     try {
@@ -79,8 +77,6 @@ export default function MentorsClient({ userId }: { userId: string }) {
         body: JSON.stringify({ u: userId, mentorId, note: introNote }),
       });
       if (!r.ok) throw new Error();
-      const j = await r.json();
-      if (j.mailto) setMailtos((m) => ({ ...m, [mentorId]: j.mailto }));
       setIntroState((s) => ({ ...s, [mentorId]: "sent" }));
       setIntroNote("");
     } catch {
@@ -160,14 +156,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
                   </ul>
                 )}
                 {introState[m.id] === "sent" ? (
-                  <div className="apply-confirm done">
-                    ✓ Intro requested — you&apos;ll hear from us with next steps
-                    {mailtos[m.id] && (
-                      <a className="tip-add" href={mailtos[m.id]} style={{ marginLeft: 8 }}>
-                        ✉ Or email them now — draft&apos;s ready
-                      </a>
-                    )}
-                  </div>
+                  <div className="apply-confirm done">✓ Intro requested — drizzle reaches out on your behalf with your brief</div>
                 ) : introState[m.id] === "ask" || introState[m.id] === "sending" ? (
                   <div className="intro-ask">
                     <textarea
@@ -280,7 +269,7 @@ function MentorForm({ userId, initial, exists, onSaved }: { userId: string; init
         <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. Product lead at Stripe, ex-Goldman Ops" />
       </label>
       <label className="refine-field">
-        <span>Contact email — where mentorship requests reach you (only shared after you&apos;re matched)</span>
+        <span>Contact email — where drizzle sends you intro requests (never shown to seekers)</span>
         <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="you@example.com" />
       </label>
       <label className="refine-field">

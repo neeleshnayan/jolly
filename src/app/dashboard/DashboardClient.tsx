@@ -41,10 +41,11 @@ export default function DashboardClient({
         </a>
       </div>
 
-      {/* the mentor circle lives right here — no separate page to remember */}
-      <MentorStrip userId={userId} />
-
       <Recommendations userId={userId} />
+
+      {/* people after the jobs: once you've seen what's out there, here's who
+          can help you get it — no separate page to remember */}
+      <MentorStrip userId={userId} />
     </main>
   );
 }
@@ -52,7 +53,20 @@ export default function DashboardClient({
 /** Mentor Connect, flattened: the top matches inline on the dashboard. The
  *  full view (profile form, pre-brief preview, intro notes) stays at /mentors. */
 function MentorStrip({ userId }: { userId: string }) {
-  type Mini = { id: string; name: string | null; avatarUrl: string | null; headline: string | null; score: number; why: string[] };
+  type Mini = {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+    headline: string | null;
+    journey: string | null;
+    expertise: string[];
+    transitions: { from: string; to: string }[];
+    availability: string;
+    feeHr: number | null;
+    score: number;
+    why: string[];
+  };
+  const AVAIL: Record<string, string> = { occasionally: "Occasionally", "part-time": "Part-time", open: "Open to many sessions" };
   const [matches, setMatches] = useState<Mini[] | null>(null);
 
   useEffect(() => {
@@ -66,6 +80,7 @@ function MentorStrip({ userId }: { userId: string }) {
     <section className="dash-section">
       <div className="dash-section-head">
         <h2>Your mentor circle</h2>
+        <span className="dash-hint">People who&apos;ve already made your move</span>
         <a className="refine-toggle" href="/mentors">Open Mentor Connect →</a>
       </div>
       {matches === null ? (
@@ -76,18 +91,34 @@ function MentorStrip({ userId }: { userId: string }) {
         <div className="mentor-strip">
           {matches.map((m) => (
             <a className="mentor-strip-card" key={m.id} href="/mentors">
-              {m.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="mentor-avatar" src={m.avatarUrl} alt="" />
-              ) : (
-                <span className="mentor-avatar mentor-avatar-fallback">{(m.name ?? "?").slice(0, 1)}</span>
-              )}
-              <span className="mentor-strip-body">
-                <span className="mentor-name">{m.name ?? "Mentor"}</span>
-                <span className="mentor-headline">{m.headline ?? ""}</span>
-                {m.why[0] && <span className="mentor-strip-why">{m.why[0]}</span>}
+              <span className="mentor-strip-top">
+                {m.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="mentor-avatar" src={m.avatarUrl} alt="" />
+                ) : (
+                  <span className="mentor-avatar mentor-avatar-fallback">{(m.name ?? "?").slice(0, 1)}</span>
+                )}
+                <span className="mentor-strip-body">
+                  <span className="mentor-name">{m.name ?? "Mentor"}</span>
+                  <span className="mentor-headline">{m.headline ?? ""}</span>
+                </span>
+                {m.score > 0 && <span className="mentor-fit">{Math.round(m.score * 100)}%</span>}
               </span>
-              {m.score > 0 && <span className="mentor-fit">{Math.round(m.score * 100)}%</span>}
+              {m.transitions.length > 0 && (
+                <span className="mentor-transitions">
+                  {m.transitions.slice(0, 2).map((t, i) => (
+                    <span className="mentor-transition" key={i}>{t.from} → {t.to}</span>
+                  ))}
+                </span>
+              )}
+              {m.why[0] && <span className="mentor-strip-why">{m.why[0]}</span>}
+              {m.journey && <span className="mentor-strip-journey">{m.journey.slice(0, 140)}</span>}
+              <span className="mentor-strip-foot">
+                {m.expertise.slice(0, 3).map((e) => (
+                  <span className="rec-chip" key={e}>{e}</span>
+                ))}
+                <span className="mentor-strip-meta">{AVAIL[m.availability] ?? m.availability} · {m.feeHr ? `₹${m.feeHr.toLocaleString()}/hr` : "Free"}</span>
+              </span>
             </a>
           ))}
         </div>

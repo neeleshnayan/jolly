@@ -1855,19 +1855,9 @@ a.start-tile:hover { border-color: var(--accent); }
 }
 
 /* target-a-job opens as a READABLE drawer, not a cramped rail box */
-.job-target {
-  position: fixed;
-  top: 118px;
-  right: 16px;
-  width: 440px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 140px);
-  overflow-y: auto;
-  z-index: 45;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--line);
-  background: var(--paper);
-}
+/* the JD panel expands IN the rail — the old fixed flyout floated over the
+   rail's own text and, in dark mode, read as broken overlap */
+.job-target { background: var(--paper); }
 .job-target-jd { min-height: 130px; }
 
 /* mentor tips in the editor's AI rail */
@@ -2759,17 +2749,22 @@ textarea.f { line-height: 1.55; }
 [data-theme="dark"] .vb-chip.active { background: #2b1d10; color: #f0b26a; border-color: #4a3218; }
 
 /* ---- the mentor circle, flattened onto the dashboard ---- */
-.mentor-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.mentor-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: stretch; }
 .mentor-strip-card {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px; border-radius: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 16px; border-radius: 16px;
   background: var(--glass); border: 1px solid var(--glass-border);
   backdrop-filter: blur(12px); text-decoration: none; color: var(--ink);
   transition: transform 0.15s ease;
 }
 .mentor-strip-card:hover { transform: translateY(-2px); }
+.mentor-strip-top { display: flex; align-items: center; gap: 12px; }
 .mentor-strip-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.mentor-strip-why { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mentor-strip-why { font-size: 11.5px; color: var(--accent); }
+.mentor-strip-journey { font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.mentor-strip-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: auto; }
+.mentor-strip-foot .rec-chip { font-size: 10px; padding: 2px 7px; }
+.mentor-strip-meta { font-size: 10.5px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 
 /* ---- application card: the collapsible role detail + match chip ---- */
 .kanban-chip.fit { color: #15803d; border-color: #16a34a; font-weight: 650; }
@@ -2788,11 +2783,14 @@ textarea.f { line-height: 1.55; }
 .applykit-resume-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .applykit-version-pick { display: flex; align-items: center; gap: 6px; }
 .applykit-version-pick .f-box { font-size: 12px; padding: 5px 8px; max-width: 240px; }
-.applykit-ats { font-size: 12.5px; padding: 7px 10px; border-radius: 9px; margin-bottom: 8px; border: 1px solid var(--line); }
-.applykit-ats.good { color: #15803d; background: color-mix(in srgb, #16a34a 8%, var(--paper)); }
-.applykit-ats.mid { color: #b45309; background: color-mix(in srgb, #d97706 8%, var(--paper)); }
-.applykit-ats.low { color: #dc2626; background: color-mix(in srgb, #dc2626 8%, var(--paper)); }
-.applykit-ats a { color: inherit; font-weight: 600; }
-[data-theme="dark"] .applykit-ats.good { color: #6ee7a0; }
-[data-theme="dark"] .applykit-ats.mid { color: #f0b26a; }
-[data-theme="dark"] .applykit-ats.low { color: #f28b82; }
+.applykit-ats-panel {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; margin-bottom: 8px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+}
+.applykit-ats-panel .ats-ring { flex: 0 0 auto; }
+.applykit-ats-detail { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; min-width: 0; }
+.applykit-ats-miss { color: var(--muted); }
+.applykit-ats-miss a { color: var(--accent); font-weight: 600; }
+.applykit-ats-ok { color: #15803d; }
+[data-theme="dark"] .applykit-ats-ok { color: #6ee7a0; }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import AtsRing from "../AtsRing";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
@@ -206,21 +207,6 @@ function RedesignWizard({
   );
 }
 
-/** ATS score as a ring — the same number reads as progress, not a grade. */
-function AtsRing({ score }: { score: number }) {
-  const r = 24;
-  const c = 2 * Math.PI * r;
-  const cls = score >= 70 ? "good" : score >= 45 ? "mid" : "low";
-  return (
-    <svg className={`ats-ring ${cls}`} viewBox="0 0 60 60" width="60" height="60" role="img" aria-label={`${score}% keyword match`}>
-      <circle className="ats-ring-track" cx="30" cy="30" r={r} />
-      <circle className="ats-ring-fill" cx="30" cy="30" r={r} strokeDasharray={`${(score / 100) * c} ${c}`} transform="rotate(-90 30 30)" />
-      <text x="30" y="35" textAnchor="middle" className="ats-ring-num">
-        {score}%
-      </text>
-    </svg>
-  );
-}
 const TEMPLATE_OPTIONS = [
   { key: "clean", label: "Clean", hint: "Understated, left-aligned — the safe default" },
   { key: "accent-name", label: "Accent", hint: "Your name in the accent color — modern & warm" },
@@ -1116,7 +1102,6 @@ export default function ResumeEditor({
         <Brand />
         <span style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <span className="status">{status}</span>
-          <a href="/mentor">Talk to your mentor →</a>
           <UserChip />
         </span>
       </div>

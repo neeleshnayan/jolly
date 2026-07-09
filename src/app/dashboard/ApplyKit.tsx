@@ -11,6 +11,7 @@
  * alone to answer.
  */
 import { useEffect, useState } from "react";
+import AtsRing from "../AtsRing";
 
 type Answer = { key: string; label: string; value: string | null };
 type Kit = {
@@ -45,6 +46,8 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
         if (j.error) throw new Error(j.error);
         setKit(j);
         setLetterText(j.letter?.content ?? "");
+        // how the résumé fares is part of the pack — check without being asked
+        if (j.job?.jd) void runAtsWith(j.job.jd);
       })
       .catch((e) => setErr(e instanceof Error ? e.message : "Couldn't stage the kit"));
     fetch(`/api/track/version?u=${userId}`, { cache: "no-store" })
@@ -81,14 +84,13 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
     }
   }
 
-  async function runAts() {
-    if (!kit?.job?.jd) return;
+  async function runAtsWith(jd: string) {
     setAtsBusy(true);
     try {
       const r = await fetch("/api/resume/ats-check", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, jd: kit.job.jd }),
+        body: JSON.stringify({ userId, jd }),
       });
       const j = await r.json();
       if (r.ok) setAts(j);
@@ -96,6 +98,7 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
       setAtsBusy(false);
     }
   }
+  const runAts = () => kit?.job?.jd && void runAtsWith(kit.job.jd);
 
   // Esc closes, like any window
   useEffect(() => {
@@ -200,23 +203,27 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
                         )}
                       </span>
                     )}
-                    {kit.job?.jd && (
-                      <button className="ghost-btn" onClick={() => void runAts()} disabled={atsBusy}>
-                        {atsBusy ? "Checking…" : ats ? "↻ Re-check ATS" : "🎯 ATS check"}
+                    {kit.job?.jd && ats && (
+                      <button className="ghost-btn" onClick={runAts} disabled={atsBusy}>
+                        {atsBusy ? "Checking…" : "↻ Re-check ATS"}
                       </button>
                     )}
                   </div>
+                  {atsBusy && !ats && <p className="dash-empty">Checking this résumé against the job&apos;s keyword screen…</p>}
                   {ats && (
-                    <div className={`applykit-ats ${ats.score >= 70 ? "good" : ats.score >= 45 ? "mid" : "low"}`}>
-                      <b>{ats.score}% keyword match</b>
-                      {ats.required.filter((k) => !k.hit).length > 0 ? (
-                        <span>
-                          {" "}· missing: {ats.required.filter((k) => !k.hit).slice(0, 4).map((k) => k.term).join(", ")}
-                          {" "}<a href="/resume">✎ fix in the editor</a>
-                        </span>
-                      ) : (
-                        <span> · every required keyword is covered ✓</span>
-                      )}
+                    <div className="applykit-ats-panel">
+                      <AtsRing score={ats.score} />
+                      <div className="applykit-ats-detail">
+                        <b>Keyword match for this job</b>
+                        {ats.required.filter((k) => !k.hit).length > 0 ? (
+                          <span className="applykit-ats-miss">
+                            Missing: {ats.required.filter((k) => !k.hit).slice(0, 5).map((k) => k.term).join(", ")}
+                            {" "}· <a href="/resume">✎ fix in the editor</a>
+                          </span>
+                        ) : (
+                          <span className="applykit-ats-ok">Every required keyword is covered ✓</span>
+                        )}
+                      </div>
                     </div>
                   )}
                   {/* the print page IS the document — true fidelity, zero drift */}
