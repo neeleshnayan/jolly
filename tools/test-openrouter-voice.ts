@@ -33,7 +33,6 @@ async function main() {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY not in .env.local");
   const auth = { authorization: `Bearer ${key}` };
-  const sttModel = process.env.OPENROUTER_STT_MODEL ?? "openai/whisper-large-v3";
   const dir = process.env.TEMP ?? ".";
 
   const line =
@@ -75,18 +74,31 @@ async function main() {
     process.exit(1);
   }
 
-  // ---- STT round-trip on the first successful sample ----
-  console.log(`\nSTT  ${sttModel}`);
-  const fd = new FormData();
-  fd.append("file", new Blob([firstMp3], { type: "audio/mpeg" }), "line.mp3");
-  fd.append("model", sttModel);
-  fd.append("language", "en");
-  const t0 = Date.now();
-  const sttRes = await fetch(`${BASE}/audio/transcriptions`, { method: "POST", headers: auth, body: fd });
-  if (!sttRes.ok) throw new Error(`STT ${sttRes.status}: ${(await sttRes.text()).slice(0, 300)}`);
-  const sttJson = (await sttRes.json()) as { text?: string };
-  console.log(`  → "${(sttJson.text ?? "").trim()}"  (${Date.now() - t0}ms)`);
-  console.log(`\nPlay the .mp3 files above to pick the mentor voice.`);
+  // ---- STT head-to-head on the same clip (needs a funded account) ----
+  // whisper-turbo vs parakeet vs whisper-large-v3 — same $0.0015/min for the
+  // cheap ones, so this is really a latency + accuracy-on-your-voice bake-off.
+  const sttModels = [
+    "openai/whisper-large-v3-turbo",
+    "nvidia/parakeet-tdt-0.6b-v3",
+    "openai/whisper-large-v3",
+  ];
+  console.log(`\nSTT bake-off on the same clip:`);
+  for (const m of sttModels) {
+    const fd = new FormData();
+    fd.append("file", new Blob([firstMp3], { type: "audio/mpeg" }), "line.mp3");
+    fd.append("model", m);
+    fd.append("language", "en");
+    const t0 = Date.now();
+    const res = await fetch(`${BASE}/audio/transcriptions`, { method: "POST", headers: auth, body: fd });
+    if (!res.ok) {
+      console.log(`  ✗ ${m} → ${res.status}: ${(await res.text()).slice(0, 120)}`);
+      continue;
+    }
+    const j = (await res.json()) as { text?: string; usage?: { cost?: number } };
+    console.log(`  ✓ ${m}  (${Date.now() - t0}ms, $${j.usage?.cost ?? "?"})`);
+    console.log(`      "${(j.text ?? "").trim()}"`);
+  }
+  console.log(`\nPlay the .mp3 files above to pick the mentor voice; STT numbers above pick the transcriber.`);
   process.exit(0);
 }
 
