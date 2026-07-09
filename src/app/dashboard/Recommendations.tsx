@@ -22,6 +22,9 @@ type Job = {
   coreRequirements: string[];
   skills: string[];
   fit: number;
+  desire: number;
+  evidence: number | null;
+  trajectory: number | null;
   reasons: string[];
   gaps: string[];
   why: string;
@@ -188,8 +191,9 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
   // for a one-tap confirm — honest data (no phantom applications from bounces),
   // zero forms. Confirmed rows feed the outcome funnel on this same dashboard.
   const [confirming, setConfirming] = useState<Record<string, "ask" | "saving" | "done">>({});
-  // the Apply Kit rides the same click that opens the ATS tab
-  const [kitFor, setKitFor] = useState<{ id: string; title: string } | null>(null);
+  // the Apply Kit rides the same click that opens the ATS tab; the ranked job
+  // travels with it so the kit's diagnostics don't re-rank anything
+  const [kitFor, setKitFor] = useState<{ id: string; title: string; job?: Job } | null>(null);
   // deep link from the résumé editor's redesign handoff: /dashboard?applykit=<id>
   // opens the kit for that role with the freshly tailored documents
   useEffect(() => {
@@ -197,14 +201,14 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     const id = new URLSearchParams(window.location.search).get("applykit");
     if (!id) return;
     const m = matches.find((j) => j.id === id);
-    if (m) setKitFor({ id: m.id, title: m.title ?? "this role" });
+    if (m) setKitFor({ id: m.id, title: m.title ?? "this role", job: m });
     const url = new URL(window.location.href);
     url.searchParams.delete("applykit"); // one-shot: a reload shouldn't re-open it
     window.history.replaceState({}, "", url);
   }, [matches]);
   function onApplyClick(id: string, title?: string | null) {
     signal("apply_click", id);
-    setKitFor({ id, title: title ?? "this role" });
+    setKitFor({ id, title: title ?? "this role", job: matches?.find((j) => j.id === id) });
     setConfirming((c) => (c[id] ? c : { ...c, [id]: "ask" }));
   }
   async function confirmApplied(j: Job) {
@@ -412,7 +416,19 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
         </button>
         {bookmarkMsg && <span className="dash-hint">{bookmarkMsg}</span>}
       </div>
-      {kitFor && <ApplyKit userId={userId} opportunityId={kitFor.id} jobTitle={kitFor.title} onClose={() => setKitFor(null)} />}
+      {kitFor && (
+        <ApplyKit
+          userId={userId}
+          opportunityId={kitFor.id}
+          jobTitle={kitFor.title}
+          ranked={
+            kitFor.job
+              ? { fit: kitFor.job.fit, desire: kitFor.job.desire, evidence: kitFor.job.evidence, trajectory: kitFor.job.trajectory, reasons: kitFor.job.reasons, gaps: kitFor.job.gaps }
+              : null
+          }
+          onClose={() => setKitFor(null)}
+        />
+      )}
     </section>
   );
 }

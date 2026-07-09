@@ -1154,7 +1154,8 @@ a { color: var(--accent); }
 .applykit-answer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .applykit-answer:last-child { border-bottom: none; }
 .applykit-answer-label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
-.applykit-answer-value { display: flex; align-items: center; gap: 7px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.applykit-answer-value { display: flex; align-items: center; gap: 7px; font-weight: 600; text-align: right; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
+.applykit-answer-value > span { font-size: 13px; }
 .applykit-copy { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; cursor: pointer; font-size: 12px; padding: 2px 7px; color: var(--ink); }
 .applykit-copy:hover { border-color: var(--accent); color: var(--accent); }
 .applykit-missing { font-size: 12px; color: var(--accent); text-decoration: none; }
@@ -2783,17 +2784,56 @@ textarea.f { line-height: 1.55; }
 .applykit-resume-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .applykit-version-pick { display: flex; align-items: center; gap: 6px; }
 .applykit-version-pick .f-box { font-size: 12px; padding: 5px 8px; max-width: 240px; }
-.applykit-ats-panel {
+/* the diagnostics console: two honest dials on the same document, plus the
+   what-if probe (simulated keywords are arithmetic, never edits) */
+.applykit-window { height: min(88vh, 900px); }
+.applykit-diag { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.diag-dial {
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 12px; margin-bottom: 8px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border); border-radius: 12px;
+  background: var(--glass); backdrop-filter: blur(10px);
 }
-.applykit-ats-panel .ats-ring { flex: 0 0 auto; }
-.applykit-ats-detail { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; min-width: 0; }
-.applykit-ats-miss { color: var(--muted); }
-.applykit-ats-miss a { color: var(--accent); font-weight: 600; }
+.diag-dial .ats-ring { flex: 0 0 auto; }
+.diag-detail { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; min-width: 0; }
+.diag-detail b { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.diag-sim-badge {
+  font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #b45309; background: color-mix(in srgb, #d97706 12%, transparent);
+  border-radius: 6px; padding: 1px 7px;
+}
+[data-theme="dark"] .diag-sim-badge { color: #f0b26a; }
+.diag-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.diag-whatif {
+  font: inherit; font-size: 11.5px; cursor: pointer;
+  border: 1px dashed var(--line); border-radius: 999px; padding: 2px 9px;
+  background: none; color: var(--ink);
+}
+.diag-whatif em { font-style: normal; color: var(--accent); margin-left: 4px; font-weight: 650; }
+.diag-whatif:hover { border-color: var(--accent); }
+.diag-whatif.on { border-style: solid; border-color: var(--accent); color: var(--accent); }
+.diag-fix { font-size: 11.5px; color: var(--accent); text-decoration: none; margin-left: 2px; }
+.diag-fix:hover { text-decoration: underline; }
+.diag-why { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); }
+.diag-plus { color: #15803d; }
+.diag-minus { color: #b45309; }
+[data-theme="dark"] .diag-plus { color: #6ee7a0; }
+[data-theme="dark"] .diag-minus { color: #f0b26a; }
 .applykit-ats-ok { color: #15803d; }
 [data-theme="dark"] .applykit-ats-ok { color: #6ee7a0; }
+
+/* the letter reads as a LETTER: paper, margins, serif warmth — still editable */
+.applykit-hooks { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+.applykit-letter-sheet { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: #eceff3; padding: 18px; display: flex; }
+.applykit-letter-full.letter-paper {
+  flex: 1; margin: 0 auto; max-width: 640px; min-height: 100%;
+  background: #fff; color: #1a2233;
+  border: none; border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.14);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13.5px; line-height: 1.7;
+  padding: 42px 48px; resize: none; outline: none;
+}
 
 /* the mentor's own card — exactly the seeker view, plus an edit affordance */
 .mentor-card-own { margin-top: 4px; }

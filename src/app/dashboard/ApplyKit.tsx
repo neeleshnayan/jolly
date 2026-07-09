@@ -22,12 +22,34 @@ type Kit = {
 
 type PickVersion = { id: string; label: string | null; createdAt: string; theme: string | null };
 type AtsSummary = { score: number; required: { term: string; hit: boolean }[]; preferred: { term: string; hit: boolean }[] };
+/** The ranked read on this role (fit v2), passed from the card that opened us. */
+export type RankedRead = {
+  fit: number;
+  desire: number;
+  evidence: number | null;
+  trajectory: number | null;
+  reasons: string[];
+  gaps: string[];
+};
 
-export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: { userId: string; opportunityId: string; jobTitle: string; onClose: () => void }) {
+export default function ApplyKit({
+  userId,
+  opportunityId,
+  jobTitle,
+  ranked = null,
+  onClose,
+}: {
+  userId: string;
+  opportunityId: string;
+  jobTitle: string;
+  ranked?: RankedRead | null;
+  onClose: () => void;
+}) {
   const [kit, setKit] = useState<Kit | null>(null);
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [letterText, setLetterText] = useState("");
+  const [letterHooks, setLetterHooks] = useState<string[]>([]);
   const [letterBusy, setLetterBusy] = useState(false);
   const [docTab, setDocTab] = useState<"resume" | "letter">("resume");
   // which résumé goes out: the live one, or any saved theme/version snapshot
@@ -38,6 +60,24 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
   // how this résumé fares against THIS job's keyword screen
   const [ats, setAts] = useState<AtsSummary | null>(null);
   const [atsBusy, setAtsBusy] = useState(false);
+  // the what-if probe: tick a missing keyword to SIMULATE it on the résumé —
+  // pure arithmetic (the server's exact formula), nothing is ever added for you
+  const [simulated, setSimulated] = useState<Set<string>>(new Set());
+  const scoreWith = (extra: Set<string>) => {
+    if (!ats) return 0;
+    const rs = ats.required.length ? ats.required.filter((k) => k.hit || extra.has(k.term)).length / ats.required.length : 1;
+    const ps = ats.preferred.length ? ats.preferred.filter((k) => k.hit || extra.has(k.term)).length / ats.preferred.length : 1;
+    return Math.round(100 * (0.8 * rs + 0.2 * ps));
+  };
+  const simScore = scoreWith(simulated);
+  const deltaFor = (term: string) => scoreWith(new Set([...simulated, term])) - simScore;
+  const toggleSim = (term: string) =>
+    setSimulated((s) => {
+      const next = new Set(s);
+      if (next.has(term)) next.delete(term);
+      else next.add(term);
+      return next;
+    });
 
   useEffect(() => {
     fetch(`/api/apply-kit?u=${userId}&opportunityId=${opportunityId}`, { cache: "no-store" })
@@ -93,7 +133,10 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
         body: JSON.stringify({ userId, jd }),
       });
       const j = await r.json();
-      if (r.ok) setAts(j);
+      if (r.ok) {
+        setAts(j);
+        setSimulated(new Set()); // a fresh read starts from reality
+      }
     } finally {
       setAtsBusy(false);
     }
@@ -128,7 +171,10 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
         body: JSON.stringify({ userId, jd: kit.job.jd }),
       });
       const j = await r.json();
-      if (r.ok && j.letter) setLetterText(j.letter);
+      if (r.ok && j.letter) {
+        setLetterText(j.letter);
+        setLetterHooks(j.hooks ?? []); // the WHY behind the letter, shown above it
+      }
     } finally {
       setLetterBusy(false);
     }
@@ -183,8 +229,8 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
                 </span>
               </div>
               {docTab === "resume" ? (
-                <div className="applykit-resume-scroll">
-                  {/* which résumé goes out + how it fares against this job's screen */}
+                <>
+                  {/* which résumé goes out — lives on the glass, not the paper tray */}
                   <div className="applykit-resume-tools">
                     {versions.length > 0 && (
                       <span className="applykit-version-pick">
@@ -205,37 +251,87 @@ export default function ApplyKit({ userId, opportunityId, jobTitle, onClose }: {
                     )}
                     {kit.job?.jd && ats && (
                       <button className="ghost-btn" onClick={runAts} disabled={atsBusy}>
-                        {atsBusy ? "Checking…" : "↻ Re-check ATS"}
+                        {atsBusy ? "Checking…" : "↻ Re-check"}
                       </button>
                     )}
                   </div>
-                  {atsBusy && !ats && <p className="dash-empty">Checking this résumé against the job&apos;s keyword screen…</p>}
-                  {ats && (
-                    <div className="applykit-ats-panel">
-                      <AtsRing score={ats.score} />
-                      <div className="applykit-ats-detail">
-                        <b>Keyword match for this job</b>
-                        {ats.required.filter((k) => !k.hit).length > 0 ? (
-                          <span className="applykit-ats-miss">
-                            Missing: {ats.required.filter((k) => !k.hit).slice(0, 5).map((k) => k.term).join(", ")}
-                            {" "}· <a href="/resume">✎ fix in the editor</a>
-                          </span>
-                        ) : (
-                          <span className="applykit-ats-ok">Every required keyword is covered ✓</span>
-                        )}
+
+                  {/* diagnostics: two honest dials on the same document */}
+                  <div className="applykit-diag">
+                    {atsBusy && !ats && <p className="dash-empty">Reading this résumé the way the screening robot will…</p>}
+                    {ats && (
+                      <div className="diag-dial">
+                        <AtsRing score={simulated.size ? simScore : ats.score} />
+                        <div className="diag-detail">
+                          <b>
+                            The robot&apos;s read — keyword screen
+                            {simulated.size > 0 && <span className="diag-sim-badge">simulated · really {ats.score}%</span>}
+                          </b>
+                          {ats.required.filter((k) => !k.hit).length > 0 ? (
+                            <span className="diag-chips">
+                              {ats.required.filter((k) => !k.hit).slice(0, 6).map((k) => (
+                                <button
+                                  key={k.term}
+                                  className={`diag-whatif${simulated.has(k.term) ? " on" : ""}`}
+                                  onClick={() => toggleSim(k.term)}
+                                  title="What if this were on your résumé? Pure arithmetic — nothing is added for you."
+                                >
+                                  {simulated.has(k.term) ? "✓" : "+"} {k.term}
+                                  {!simulated.has(k.term) && deltaFor(k.term) > 0 && <em>+{deltaFor(k.term)}%</em>}
+                                </button>
+                              ))}
+                              <a className="diag-fix" href="/resume">✎ genuinely yours? fix in the editor</a>
+                            </span>
+                          ) : (
+                            <span className="applykit-ats-ok">Every required keyword is covered ✓</span>
+                          )}
+                        </div>
                       </div>
+                    )}
+                    {ranked && (
+                      <div className="diag-dial">
+                        <AtsRing score={Math.round(ranked.fit * 100)} label="whole-person fit" />
+                        <div className="diag-detail">
+                          <b>drizzle&apos;s read — the whole person</b>
+                          <span className="diag-chips">
+                            {ranked.evidence !== null && <span className="rec-chip">résumé evidence {Math.round(ranked.evidence * 100)}%</span>}
+                            {ranked.trajectory !== null && <span className="rec-chip">your direction {Math.round(ranked.trajectory * 100)}%</span>}
+                            <span className="rec-chip">how you work {Math.round(ranked.desire * 100)}%</span>
+                          </span>
+                          {(ranked.reasons[0] || ranked.gaps[0]) && (
+                            <span className="diag-why">
+                              {ranked.reasons[0] && <span className="diag-plus">▲ {ranked.reasons[0]}</span>}
+                              {ranked.gaps[0] && <span className="diag-minus">▼ {ranked.gaps[0]}</span>}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="applykit-resume-scroll">
+                    {/* the print page IS the document — true fidelity, zero drift */}
+                    <iframe key={frameKey} className="applykit-resume-frame" src={`/resume/print?u=${userId}`} title="Your résumé" />
+                  </div>
+                </>
+              ) : letterText || letterBusy ? (
+                <>
+                  {letterHooks.length > 0 && (
+                    <div className="applykit-hooks">
+                      why this letter: {letterHooks.map((h) => (
+                        <span className="rec-chip" key={h}>{h}</span>
+                      ))}
                     </div>
                   )}
-                  {/* the print page IS the document — true fidelity, zero drift */}
-                  <iframe key={frameKey} className="applykit-resume-frame" src={`/resume/print?u=${userId}`} title="Your résumé" />
-                </div>
-              ) : letterText || letterBusy ? (
-                <textarea
-                  className="applykit-letter-full"
-                  value={letterBusy && !letterText ? "Writing against this job's description…" : letterText}
-                  onChange={(e) => setLetterText(e.target.value)}
-                  readOnly={letterBusy}
-                />
+                  <div className="applykit-letter-sheet">
+                    <textarea
+                      className="applykit-letter-full letter-paper"
+                      value={letterBusy && !letterText ? "Writing against this job's description…" : letterText}
+                      onChange={(e) => setLetterText(e.target.value)}
+                      readOnly={letterBusy}
+                    />
+                  </div>
+                </>
               ) : (
                 <div className="applykit-letter-empty">
                   <p className="dash-empty">No letter yet — ✨ Write it drafts one against this job&apos;s description.</p>
