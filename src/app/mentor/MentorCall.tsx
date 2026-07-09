@@ -149,6 +149,29 @@ export default function MentorCall({ userId }: { userId: string }) {
   type CallRole = { kind: string; title: string; company: string; why: string };
   const spectrumRef = useRef<CallRole[]>([]);
   const [roleCards, setRoleCards] = useState<CallRole[] | null>(null);
+  // the human circle, same contract: preloaded silently, revealed the moment
+  // the mentor offers an intro by name ("There's someone — Arjun Mehta…")
+  type CircleMentor = { id: string; name: string; avatarUrl: string | null; headline: string | null; move: string; why: string };
+  const circleRef = useRef<CircleMentor[]>([]);
+  const [mentorCards, setMentorCards] = useState<CircleMentor[] | null>(null);
+  const [introState, setIntroState] = useState<Record<string, "sending" | "sent">>({});
+  async function requestIntroInCall(mentorId: string) {
+    setIntroState((s) => ({ ...s, [mentorId]: "sending" }));
+    try {
+      const r = await fetch("/api/mentors/intro", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ u: userId, mentorId }),
+      });
+      if (!r.ok) throw new Error();
+      setIntroState((s) => ({ ...s, [mentorId]: "sent" }));
+    } catch {
+      setIntroState((s) => {
+        const { [mentorId]: _drop, ...rest } = s;
+        return rest;
+      });
+    }
+  }
   // debug A/B: which brain answers — local Ollama or Anthropic. Dev-only UI;
   // the server independently gates the override, so this is safe to render.
   const [brain, setBrain] = useState<"ollama" | "anthropic">("ollama");
@@ -273,6 +296,24 @@ export default function MentorCall({ userId }: { userId: string }) {
     });
     if (named) setRoleCards(spectrumRef.current);
   }
+  // Reveal the CIRCLE the moment the mentor offers a person by name. Names are
+  // spoken verbatim (the prompt forbids inventing people), so matching is
+  // stricter than roles: full name, or a distinctive (≥4 chars) surname.
+  function maybeRevealMentors(replyText: string) {
+    if (mentorCards || !circleRef.current.length) return;
+    const t = ` ${replyText.toLowerCase().replace(/[^a-z0-9 ]+/g, " ")} `;
+    const named = circleRef.current.filter((m) => {
+      const full = m.name.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").trim();
+      if (full && t.includes(` ${full} `)) return true;
+      const last = full.split(/\s+/).pop() ?? "";
+      return last.length >= 4 && t.includes(` ${last} `);
+    });
+    if (named.length) {
+      // the person the mentor just offered leads; the rest of the circle follows
+      const rest = circleRef.current.filter((m) => !named.some((n) => n.id === m.id));
+      setMentorCards([...named, ...rest]);
+    }
+  }
   function buildTranscript(list: Turn[]) {
     return list.map((t) => `${t.role === "user" ? "You" : "Mentor"}: ${t.text}`).join("\n");
   }
@@ -295,6 +336,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       .replace(/\s{2,}/g, " ")
       .trim();
     maybeRevealRoles(text); // if the mentor named a role, surface the cards
+    maybeRevealMentors(text); // if the mentor offered a PERSON, surface them
     if (!text.trim()) {
       if (liveRef.current) {
         enter("idle");
@@ -690,6 +732,23 @@ export default function MentorCall({ userId }: { userId: string }) {
         );
       })
       .catch(() => {});
+    // …and the human circle, same contract: revealed only when a person is offered
+    fetch(`/api/mentors?u=${userId}`)
+      .then((r) => r.json())
+      .then((j) => {
+        circleRef.current = ((j.matches ?? []) as { id: string; name: string | null; avatarUrl: string | null; headline: string | null; transitions: { from: string; to: string }[]; why: string[] }[])
+          .slice(0, 3)
+          .filter((m) => m.name)
+          .map((m) => ({
+            id: m.id,
+            name: m.name as string,
+            avatarUrl: m.avatarUrl,
+            headline: m.headline,
+            move: m.transitions[0] ? `${m.transitions[0].from} → ${m.transitions[0].to}` : "",
+            why: m.why[0] ?? "",
+          }));
+      })
+      .catch(() => {});
 
     // Warm the voice stack WHILE the greeting is generated — both finish before
     // the clock starts, so cold-start (often ~10s) costs the user nothing.
@@ -911,7 +970,10 @@ export default function MentorCall({ userId }: { userId: string }) {
     phase === "speaking" && spokenText
       ? revealWords(spokenText, revealFrac)
       : lastAssistant?.text ?? "";
-  const keyTerms = spectrumRef.current.flatMap((r) => [r.title, r.company, displayCompany(r.company)]).filter((t): t is string => !!t && t.length > 2);
+  const keyTerms = [
+    ...spectrumRef.current.flatMap((r) => [r.title, r.company, displayCompany(r.company)]),
+    ...circleRef.current.map((m) => m.name), // an offered person's name pops in the caption too
+  ].filter((t): t is string => !!t && t.length > 2);
 
   return (
     <div className="call">
@@ -1057,6 +1119,38 @@ export default function MentorCall({ userId }: { userId: string }) {
             </div>
             {caption && <div className="caption-text" dangerouslySetInnerHTML={{ __html: renderCaption(caption, keyTerms) }} />}
           </div>
+
+          {mentorCards && (
+            <div className="call-roles">
+              <div className="call-roles-head">From the drizzle circle — the one they just mentioned leads</div>
+              <div className="call-roles-row">
+                {mentorCards.map((m, i) => (
+                  <div className={`call-role call-mentor${i === 0 ? " named" : ""}`} key={m.id} style={{ animationDelay: `${i * 120}ms` }}>
+                    <div className="call-mentor-head">
+                      {m.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className="mentor-avatar" src={m.avatarUrl} alt="" />
+                      ) : (
+                        <span className="mentor-avatar mentor-avatar-fallback">{m.name.slice(0, 1)}</span>
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div className="call-role-title">{m.name}</div>
+                        <div className="call-role-co">{m.headline ?? ""}</div>
+                      </div>
+                    </div>
+                    {m.move && <div className="call-mentor-move">{m.move}</div>}
+                    {introState[m.id] === "sent" ? (
+                      <span className="apply-confirm done">✓ Intro requested</span>
+                    ) : (
+                      <button className="tip-add" onClick={() => void requestIntroInCall(m.id)} disabled={introState[m.id] === "sending"}>
+                        {introState[m.id] === "sending" ? "Requesting…" : "🤝 Request intro"}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {roleCards && (
             <div className="call-roles">

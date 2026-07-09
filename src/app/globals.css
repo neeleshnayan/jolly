@@ -2842,3 +2842,11 @@ textarea.f { line-height: 1.55; }
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
   margin-bottom: 10px;
 }
+
+/* in-call circle cards — the person the mentor just offered leads, lit */
+.call-mentor { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.call-mentor.named { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 8px 26px color-mix(in srgb, var(--accent) 22%, transparent); }
+.call-mentor-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.call-mentor-head .mentor-avatar { width: 34px; height: 34px; font-size: 15px; }
+.call-mentor-move { font-size: 11px; color: var(--muted); }
+.call-mentor .tip-add { font-size: 11.5px; }
