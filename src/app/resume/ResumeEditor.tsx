@@ -368,6 +368,8 @@ export default function ResumeEditor({
     rationale: string;
     content: { experiences: { id: string; bullets: string[] }[]; projects: { id: string; bullets: string[] }[] };
     proposed: FullProfile;
+    // set when the sheet overflowed and the rewrite merged/cut toward one page
+    condensed: { before: number; after: number; pagesBefore: number; pagesAfter: number } | null;
   };
   const [overhaul, setOverhaul] = useState<Overhaul | null>(null);
   const [redesigning, setRedesigning] = useState(false);
@@ -604,7 +606,7 @@ export default function ResumeEditor({
         experiences: data.experiences.map((e) => (em.has(e.id) ? { ...e, bullets: wrapBullets(em.get(e.id)!) } : e)),
         projects: data.projects.map((p) => (pm.has(p.id) ? { ...p, bullets: wrapBullets(pm.get(p.id)!) } : p)),
       };
-      setOverhaul({ style, rationale: j.rationale ?? "", content, proposed });
+      setOverhaul({ style, rationale: j.rationale ?? "", content, proposed, condensed: j.condensed ?? null });
     } catch (e) {
       setRedesignErr(e instanceof Error ? e.message : "Redesign failed");
     } finally {
@@ -1097,6 +1099,13 @@ export default function ResumeEditor({
             <div>
               <div className="diff-title">✨ AI redesign — review side by side</div>
               {overhaul.rationale && <div className="diff-rationale">{overhaul.rationale}</div>}
+              {overhaul.condensed && (
+                <div className="diff-rationale">
+                  Condensed toward one page: {overhaul.condensed.before} → {overhaul.condensed.after} bullets (~
+                  {overhaul.condensed.pagesBefore} → ~{overhaul.condensed.pagesAfter} pages). Overlapping lines were
+                  merged and the least relevant cut — nothing was invented. Review before overwriting.
+                </div>
+              )}
             </div>
             <div className="diff-actions">
               <button className="ghost-btn" onClick={() => setOverhaul(null)}>Keep original</button>
