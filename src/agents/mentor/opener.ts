@@ -12,7 +12,7 @@ export async function mentorOpener(userId: string): Promise<string> {
   const map = await getMentorMap(userId);
   const first = map.profile?.fullName?.split(" ")[0];
   const spectrum = await getCallSpectrum(userId).catch(() => []);
-  const system = buildMentorSystemPrompt(map, spectrum);
+  const { core, delta } = buildMentorSystemPrompt(map, spectrum);
 
   // A stage direction, not a real user turn — tells the mentor how to open.
   // Returning callers get a reunion, not a stranger's greeting.
@@ -31,7 +31,7 @@ export async function mentorOpener(userId: string): Promise<string> {
   const provider = getProvider("mentor");
   let text = "";
   try {
-    for await (const d of provider.streamChat({ system, messages: [direction], maxTokens: 120 })) {
+    for await (const d of provider.streamChat({ systemCore: core, system: delta, messages: [direction], maxTokens: 120 })) {
       text += d;
     }
   } catch {

@@ -28,14 +28,17 @@ const MOVES = [
   `FOLLOW THE ENERGY — pick the one word or aside where their voice came alive and pull on THAT, even if it seems off-topic.`,
 ] as const;
 
+/** Split so the big STATIC prefix (persona + everything-you-know) is byte-identical
+ *  across every turn of a call and can be cached; only the small per-turn steering
+ *  (time, move, no-repeat list, role dossier) lives in `delta`. */
 export function buildMentorSystemPrompt(
   map: MentorMap,
   spectrum: CallRole[] = [],
   secondsLeft?: number,
   turn?: { index: number; asked: string[] },
   circle: CircleMentor[] = [],
-): string {
-  // time awareness + how to end the call well
+): { core: string; delta: string } {
+  // time awareness + how to end the call well — DYNAMIC (per turn)
   const timeHint =
     secondsLeft == null
       ? ""
@@ -48,12 +51,13 @@ export function buildMentorSystemPrompt(
   // while most of the call remains, unless the user asks to stop
   const earlyGuard =
     secondsLeft != null && secondsLeft > 600
-      ? ` IMPORTANT: it is still EARLY in this call (over ${Math.round(secondsLeft / 60)} minutes remain). Do NOT close yet — there is more of them to understand. Only close this early if THEY say they need to go.`
+      ? `\n\nIMPORTANT: it is still EARLY in this call (over ${Math.round(secondsLeft / 60)} minutes remain). Do NOT close yet — there is more of them to understand. Only close this early if THEY say they need to go.`
       : "";
+  // STATIC close instructions (earlyGuard moved to the dynamic delta)
   const closingBlock = `\n\nENDING THE CALL — a TWO-STEP close, never abrupt:
 1. When you have a real read on who they are (or time is running short), first ASK: "before we wrap — anything else on your mind you want to think through together?" Give them the floor. Do NOT end on this turn.
 2. After they respond (or decline), close: two warm, energising sentences — name one genuine strength you actually saw, and one concrete, hopeful next move — then put [[END_CALL]] on its very own line at the end.
-If time has fully run out mid-thread, bounce politely: acknowledge the thread is worth more time ("that deserves a proper conversation — bring it to our next call"), then do step 2 in the same turn. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing.${earlyGuard}`;
+If time has fully run out mid-thread, bounce politely: acknowledge the thread is worth more time ("that deserves a proper conversation — bring it to our next call"), then do step 2 in the same turn. Close as an equal who believes in them: NO groveling, no "thank you so much for your time", no bowing.`;
 
   const name = map.profile?.fullName ?? "the person";
   const headline = map.profile?.headline ? ` (${map.profile.headline})` : "";
@@ -68,18 +72,19 @@ If time has fully run out mid-thread, bounce politely: acknowledge the thread is
         .join("\n")}`
     : "";
 
-  // three roles pre-picked across the spectrum, to make the call concrete
-  // past the midpoint the roles MUST come up — a whole call without them means
-  // the reveal moment (and the reaction data it generates) never happens
-  const midpointNudge =
-    secondsLeft != null && secondsLeft <= 600
-      ? ` The call is past its midpoint and you haven't necessarily raised these yet — find a natural bridge from what they've been saying and bring ONE up in your next turn or two, naming the role title and company out loud.`
-      : "";
+  // three roles pre-picked across the spectrum, to make the call concrete.
+  // STATIC list; the "raise one past the midpoint" nudge is DYNAMIC → delta.
   const rolesBlock = spectrum.length
-    ? `\n\nTHREE ROLES YOU'VE LINED UP TO DISCUSS (across the spectrum — a strong fit, a different path, a pivot). Don't dump them as a list; bring ONE up when it's natural, NAMING THE TITLE AND COMPANY exactly (the screen shows them cards when you do), and use it to probe — "between building something from scratch and leading a team, which pulls at you more, and why?". Let their reaction teach you what they actually want:${midpointNudge}\n${spectrum
+    ? `\n\nTHREE ROLES YOU'VE LINED UP TO DISCUSS (across the spectrum — a strong fit, a different path, a pivot). Don't dump them as a list; bring ONE up when it's natural, NAMING THE TITLE AND COMPANY exactly (the screen shows them cards when you do), and use it to probe — "between building something from scratch and leading a team, which pulls at you more, and why?". Let their reaction teach you what they actually want:\n${spectrum
         .map((r) => `- [${r.kind}] ${r.title} at ${r.company} — ${r.why}`)
         .join("\n")}`
     : "";
+  // past the midpoint the roles MUST come up — the reveal moment (and its
+  // reaction data) never happens otherwise. Per-turn, so it lives in the delta.
+  const midpointNudge =
+    spectrum.length && secondsLeft != null && secondsLeft <= 600
+      ? `\n\nMIDPOINT NUDGE: the call is past its midpoint and you haven't necessarily raised the three roles above yet — find a natural bridge from what they've been saying and bring ONE up in your next turn or two, naming the role title and company out loud.`
+      : "";
 
   // the human circle: a second kind of concrete help. Roles test trajectory;
   // people who MADE the move offer the lived answer. Either, both, any order.
@@ -152,7 +157,8 @@ If time has fully run out mid-thread, bounce politely: acknowledge the thread is
     ? `\n\nTHREADS FROM THEIR RÉSUMÉ WORTH PULLING ON (raise these naturally when the moment fits — don't fire them off as a checklist):\n${probes}`
     : "";
 
-  return `You are a warm, sharp career mentor talking to ${name}${headline} on a VOICE call — a real, real-time spoken conversation.
+  // ---- CORE: byte-identical for the whole call → cached ----
+  const core = `You are a warm, sharp career mentor talking to ${name}${headline} on a VOICE call — a real, real-time spoken conversation.
 
 WHO YOU ARE:
 - A trusted mentor who wants them in work they don't have to settle for.
@@ -199,7 +205,12 @@ Understanding so far:
 ${known}${prevCallsBlock}${arcBlock}${activityBlock}
 
 WHERE YOUR CURIOSITY IS THIN (drift here when it feels natural — never interrogate):
-${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${circleBlock}${askedBlock}${turnBlock}${closingBlock}${timeHint}
+${(thin.length ? thin : DIMENSIONS).map((d) => `- ${d}`).join("\n")}${probeBlock}${rolesBlock}${circleBlock}${closingBlock}
 
 Keep each turn to a sentence or two. This is a conversation, not a monologue — and it should feel alive, like talking to someone who really gets it, not like filling out a form.`;
+
+  // ---- DELTA: the per-turn steering. Appended after the core; never cached. ----
+  const delta = `${midpointNudge}${turnBlock}${askedBlock}${earlyGuard}${timeHint}`;
+
+  return { core, delta };
 }

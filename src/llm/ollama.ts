@@ -164,6 +164,10 @@ export const ollamaProvider: LLMProvider = {
   },
 
   async *streamChat(req) {
+    // core FIRST so the stable prefix stays byte-identical across turns —
+    // llama.cpp reuses its KV cache for it, so prompt-eval skips re-reading
+    // the whole persona+profile every turn (the local latency win).
+    const system = [req.systemCore, req.system].filter(Boolean).join("\n\n");
     const res = await fetch(`${BASE}/api/chat`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -175,7 +179,7 @@ export const ollamaProvider: LLMProvider = {
 
         options: ollamaOptions({ temperature: 0.7, numCtx: NUM_CTX }),
         messages: [
-          ...(req.system ? [{ role: "system", content: req.system }] : []),
+          ...(system ? [{ role: "system", content: system }] : []),
           ...req.messages,
         ],
       }),

@@ -39,6 +39,12 @@ export interface ChatMessage {
 }
 
 export interface ChatRequest {
+  /** the STATIC, per-call system prefix — identical across every turn of a call.
+   *  Cloud providers cache it (cache_control breakpoint → ~10% input price);
+   *  Ollama reuses its KV prefix so prompt-eval skips it. Keep it byte-stable. */
+  systemCore?: string;
+  /** the per-turn dynamic tail (time left, steering, role dossier). Appended
+   *  after the core; never cached. */
   system?: string;
   messages: ChatMessage[];
   maxTokens?: number;

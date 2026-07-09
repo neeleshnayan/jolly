@@ -61,10 +61,19 @@ export const anthropicProvider: LLMProvider = {
 
   async *streamChat(req) {
     // Anthropic keeps system separate and requires messages to start with user.
-    const system =
-      [req.system, ...req.messages.filter((m) => m.role === "system").map((m) => m.content)]
-        .filter(Boolean)
-        .join("\n\n") || undefined;
+    // Cache the static core with a cache_control breakpoint; the delta + any
+    // inline system messages follow as fresh blocks.
+    const tail = [req.system, ...req.messages.filter((m) => m.role === "system").map((m) => m.content)].filter(
+      Boolean,
+    ) as string[];
+    const system: Anthropic.Messages.MessageCreateParams["system"] = req.systemCore
+      ? ([
+          { type: "text", text: req.systemCore, cache_control: { type: "ephemeral" } },
+          ...tail.map((t) => ({ type: "text", text: t })),
+        ] as Anthropic.Messages.TextBlockParam[])
+      : tail.length
+        ? tail.join("\n\n")
+        : undefined;
 
     const msgs = req.messages
       .filter((m) => m.role !== "system")

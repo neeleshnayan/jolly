@@ -64,14 +64,16 @@ export async function* mentorTurn(input: {
   // capabilities: when the user names a role from their world, this turn's
   // prompt gains a focused dossier (deterministic detection, cheap, cached)
   const brief = await capabilityBrief(input.userId, input.messages);
-  const system =
-    buildMentorSystemPrompt(map, spectrum, input.secondsLeft, {
-      index: turnIndex,
-      asked: askedQuestions(input.messages),
-    }, circle) + brief;
+  // core is byte-identical for the whole call (cached); delta + the on-demand
+  // role dossier are this turn's dynamic tail
+  const { core, delta } = buildMentorSystemPrompt(map, spectrum, input.secondsLeft, {
+    index: turnIndex,
+    asked: askedQuestions(input.messages),
+  }, circle);
   const provider = getProviderByName(input.brain) ?? getProvider("mentor");
   yield* provider.streamChat({
-    system,
+    systemCore: core,
+    system: delta + brief,
     messages: input.messages,
     maxTokens: 400, // spoken turns should be short
   });

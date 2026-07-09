@@ -88,8 +88,18 @@ export const openrouterProvider: LLMProvider = {
   },
 
   async *streamChat(req) {
+    // cache the static core: a cache_control breakpoint on the core block tells
+    // OpenRouter/Anthropic to cache everything up to it (~10% input price on
+    // cached reads); the delta block after it stays fresh. Falls back to a plain
+    // string system when there's no core (non-mentor callers).
+    const systemContent = req.systemCore
+      ? [
+          { type: "text", text: req.systemCore, cache_control: { type: "ephemeral" } },
+          ...(req.system ? [{ type: "text", text: req.system }] : []),
+        ]
+      : req.system;
     const messages = [
-      ...(req.system ? [{ role: "system", content: req.system }] : []),
+      ...(systemContent ? [{ role: "system", content: systemContent }] : []),
       ...req.messages.map((m) => ({ role: m.role, content: m.content })),
     ];
     const res = await fetch(`${BASE}/chat/completions`, {

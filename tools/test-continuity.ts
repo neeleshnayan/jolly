@@ -52,13 +52,17 @@ async function main() {
       { period: "Jul 2026", line: "Applying to Series A companies with real scope", kind: "goal" },
     ],
   };
-  const prompt = buildMentorSystemPrompt(map as never, [], 1100, { index: 0, asked: [] });
+  const parts = buildMentorSystemPrompt(map as never, [], 1100, { index: 0, asked: [] });
+  const prompt = parts.core + parts.delta; // core + per-turn delta = what the model sees
+  assert("prompt splits into core + delta", typeof parts.core === "string" && typeof parts.delta === "string");
+  assert("static knowledge lives in the cached core", parts.core.includes("WHAT THEY'VE DONE SINCE") && parts.core.includes("THEIR GROWTH ARC"));
   assert("previous-calls block present", prompt.includes("YOUR PREVIOUS CALLS") && prompt.includes("pull toward founding"));
   assert("call number correct (call 2)", prompt.includes("this is call 2"));
   assert("activity block present", prompt.includes("WHAT THEY'VE DONE SINCE") && prompt.includes("interviewing"));
   assert("ghosting shown honestly", prompt.includes("no response"));
   assert("relative dates humanized", /\d+ days ago|yesterday|earlier today/.test(prompt));
-  const fresh = buildMentorSystemPrompt({ ...map, previousCalls: [], activity: [], trajectory: [] } as never, [], 1100, { index: 0, asked: [] });
+  const freshParts = buildMentorSystemPrompt({ ...map, previousCalls: [], activity: [], trajectory: [] } as never, [], 1100, { index: 0, asked: [] });
+  const fresh = freshParts.core + freshParts.delta;
   assert("first call has NO continuity blocks", !fresh.includes("YOUR PREVIOUS CALLS") && !fresh.includes("DONE SINCE"));
   assert("growth arc present with ≥2 points", prompt.includes("THEIR GROWTH ARC") && prompt.includes("Wanted a FAANG title"));
   assert("arc coaches naming the shift", prompt.includes("NAME a shift"));
