@@ -11,7 +11,8 @@ import { opportunityExtraction, type OpportunityExtraction } from "@/lib/opportu
 
 const SCHEMA_NAME = "vectorize_role";
 
-function jsonSchema(): Record<string, unknown> {
+// exported so the model bake-off tool runs the EXACT production extraction
+export function vectorizeJsonSchema(): Record<string, unknown> {
   const js = zodToJsonSchema(opportunityExtraction, { $refStrategy: "none" }) as Record<
     string,
     unknown
@@ -20,7 +21,7 @@ function jsonSchema(): Record<string, unknown> {
   return js;
 }
 
-const PROMPT = `Read this job description and produce two things: hard FACTS (for filtering) and a role VECTOR scored 0.0–1.0 on each axis. Where the JD is vague, infer conservatively and SAY SO in the rationale — never invent specifics.
+export const VECTORIZE_PROMPT = `Read this job description and produce two things: hard FACTS (for filtering) and a role VECTOR scored 0.0–1.0 on each axis. Where the JD is vague, infer conservatively and SAY SO in the rationale — never invent specifics.
 
 FACTS:
 - title, company, location, remote (onsite/hybrid/remote/unknown)
@@ -94,8 +95,8 @@ export const opportunityVectorizer: Agent<{ jd: string }, OpportunityExtraction>
       try {
         const res = await provider.extractStructured({
           schemaName: SCHEMA_NAME,
-          jsonSchema: jsonSchema(),
-          prompt: PROMPT + input.jd,
+          jsonSchema: vectorizeJsonSchema(),
+          prompt: VECTORIZE_PROMPT + input.jd,
           maxTokens: 3000,
         });
         return { output: opportunityExtraction.parse(res.data), usage: res.usage };
