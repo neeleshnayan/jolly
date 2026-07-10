@@ -362,6 +362,9 @@ export const opportunities = pgTable(
     visibility: text("visibility").default("global").notNull(),
     vector: jsonb("vector").$type<Record<string, unknown>>().default({}),
     facts: jsonb("facts").$type<Record<string, unknown>>().default({}),
+    // nomic-embed-text vector of the role (title+summary+skills) — the semantic
+    // trajectory signal that replaced lexical word-overlap. Regenerable in ~50ms.
+    embedding: jsonb("embedding").$type<number[]>(),
     // null = fetched from a board but not yet vectorized (inference pending).
     // Lets the admin split cheap board-fetching from GPU-heavy inference.
     vectorizedAt: timestamp("vectorized_at", { withTimezone: true }),

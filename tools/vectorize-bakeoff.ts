@@ -43,10 +43,14 @@ const SCRATCH =
 type Facts = {
   location?: string | null;
   country?: string | null;
+  remote?: string | null;
+  company_stage?: string | null;
   comp_min?: number | null;
   comp_max?: number | null;
   comp_currency?: string | null;
   min_years_experience?: number | null;
+  needs_review?: boolean;
+  review_reason?: string;
   required_credentials?: string[];
   must_have_skills?: string[];
   nice_to_have_skills?: string[];
@@ -111,7 +115,7 @@ async function main() {
         const ms = Date.now() - t0;
         const facts = ((res.data as { facts?: Facts }).facts ?? {}) as Facts;
         results[i][model] = { ms, facts, tokens: res.usage?.outputTokens ?? null };
-        console.log(`  [${i + 1}/${rows.length}] ${rows[i].title} — ${(ms / 1000).toFixed(1)}s, ${facts.must_have_skills?.length ?? 0} must / ${facts.nice_to_have_skills?.length ?? 0} nice, country=${facts.country ?? "—"}`);
+        console.log(`  [${i + 1}/${rows.length}] ${rows[i].title} — ${(ms / 1000).toFixed(1)}s, ${facts.must_have_skills?.length ?? 0} must, remote=${facts.remote ?? "—"}, yrs=${facts.min_years_experience ?? "—"}, review=${facts.needs_review ? `YES(${facts.review_reason ?? ""})` : "no"}`);
       } catch (e) {
         results[i][model] = { error: (e as Error).message };
         console.log(`  [${i + 1}/${rows.length}] ${rows[i].title} — ERROR: ${(e as Error).message}`);
@@ -130,7 +134,7 @@ async function main() {
       if (r.error) { console.log(`  ${model}: ERROR ${r.error}`); continue; }
       const f = r.facts!;
       console.log(`  ${model}  (${((r.ms ?? 0) / 1000).toFixed(1)}s)`);
-      console.log(`     country: ${f.country ?? "—"}   comp: ${f.comp_min ?? "?"}–${f.comp_max ?? "?"} ${f.comp_currency ?? ""}   years: ${f.min_years_experience ?? "—"}   creds: [${(f.required_credentials ?? []).join(", ")}]`);
+      console.log(`     country: ${f.country ?? "—"}   remote: ${f.remote ?? "—"}   stage: ${f.company_stage ?? "—"}   comp: ${f.comp_min ?? "?"}–${f.comp_max ?? "?"} ${f.comp_currency ?? ""}   years: ${f.min_years_experience ?? "—"}`);
       console.log(`     must:  ${(f.must_have_skills ?? []).join(", ")}`);
       console.log(`     nice:  ${(f.nice_to_have_skills ?? []).join(", ")}`);
       console.log(`     summary: ${(f.summary ?? "").slice(0, 180)}`);

@@ -254,6 +254,8 @@ export function sampleExtraction(j: SampleJob): OpportunityExtraction {
       core_requirements: [],
       must_have_skills: [],
       nice_to_have_skills: [],
+      needs_review: false, // curated samples are hand-authored — never escalate
+      review_reason: "",
     },
     vector: j.vector,
   };

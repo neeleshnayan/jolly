@@ -2,7 +2,8 @@
  * Re-apply the curated facts+vector onto the sample-source opportunities.
  * The demo samples have hand-authored extraction (sampleExtraction) over very
  * short JDs — a model re-vectorise would clobber them with sparse output, so
- * revectorize.ts excludes source='sample'. Run this if any got overwritten.
+ * the backfill (lib/jobs/fetch + tools/backfill.ts) excludes source='sample'.
+ * Run this if any got overwritten.
  *   npx tsx tools/restore-samples.ts
  * Idempotent: sets each sample row back to its canonical curated facts.
  */

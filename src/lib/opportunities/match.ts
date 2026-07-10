@@ -38,10 +38,20 @@ export function scoreMatch(user: ScoringVector, opp: OpportunityVector): MatchRe
     user: u as number,
     role: r as number,
     weight: 1,
-    fit: 1 - Math.max(0, (r as number) - (u as number)), // only under-qual counts
+    // under-qual only (a 0.05 wiggle keeps a hairline shortfall free), penalised
+    // SUPER-LINEARLY: a mild stretch barely dents, but a big single-axis gap is a
+    // wall. deficit 0.15 → clearance ~0.88; 0.30 → ~0.56; 0.45 → ~0.15. The
+    // linear version wasn't decisive enough — a salesperson (tech 0.2) still
+    // cleared an entry-level eng role at ~0.85 because one 0.35 gap only cost 0.65.
+    fit: 1 - Math.min(1, Math.pow(Math.max(0, (r as number) - (u as number) - 0.05) / 0.45, 1.4)),
   }));
   const qualification = mean(qual.map((a) => a.fit));
-  const gate = Math.min(1, qualification / 0.85); // comfortable clearance → ~1
+  // Deficits COMPOUND — the gate is the PRODUCT of per-axis clearances, not the
+  // mean. Averaging let one catastrophic axis hide behind three passing ones (a
+  // junior at 0.84 for Staff+, a marketer at ~1.0 for staff eng). Multiplying +
+  // the super-linear per-axis curve above makes "genuinely can't do this on one
+  // dimension" decisive, while cleared axes stay ×1.
+  const gate = qual.reduce((g, a) => g * a.fit, 1);
 
   // ---- desire: the ranker. LINEAR deviation — the old squared softener let a
   // 0.3 mismatch still score 0.91, which compressed the whole pool into the

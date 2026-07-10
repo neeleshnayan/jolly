@@ -7,6 +7,8 @@
  * an honest "300k–400k" beats a confidently wrong rupee sign.
  */
 
+import { normCurrency, fmtMoney } from "./currency";
+
 type Currency = "INR" | "USD" | "GBP" | "EUR" | null;
 
 const INR_HINTS = /india|bengaluru|bangalore|mumbai|delhi|gurgaon|gurugram|noida|hyderabad|pune|chennai|kolkata|ahmedabad|jaipur|kochi/i;
@@ -68,18 +70,17 @@ export function inferCountry(location: string | null | undefined): string | null
   return null;
 }
 
-/** "₹35L–45L", "$300k–$400k", "£90k–£110k", or currency-less "300k–400k". */
+/** "₹35L–45L", "$300k–$400k", "S$180k–S$240k", or currency-less "300k–400k".
+ *  Any ISO code the extraction emits renders via the currency table; the
+ *  location inference only backstops rows that predate comp_currency. */
 export function formatComp(min: number | null, max: number | null, location?: string | null, currency?: string | null): string | null {
   if (!min && !max) return null;
   const lo = min ?? max!;
   const hi = max ?? min!;
-  const cur = (currency as Currency) ?? inferCurrency(location);
-
-  if (cur === "INR") {
-    const l = (n: number) => (n >= 100000 ? `${Math.round(n / 100000)}L` : `${Math.round(n / 1000)}k`);
-    return lo === hi ? `₹${l(lo)}` : `₹${l(lo)}–${l(hi)}`;
-  }
-  const sym = cur === "USD" ? "$" : cur === "GBP" ? "£" : cur === "EUR" ? "€" : "";
-  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`);
-  return lo === hi ? `${sym}${k(lo)}` : `${sym}${k(lo)}–${sym}${k(hi)}`;
+  const cur = normCurrency(currency) ?? inferCurrency(location);
+  if (lo === hi) return fmtMoney(lo, cur);
+  const a = fmtMoney(lo, cur);
+  const b = fmtMoney(hi, cur);
+  // "₹35L–45L" reads better than "₹35L–₹45L" — keep the ₹ once
+  return a.startsWith("₹") && b.startsWith("₹") ? `${a}–${b.slice(1)}` : `${a}–${b}`;
 }

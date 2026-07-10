@@ -26,7 +26,9 @@ import type { OpportunityVector } from "./schema";
 // train on yet — a card scrolled past is not a judgment)
 const EVENT_WEIGHT: Record<string, number> = {
   applied: 1.0,
+  up: 0.75, // explicit "more like this" 👍
   apply_click: 0.5,
+  down: -0.75, // explicit "less like this" 👎
   dismiss: -0.8,
 };
 

@@ -9,14 +9,14 @@
  * Both the CLI worker and the admin dashboard call these. Pure functions of
  * env + DB — no process.exit, no env mutation; log via callback.
  */
-import { asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { opportunities } from "@/db/schema";
-import { runAgent } from "@/agents/run";
-import { opportunityVectorizer } from "@/agents/opportunity-vectorizer";
 import { releaseLiveModel } from "@/llm/ollama";
 import { COMPANIES } from "./companies";
 import { fetchBoard } from "./ats";
+import { FAST_MODEL, STRONG_MODEL, TRUSTED_MODELS, extractRole, escalationReason, applyRowAuthority, writeVectorization, cleanSkills, unloadModel } from "./vectorize";
+import { VECTORIZE_PROMPT_VERSION } from "@/agents/opportunity-vectorizer";
 
 // Early users are DIVERSE — lawyers, designers, doctors, engineers, PMs,
 // writers, remote side-hustlers — so the net is wide across verticals.
@@ -154,6 +154,22 @@ export function resetInferenceProgress(): void {
 }
 
 /**
+ * Evidence-based "is a run active?" — the in-memory mutex above dies whenever
+ * Next dev re-instantiates this module (HMR), so mid-run the UI would say idle
+ * and let the operator start a SECOND GPU run. A live run stamps a row at least
+ * every batch (~2-3 min worst case), so a recent vectorized_at is proof enough.
+ * Window = max inter-batch sleep (120s) + one slow generation, with margin.
+ * Returns seconds since the last stamp when recent, else null. Cost: a brief
+ * post-run lockout before the next click — far cheaper than a GPU race.
+ */
+export async function recentInferenceActivity(withinSec = 240): Promise<number | null> {
+  const [r] = await db
+    .select({ ago: sql<number | null>`extract(epoch from now() - max(${opportunities.vectorizedAt}))::int` })
+    .from(opportunities);
+  return r?.ago != null && r.ago < withinSec ? r.ago : null;
+}
+
+/**
  * Phase 2 — vectorize pending rows on the local model. Processes `limit` rows in
  * batches of `batchSize`, sleeping `sleepMs` between batches so the GPU gets
  * thermal headroom on a long run.
@@ -162,108 +178,144 @@ export async function runInference(opts?: {
   limit?: number;
   batchSize?: number;
   sleepMs?: number;
+  force?: boolean; // reprocess regardless of vectorizedAt (oldest/never first)
+  tiered?: boolean; // fast → escalate-to-strong cascade (default on = CLI parity)
   log?: (line: string) => void;
 }): Promise<InferenceResult> {
   const limit = opts?.limit ?? Number(process.env.JOBS_INFER_LIMIT ?? 20);
   const batchSize = Math.max(1, opts?.batchSize ?? Number(process.env.JOBS_INFER_BATCH ?? 5));
   const sleepMs = opts?.sleepMs ?? Number(process.env.JOBS_INFER_SLEEP_MS ?? 30000);
+  const force = opts?.force ?? false;
+  const tiered = opts?.tiered ?? true;
   const lines: string[] = [];
   const log = (s: string) => {
     lines.push(s);
     opts?.log?.(s);
   };
 
-  // Round-robin across companies instead of oldest-first: oldest-first spent
-  // whole runs on one board's batch, so every user's top matches were from a
-  // single company until it drained. Interleaving diversifies the ranked pool
-  // with every run.
-  const pending = await db
-    .select()
-    .from(opportunities)
-    .where(isNull(opportunities.vectorizedAt))
-    .orderBy(
-      sql`row_number() over (partition by ${opportunities.company} order by ${opportunities.createdAt} asc)`,
-      asc(opportunities.createdAt),
-    )
-    .limit(limit);
+  // force = BACKFILL, not blind redo: rows that are pending, vectorized before
+  // the schema fixes (no needs_review key in facts), stamped by a model no
+  // longer in the trusted roster (granite's flat vectors — see lib/jobs/vectorize),
+  // OR written under an older PROMPT version (facts.prompt_v stamp — a rubric
+  // change re-queues exactly the stale rows). Rows already re-done on the current
+  // model+prompt are SKIPPED, so repeated clicks converge to "Backfill complete"
+  // instead of churning the pool forever.
+  // normal: only pending rows, round-robin across companies so no single board
+  // dominates a run.
+  const oldSchema = or(
+    isNull(opportunities.vectorizedAt),
+    sql`not jsonb_exists(${opportunities.facts}, 'needs_review')`,
+    sql`coalesce(${opportunities.vectorizeModel}, '') not in (${sql.join(TRUSTED_MODELS.map((m) => sql`${m}`), sql`, `)})`,
+    sql`coalesce((${opportunities.facts} ->> 'prompt_v')::int, 1) <> ${VECTORIZE_PROMPT_VERSION}`,
+  );
+  const rows = force
+    ? await db
+        .select()
+        .from(opportunities)
+        .where(and(ne(opportunities.source, "sample"), oldSchema))
+        .orderBy(sql`${opportunities.vectorizedAt} asc nulls first`, asc(opportunities.createdAt))
+        .limit(limit)
+    : await db
+        .select()
+        .from(opportunities)
+        .where(isNull(opportunities.vectorizedAt))
+        .orderBy(
+          sql`row_number() over (partition by ${opportunities.company} order by ${opportunities.createdAt} asc)`,
+          asc(opportunities.createdAt),
+        )
+        .limit(limit);
 
-  if (!pending.length) {
-    log("Nothing pending — all fetched jobs are already vectorized.");
+  if (!rows.length) {
+    log(force ? "Backfill complete — every row is already on the new schema. 🎉" : "Nothing pending — all fetched jobs are already vectorized.");
     return { vectorized: 0, failed: 0, remaining: 0, log: lines };
   }
   if (progress.running) {
     log("An inference run is already in progress — not starting another.");
-    return { vectorized: 0, failed: 0, remaining: pending.length, log: lines };
+    return { vectorized: 0, failed: 0, remaining: rows.length, log: lines };
   }
   progress.running = true;
-  progress.total = pending.length;
+  progress.total = rows.length;
   progress.done = 0;
   progress.failed = 0;
   progress.current = null;
   progress.startedAt = Date.now();
-  // free the voice model's VRAM first — no-op when live == extract model
-  await releaseLiveModel();
-  log(`Vectorizing ${pending.length} job(s), ${batchSize} at a time, ${Math.round(sleepMs / 1000)}s cooldown between batches.`);
+  await releaseLiveModel(); // free the voice model's VRAM first
 
+  const fastModel = tiered ? FAST_MODEL : undefined; // undefined → provider default (legacy single-model)
+  const escalate: { id: string; row: (typeof rows)[number] }[] = [];
   let vectorized = 0;
   let failed = 0;
-  for (let i = 0; i < pending.length; i += batchSize) {
-    const batch = pending.slice(i, i + batchSize);
-    log(`Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(pending.length / batchSize)}:`);
+  const modelDesc = !tiered ? "" : FAST_MODEL === STRONG_MODEL ? ` — ${FAST_MODEL} end to end` : ` — ${FAST_MODEL} → escalate to ${STRONG_MODEL}`;
+  log(`${force ? "Re-vectorizing" : "Vectorizing"} ${rows.length} job(s)${modelDesc}, ${batchSize}/batch, ${Math.round(sleepMs / 1000)}s cooldown.`);
+
+  // ── Pass 1: fast model (or the single default when !tiered) ──
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    log(`Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(rows.length / batchSize)}:`);
     for (const row of batch) {
       progress.current = row.title;
       try {
-        const { output } = await runAgent(opportunityVectorizer, { jd: row.rawText ?? "" }, { userId: "worker" });
-        // Board rows: the ATS's own fields are authoritative. Bookmarked rows
-        // (source "other") only have placeholder title/hostname-company — there
-        // the model's extraction from the JD is the better source.
-        if (row.source !== "other") {
-          output.facts.title = row.title || output.facts.title;
-          output.facts.company = row.company || output.facts.company;
-          output.facts.location = row.location ?? output.facts.location;
+        const out = await extractRole(row.rawText ?? "", fastModel);
+        applyRowAuthority(out, row);
+        const reason = tiered ? escalationReason(out.facts) : null; // scrubs skills in place
+        if (reason) {
+          await db.update(opportunities).set({ needsStrongPass: true }).where(eq(opportunities.id, row.id));
+          escalate.push({ id: row.id, row });
+          log(`  ↑ ${row.title} — ${reason}, escalating`);
         } else {
-          output.facts.title = output.facts.title || row.title || "";
-          output.facts.company = output.facts.company || row.company || "";
+          await writeVectorization(row.id, out, fastModel ?? null, row);
+          vectorized++;
+          progress.done = vectorized;
+          log(`  + ${row.title}`);
         }
-        await db
-          .update(opportunities)
-          .set({
-            vector: output.vector,
-            facts: output.facts,
-            remote: output.facts.remote ?? row.remote,
-            compMin: output.facts.comp_min ?? null,
-            compMax: output.facts.comp_max ?? null,
-            companyStage: output.facts.company_stage,
-            domain: output.facts.domain || null,
-            vectorizedAt: sql`now()`,
-            // bookmarks upgrade their placeholder title/company to the extraction
-            ...(row.source === "other"
-              ? { title: output.facts.title || row.title, company: output.facts.company || row.company }
-              : {}),
-          })
-          .where(eq(opportunities.id, row.id));
-        vectorized++;
-        progress.done = vectorized;
-        log(`  + ${row.title}`);
       } catch (e) {
         failed++;
         progress.failed = failed;
         log(`  ! ${row.title} — ${(e as Error).message}`);
       }
     }
-    const more = i + batchSize < pending.length;
-    if (more && sleepMs > 0) {
-      log(`  …cooling down ${Math.round(sleepMs / 1000)}s`);
+    if (i + batchSize < rows.length && sleepMs > 0) {
+      log(`  …cooling ${Math.round(sleepMs / 1000)}s`);
       await sleep(sleepMs);
+    }
+  }
+
+  // ── Pass 2: strong model over everything Pass 1 punted (ONE model swap) ──
+  if (tiered && escalate.length) {
+    if (FAST_MODEL !== STRONG_MODEL) await unloadModel(FAST_MODEL); // same model → keep it warm
+    log(`Escalated ${escalate.length} to ${STRONG_MODEL}:`);
+    for (let i = 0; i < escalate.length; i += batchSize) {
+      for (const { id, row } of escalate.slice(i, i + batchSize)) {
+        progress.current = row.title;
+        try {
+          const out = await extractRole(row.rawText ?? "", STRONG_MODEL);
+          applyRowAuthority(out, row);
+          cleanSkills(out.facts); // scrub the strong model's skills too
+          await writeVectorization(id, out, STRONG_MODEL, row);
+          vectorized++;
+          progress.done = vectorized;
+          log(`  + ${row.title} (strong)`);
+        } catch (e) {
+          failed++;
+          progress.failed = failed;
+          log(`  ! ${row.title} (strong) — ${(e as Error).message}`);
+        }
+      }
+      if (i + batchSize < escalate.length && sleepMs > 0) {
+        log(`  …cooling ${Math.round(sleepMs / 1000)}s`);
+        await sleep(sleepMs);
+      }
     }
   }
 
   progress.running = false;
   progress.current = null;
-  const [{ n: remaining }] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(opportunities)
-    .where(isNull(opportunities.vectorizedAt));
-  log(`Inference done. Vectorized ${vectorized}, failed ${failed}, ${remaining} still pending.`);
+  const [{ n: remaining }] = force
+    ? await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(opportunities)
+        .where(and(ne(opportunities.source, "sample"), oldSchema))
+    : await db.select({ n: sql<number>`count(*)::int` }).from(opportunities).where(isNull(opportunities.vectorizedAt));
+  log(`Done. Vectorized ${vectorized}, failed ${failed}, ${remaining} ${force ? "still on the old schema" : "still pending"}.`);
   return { vectorized, failed, remaining, log: lines };
 }

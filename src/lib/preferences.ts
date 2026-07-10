@@ -14,7 +14,12 @@ export type Preferences = {
   acceptMin?: number; // the floor they'd accept, annual, in compCurrency
   expectedComp?: number; // the target
   compCurrency?: CompCurrency;
+  /** where they'd actually take a job — acts as a FILTER: non-remote roles
+   *  outside these (and outside dreamCities) don't rank at all */
   locations?: string[];
+  /** aspirational cities — roles here get a ranking BOOST on top of passing
+   *  the filter ("optimise for", not "restrict to") */
+  dreamCities?: string[];
   remote?: "remote" | "hybrid" | "onsite" | "any";
 };
 
@@ -40,6 +45,10 @@ export async function savePreferences(userId: string, prefs: Preferences): Promi
   if (Array.isArray(prefs.locations)) {
     const locs = prefs.locations.map((s) => String(s).trim()).filter(Boolean).slice(0, 6);
     if (locs.length) clean.locations = locs;
+  }
+  if (Array.isArray(prefs.dreamCities)) {
+    const dreams = prefs.dreamCities.map((s) => String(s).trim()).filter(Boolean).slice(0, 4);
+    if (dreams.length) clean.dreamCities = dreams;
   }
   if (prefs.remote && ["remote", "hybrid", "onsite", "any"].includes(prefs.remote)) clean.remote = prefs.remote;
   await db

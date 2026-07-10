@@ -3,7 +3,7 @@
  * and pick a 3-role "spectrum" to prime the mentor before a call. Uses the
  * CACHED scoring vector (recomputed only when missing) so this is cheap.
  */
-import { and, desc, eq, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { certifications, education, experiences, insights, opportunities, profiles, rankingSignals, resumeThemes, skills } from "@/db/schema";
 import { deriveCandidateQuals, hardGate } from "./gates";
@@ -12,7 +12,13 @@ import { computeAndSaveScoring, getSavedScoring, recomputeScoringInBackground } 
 import { getPreferences, type Preferences } from "@/lib/preferences";
 import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
 import { inferCurrency, inferCountry } from "@/lib/format/comp";
+import { toUSD, fmtMoney } from "@/lib/format/currency";
 import { scoreMatch } from "./match";
+import { blendCore } from "./blend";
+import { TRUSTED_MODELS } from "@/lib/jobs/vectorize";
+import { canonSkillKey } from "@/lib/skills/canon";
+import { firstCityHit } from "@/lib/geo/canon";
+import { embed, cosine, trajectoryFromCosine, directionEmbedText } from "@/lib/embeddings";
 import type { ScoringVector } from "@/lib/scoring/schema";
 import type { OpportunityVector, OpportunityFacts } from "./schema";
 
@@ -26,7 +32,7 @@ export type RankedJob = {
   compMin: number | null;
   compMax: number | null;
   compCurrency: string | null;
-  stage: string | null;
+  minYears: number | null; // required experience (company_stage was too noisy to show)
   domain: string | null;
   url: string | null;
   source: string | null;
@@ -86,7 +92,9 @@ function whySummary(m: { fit: number; reasons: string[]; gaps: string[] }): stri
 // ---- evidence: what the résumé PROVES, not what the persona suggests ----
 // Same containment matcher as the skill radar — "data mining & modelling"
 // counts for "data mining"; "python" counts inside "python scripting".
-const normSkill = (s: unknown) => String(s ?? "").toLowerCase().trim();
+// canonical key, not just lowercase: "K8s" on a résumé must earn evidence
+// against "Kubernetes" in a JD, and model-casing variants must be one skill
+const normSkill = (s: unknown) => canonSkillKey(String(s ?? ""));
 function skillEvidence(mine: string[], must: string[], nice: string[]) {
   const have = (s: string) => mine.some((m) => m === s || m.includes(s) || s.includes(m));
   const mustHave = must.filter(have);
@@ -118,30 +126,25 @@ function trajectoryFit(roleText: string, targetWords: string[], aspireWords: str
 }
 
 // ---- concrete refinements the user states explicitly (comp + where/how) ----
-// Rough FX to USD for RANKING only (a soft factor, not an exchange desk).
-const TO_USD: Record<string, number> = { USD: 1, INR: 1 / 85, GBP: 1.27, EUR: 1.08 };
-const compFmt = (n: number, cur: string) =>
-  cur === "INR"
-    ? n >= 100000
-      ? `₹${Math.round(n / 100000)}L`
-      : `₹${Math.round(n / 1000)}k`
-    : `${cur === "USD" ? "$" : cur === "GBP" ? "£" : "€"}${Math.round(n / 1000)}k`;
 
 /** The user states a RANGE: a floor they'd accept and a target they're aiming
  *  for. Roles at/above target rank clean; inside the range get a whisper of a
  *  penalty (they said they'd take it); below the floor sink hard. Compared in
- *  USD via rough FX; unknown job comp OR currency is NEUTRAL. */
+ *  USD via the shared currency table (lib/format/currency — any ISO the
+ *  extraction emits, not just the big four); unknown comp OR currency is
+ *  NEUTRAL, never a penalty. */
 function compRefine(pref: Preferences, compMin: number | null, compMax: number | null, jobCurrency: string | null) {
   const exp = pref.expectedComp;
   if (!exp) return { factor: 1 } as { factor: number; reason?: string; gap?: string };
   const userCur = pref.compCurrency ?? "INR"; // historical prefs predate the field and were entered in ₹
   const top = compMax ?? compMin;
-  if (!top || !jobCurrency || !TO_USD[jobCurrency] || !TO_USD[userCur]) return { factor: 1 };
-  const topUsd = top * TO_USD[jobCurrency];
-  const expUsd = exp * TO_USD[userCur];
+  if (!top) return { factor: 1 };
+  const topUsd = toUSD(top, jobCurrency);
+  const expUsd = toUSD(exp, userCur);
+  if (topUsd === null || expUsd === null) return { factor: 1 };
   // floor: stated acceptMin, else legacy currentComp, else 15% wiggle under target
-  const floorUsd = (pref.acceptMin ?? pref.currentComp ?? exp * 0.85) * TO_USD[userCur];
-  if (topUsd >= expUsd) return { factor: 1, reason: `Comp clears your ${compFmt(exp, userCur)} target` };
+  const floorUsd = toUSD(pref.acceptMin ?? pref.currentComp ?? exp * 0.85, userCur) as number;
+  if (topUsd >= expUsd) return { factor: 1, reason: `Comp clears your ${fmtMoney(exp, userCur)} target` };
   if (topUsd >= floorUsd) return { factor: 0.95, reason: `Comp inside your acceptable range` };
   const ratio = topUsd / expUsd;
   return { factor: Math.max(0.6, 0.6 + 0.4 * ratio), gap: `Comp below the floor you'd accept` };
@@ -149,6 +152,13 @@ function compRefine(pref: Preferences, compMin: number | null, compMax: number |
 
 /** Location / remote compatibility — soft factors so nothing is hidden, just
  *  ranked lower when it clashes with how the user wants to work. */
+/** Two-tier location semantics (city matching is CANONICAL — "NYC" finds
+ *  "New York City, NY", "Bengaluru" finds "Bangalore, India"):
+ *    locations   = FILTER — where they'd actually take a job; a non-remote role
+ *                  outside locations ∪ dreamCities returns exclude:true and
+ *                  never ranks. Remote roles always pass (they satisfy any city).
+ *    dreamCities = BOOST — aspirational; roles there rank ~12% higher with a
+ *                  ✨ reason. Dream ⊆ acceptable is implied (you'd move for it). */
 function locationRefine(pref: Preferences, remote: string | null, location: string | null) {
   let factor = 1;
   let reason: string | undefined;
@@ -165,16 +175,16 @@ function locationRefine(pref: Preferences, remote: string | null, location: stri
       reason = isRemote ? "Remote" : `${remote[0].toUpperCase()}${remote.slice(1)}`;
     }
   }
-  if (pref.locations?.length && !isRemote && location) {
-    const loc = location.toLowerCase();
-    const hit = pref.locations.find((c) => loc.includes(c.toLowerCase()));
-    if (hit) reason = `In ${hit}`;
-    else if (want !== "remote") {
-      factor *= 0.82;
-      gap = gap ?? `${location} — outside your locations`;
-    }
+  const dreamHit = firstCityHit(location, pref.dreamCities);
+  if (dreamHit) {
+    factor *= 1.12;
+    reason = `✨ ${dreamHit} — your dream city`;
+  } else if (pref.locations?.length && !isRemote && location) {
+    const hit = firstCityHit(location, pref.locations);
+    if (hit) reason = reason ?? `In ${hit}`;
+    else return { factor, reason, gap, exclude: true as const }; // the FILTER
   }
-  return { factor, reason, gap };
+  return { factor, reason, gap, exclude: false as const };
 }
 
 export type RankOutcome = { matches: RankedJob[]; learning: { active: boolean; events: number; confidence: number } };
@@ -210,32 +220,33 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
   // role, fillTargetTheme writes it — and the ranking should FOLLOW the call.
   // Roles whose title/domain matches the agreed direction float up with an
   // explicit "why" so the user sees the conversation change their list.
-  const targetWords: string[] = me
+  // direction, as NATURAL TEXT (the target role phrase + aspiration/value
+  // sentences) — the embedding wants meaning, not word-bags. The word-bags are
+  // still derived below for the lexical fallback + the "you set this" reason.
+  const targetRole: string = me
     ? await db
         .select({ latentAttributes: resumeThemes.latentAttributes })
         .from(resumeThemes)
         .where(eq(resumeThemes.profileId, me.id))
-        .then((rows) => {
-          const t = rows.map((r) => r.latentAttributes as { kind?: string; role?: string; pending?: boolean } | null).find((a) => a?.kind === "target_role" && a.role && !a.pending);
-          return t?.role ? t.role.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2) : [];
-        })
-        .catch(() => [])
-    : [];
-  // the soft half of direction: their latest aspiration/value stances (the same
-  // signals the growth trajectory is built from)
-  const aspireWords: string[] = me
+        .then((rows) => rows.map((r) => r.latentAttributes as { kind?: string; role?: string; pending?: boolean } | null).find((a) => a?.kind === "target_role" && a.role && !a.pending)?.role ?? "")
+        .catch(() => "")
+    : "";
+  const aspireSents: string[] = me
     ? await db
         .select({ dimension: insights.dimension, content: insights.content })
         .from(insights)
         .where(eq(insights.profileId, me.id))
         .orderBy(desc(insights.createdAt))
         .limit(20)
-        .then((rows) => {
-          const picks = rows.filter((r) => r.dimension === "aspiration" || r.dimension === "value").slice(0, 2);
-          return [...new Set(picks.flatMap((p) => contentWords(p.content ?? "")))];
-        })
+        .then((rows) => rows.filter((r) => r.dimension === "aspiration" || r.dimension === "value").slice(0, 3).map((r) => r.content ?? "").filter(Boolean))
         .catch(() => [])
     : [];
+  const targetWords = targetRole ? targetRole.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2) : [];
+  const aspireWords = [...new Set(aspireSents.slice(0, 2).flatMap((s) => contentWords(s)))];
+  // embed the direction ONCE per ranking (~50ms) — reused across every role
+  const directionText = directionEmbedText(targetRole, aspireSents);
+  let directionVec: number[] | null = null;
+  if (directionText) { try { directionVec = (await embed([directionText]))[0] ?? null; } catch { /* fall back to lexical */ } }
   // what the résumé PROVES — the evidence half of fit
   const mySkills: string[] = me
     ? await db
@@ -251,6 +262,11 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
   const [allRoles, pref] = await Promise.all([
     // only vectorized roles — a pending row's empty vector would fake 0.5 on
     // every axis and rank as a meaningless mid-pack match.
+    // only TRUSTED-model vectors — granite-era rows scored ~0.6 on every axis
+    // (see lib/jobs/vectorize), so ranking on them surfaced Sales-AE-for-an-
+    // engineer nonsense. Honest matching means a shorter real list that grows
+    // as the backfill re-does rows, not a long list ranked on mush. Samples
+    // (curated, hand-vectored) stay in regardless — they carry no model stamp.
     // 500-row window: newest-first limit(100) was silently DROPPING older
     // roles from ranking as new batches vectorized (they vanished from the
     // user's list). Scoring is in-process arithmetic, so the real cost is
@@ -258,7 +274,11 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
     db
       .select()
       .from(opportunities)
-      .where(and(isNotNull(opportunities.vectorizedAt), visible))
+      .where(and(
+        isNotNull(opportunities.vectorizedAt),
+        or(inArray(opportunities.vectorizeModel, TRUSTED_MODELS), eq(opportunities.source, "sample")),
+        visible,
+      ))
       .orderBy(desc(opportunities.createdAt))
       .limit(500),
     getPreferences(userId),
@@ -291,19 +311,32 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
       const m = scoreMatch(vec, v);
       const c = compRefine(pref, r.compMin, r.compMax, f.comp_currency ?? inferCurrency(r.location));
       const l = locationRefine(pref, r.remote, r.location);
+      // stated locations are a FILTER, like credentials: a role somewhere they
+      // wouldn't take a job doesn't rank at 82% strength — it doesn't rank
+      if (l.exclude) return null;
       // evidence: the role's asked-for skills vs what the résumé proves
       const roleSkills = [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map(normSkill).filter(Boolean))];
       const ev = skillEvidence(mySkills, (f.must_have_skills ?? []).map(normSkill).filter(Boolean), (f.nice_to_have_skills ?? []).map(normSkill).filter(Boolean));
-      // trajectory: title+domain+summary vs the direction they're heading
+      // trajectory: SEMANTIC (embedding cosine of direction vs role) when both
+      // vectors exist; lexical word-overlap as the fallback while the embedding
+      // column fills mid-crunch, or when the user set no direction. targetHit
+      // (for the "you set this with your mentor" reason) stays lexical.
       const roleText = ` ${(r.title ?? "").toLowerCase()} ${(r.domain ?? "").toLowerCase()} ${(f.summary ?? "").toLowerCase()} ${roleSkills.join(" ")} `;
-      const traj = trajectoryFit(roleText, targetWords, aspireWords);
+      const roleEmb = r.embedding as number[] | null;
+      let traj: { score: number | null; targetHit: number };
+      if (directionVec && roleEmb?.length) {
+        traj = {
+          score: trajectoryFromCosine(cosine(directionVec, roleEmb)),
+          targetHit: targetWords.length ? targetWords.filter((w) => roleText.includes(w)).length / targetWords.length : 0,
+        };
+      } else {
+        traj = trajectoryFit(roleText, targetWords, aspireWords);
+      }
       // fit = gate × blend(desire, evidence, trajectory) × concrete refinements.
-      // Weights renormalize when a component is null, so missing data never
-      // silently counts as a good (or bad) score.
-      const parts: [number, number][] = [[m.desire, 0.45]];
-      if (ev.evidence !== null) parts.push([ev.evidence, 0.35]);
-      if (traj.score !== null) parts.push([traj.score, 0.2]);
-      const core = parts.reduce((a, [x, w]) => a + x * w, 0) / parts.reduce((a, [, w]) => a + w, 0);
+      // blendCore renormalizes when a component is null, so missing data never
+      // silently counts as a good (or bad) score. Weights live in blend.ts, the
+      // single source the offline harnesses import too.
+      const core = blendCore(m.desire, ev.evidence, traj.score);
       const fit = Math.min(1, m.gate * core * c.factor * l.factor * (gate.marginal?.penalty ?? 1));
       // concrete notes lead — they're the explicit knobs the user just set
       const reasons = [
@@ -340,7 +373,7 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
         compMin: r.compMin,
         compMax: r.compMax,
         compCurrency: f.comp_currency ?? null, // extraction wins; display falls back to location inference
-        stage: r.companyStage,
+        minYears: f.min_years_experience ?? null, // dropped company_stage (both models just guess a house default)
         domain: r.domain,
         url: r.url,
         source: r.source,

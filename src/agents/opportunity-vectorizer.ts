@@ -11,6 +11,19 @@ import { opportunityExtraction, type OpportunityExtraction } from "@/lib/opportu
 
 const SCHEMA_NAME = "vectorize_role";
 
+/** Bump when VECTORIZE_PROMPT changes meaning (rubric anchors, new fields, …).
+ *  Stamped into facts.prompt_v at write time; the admin backfill redoes any row
+ *  whose stamp is older, so a prompt change sweeps the pool exactly once.
+ *  v2 (2026-07-10): anchored off_impact / off_growth / req_breadth rubrics +
+ *  full-range instruction — gemma3 was centering those axes (std ≤ 0.06).
+ *  v3 (2026-07-10): raised the needs_review bar to "likely WRONG", not "vague" —
+ *  under v2 gemma self-flagged nearly every row (unstated years, unclear hybrid),
+ *  escalating everything to itself and stalling the sweep.
+ *  v4 (2026-07-11): anchored req_technical_depth to the WORK not the title — it
+ *  was under-scored for junior eng roles (New Grad SWE at 0.4), so the gate
+ *  couldn't separate a non-technical person from entry-level engineering. */
+export const VECTORIZE_PROMPT_VERSION = 4;
+
 // exported so the model bake-off tool runs the EXACT production extraction
 export function vectorizeJsonSchema(): Record<string, unknown> {
   const js = zodToJsonSchema(opportunityExtraction, { $refStrategy: "none" }) as Record<
@@ -62,6 +75,13 @@ FACTS:
   themselves against (e.g. "5+ years backend Go/Java", "has shipped a
   consumer product 0-to-1", "comfortable owning on-call for a service").
   Concrete and checkable — never vague adjectives like "strong communicator".
+- needs_review: TRUE only when your extraction is likely WRONG — the posting
+  bundles MULTIPLE distinct roles, it isn't in English, or you had to INVENT core
+  content (title, skills, summary) because the text doesn't state it. Ordinary JD
+  vagueness is NORMAL and is NOT review-worthy: unstated years → null, unclear
+  hybrid policy → "unknown", missing comp → null — those fields have honest
+  escape values, use them and set FALSE. Most postings are FALSE. When TRUE,
+  give review_reason in 3-6 words (e.g. "multiple roles in one posting").
 - must_have_skills / nice_to_have_skills: concrete skills, tools, languages,
   frameworks, methodologies. Use each name's CANONICAL capitalization (TypeScript,
   Next.js, PostgreSQL, Kubernetes, React, dbt, gRPC) — this text goes straight
@@ -78,17 +98,38 @@ FACTS:
 VECTOR — what the role REQUIRES (0 = low/left, 1 = high/right):
 - req_seniority (entry → executive level the role needs)
 - req_leadership (IC role → heavy people-leadership) — judge by DIRECT REPORTS, not title prestige. A "founding engineer", "staff", or "principal" IC with no reports is LOW here (~0.1–0.3), even though it's senior. Only score high when the JD asks the person to manage/hire a team. Seniority ≠ leadership.
-- req_technical_depth
-- req_breadth (deep specialist → broad generalist)
+- req_technical_depth — the technical BAR to DO the work, INDEPENDENT of
+  seniority. Do NOT lower it for junior/new-grad roles: a new-grad Software or
+  ML Engineer still writes real production code → HIGH (0.7–0.9). Anchor by the
+  WORK, not the title: software/ML/data/infra/security engineering, quantitative
+  research → 0.7–0.9; technical-adjacent (solutions/sales engineer, technical PM,
+  data analyst) → 0.4–0.6; sales/marketing/content/ops/recruiting/legal/design →
+  0.1–0.3. USING software (SEO/CRM/analytics dashboards/design or marketing
+  tools) is NOT technical depth — depth = BUILDING software/systems or
+  quantitative/scientific rigor. A Content Marketer with "analytics & SEO" is
+  still 0.2. "New Grad"/"Associate" lowers req_seniority, NOT req_technical_depth.
+- req_breadth — 0.15 = deep specialist in one system/domain (compiler engineer,
+  tax counsel, one-model researcher); 0.5 = owns a lane plus its adjacencies; 0.9 =
+  true cross-functional generalist (founding engineer, chief of staff). Commit to
+  an end — most roles are NOT 0.6.
 
-VECTOR — what the role OFFERS (each score is the role's LEVEL on that axis, NOT whether it's good — 0 = the left end, 1 = the right end):
+VECTOR — what the role OFFERS (each score is the role's LEVEL on that axis, NOT whether it's good — 0 = the left end, 1 = the right end).
+USE THE FULL 0–1 RANGE and COMMIT: if your scores for a role cluster within ±0.1 of each other, you are describing, not judging. Different axes of the same role usually differ a lot.
 - off_building (0 = little hands-on building → 1 = building from scratch is the job)
 - off_people_leadership (0 = no reports → 1 = leads/mentors a team) — same rule as req_leadership: a founding/staff IC with no direct reports is LOW even if the title sounds senior; score by actual team ownership, not prestige
 - off_autonomy (0 = tightly scoped tickets → 1 = you run your own show)
-- off_impact (0 = incremental → 1 = moves the needle)
+- off_impact — the STRUCTURAL scope of this role, not the company's mission. Job
+  ads overstate impact; discount the marketing. 0.3 = executes a piece of someone
+  else's plan; 0.5–0.6 = owns one area's outcomes (a typical staff IC on a large
+  team is here); 0.9 = owns a number the whole company watches. Most roles are
+  NOT above 0.7.
 - off_comp_level (0 = below market → 1 = clearly top of market)
 - off_company_risk (0 = rock-solid established company → 1 = high-risk early startup that could fold; a seed-stage startup is ~0.9)
-- off_growth (0 = steady-state → 1 = fast growth / stretch)
+- off_growth — how much the ROLE ITSELF will stretch and change. 0.2 = steady-state
+  BAU at a mature org (maintain, operate, iterate); 0.5 = normal product-team pace;
+  0.9 = scaling chaos — scope doubling yearly, org being built around you. A big
+  tech company shipping features is 0.4–0.6, NOT 0.7+; "fast-paced" in the ad is
+  not evidence.
 - off_domain_novelty (0 = standard next step for a typical candidate → 1 = a real domain pivot)
 
 Each vector axis: a score and a one-line rationale citing the JD (or noting its silence).
