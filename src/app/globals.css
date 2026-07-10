@@ -910,7 +910,10 @@ a { color: var(--accent); }
 @keyframes drz-float { 0%, 100% { transform: translateY(0) rotate(-0.3deg); } 50% { transform: translateY(-14px) rotate(0.3deg); } }
 @keyframes drz-bob { 0%, 100% { transform: translateY(0) scaleY(1); } 30% { transform: translateY(-4px) scaleY(1.06); } 60% { transform: translateY(1px) scaleY(0.95); } }
 @keyframes drz-glow { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.08); } }
-@media (prefers-reduced-motion: reduce) { .lp-float, .lp-bob, .lp-glow { animation: none !important; } }
+/* hero role card cycling — content swap fades in (key change retriggers) */
+.lp-role-swap { animation: drz-role-in 0.55s ease both; }
+@keyframes drz-role-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .lp-float, .lp-bob, .lp-glow, .lp-role-swap { animation: none !important; } }
 
 /* sign-in — the premium warm hero over the ambient aurora */
 .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 40px 24px; }
@@ -1010,13 +1013,14 @@ a { color: var(--accent); }
   .dz-shimmer { animation: none; color: var(--accent); -webkit-text-fill-color: var(--accent); }
 }
 
-/* ---- droplet fit gauge: the drop, filled to the role's fit % (DropletFit.tsx) ---- */
-.dropfit { display: block; flex-shrink: 0; overflow: visible; }
-.dropfit-back { fill: var(--accent); opacity: 0.12; }
-.dropfit-liquid { fill: var(--accent); transition: y 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
-.dropfit-outline { fill: none; stroke: var(--accent); stroke-width: 2.4; opacity: 0.5; }
-.dropfit-num { fill: #fff; font-family: var(--font-serif); font-weight: 600; font-size: 20px; paint-order: stroke; stroke: rgba(24, 12, 6, 0.42); stroke-width: 0.8px; }
-.dropfit-unit { fill: rgba(255, 255, 255, 0.82); font-size: 7px; font-weight: 700; letter-spacing: 0.09em; paint-order: stroke; stroke: rgba(24, 12, 6, 0.42); stroke-width: 0.5px; }
+/* ---- role-fit ring: terracotta arc to the fit % (FitRing.tsx) ---- */
+.fitring { position: relative; flex-shrink: 0; }
+.fitring svg { display: block; }
+.fitring-track { stroke: color-mix(in srgb, var(--accent) 18%, transparent); }
+.fitring-arc { stroke: var(--accent); transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+.fitring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.fitring-num { font-family: var(--font-serif); font-weight: 600; font-size: 19px; color: var(--ink); }
+.fitring-unit { font-size: 8px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); margin-top: 2px; }
 .app-new { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .f-box {
   font: inherit;
@@ -1413,6 +1417,9 @@ a { color: var(--accent); }
 
 /* recommendation card: dismiss */
 .rec-title-side { display: flex; align-items: center; gap: 6px; }
+.rec-vote { border: none; background: none; font-size: 13px; line-height: 1; cursor: pointer; padding: 3px 5px; border-radius: 7px; opacity: 0.4; filter: grayscale(0.6); transition: opacity 0.12s, background 0.12s, filter 0.12s; }
+.rec-vote:hover { opacity: 0.9; filter: grayscale(0.2); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.rec-vote.on { opacity: 1; filter: none; background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .rec-dismiss { border: none; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 2px 5px; border-radius: 6px; opacity: 0.55; }
 .rec-dismiss:hover { opacity: 1; background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
 [data-theme="dark"] .rec-dismiss:hover { color: #f28b82; }
@@ -1646,14 +1653,22 @@ a.start-tile:hover { border-color: var(--accent); }
 .rec-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .rec-chips-top { margin-top: 14px; }
 .rec-apply {
-  display: inline-block;
-  margin-top: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 16px;
+  padding: 10px 18px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 11px;
   text-decoration: none;
+  box-shadow: 0 10px 24px -14px color-mix(in srgb, var(--accent) 80%, transparent);
+  transition: transform 0.1s, filter 0.15s;
 }
-.rec-apply:hover { text-decoration: underline; }
+.rec-apply:hover { filter: brightness(1.06); }
+.rec-apply:active { transform: scale(0.98); }
 .rec-apply-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .apply-confirm { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-top: 12px; }
 .apply-confirm.done { color: #15803d; font-weight: 600; }
@@ -1703,6 +1718,8 @@ a.start-tile:hover { border-color: var(--accent); }
 .admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .admin-infer { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .admin-knob { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.admin-force { cursor: pointer; gap: 5px; }
+.admin-force input { accent-color: var(--accent); cursor: pointer; }
 .admin-count { width: 58px; padding: 7px 8px; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; }
 .admin-pending { color: #b45309; font-weight: 600; }
 .admin-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; }
@@ -2231,93 +2248,32 @@ textarea.f { line-height: 1.55; }
 .hangup:hover { background: #b91c1c; }
 
 /* presence orb — the mentor made visible */
-.orb {
-  --orb-level: 0; /* 0..1 live speech amplitude, written by the rAF loop */
+/* jobs-loading animation (LoadingDrop.tsx) — a drop that falls and lands on a
+   target. Self-contained dark "scanner" stage so it reads on either theme. */
+.loading-drop { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; }
+.loading-drop-stage {
   position: relative;
-  width: 150px;
-  height: 150px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(circle at 35% 30%, #60a5fa, #2563eb 70%);
-  box-shadow: 0 12px 40px rgba(37, 99, 235, 0.35);
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 16 / 10;
+  border-radius: 22px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 54%, #1d1913 0%, #131009 78%);
+  border: 1px solid rgba(230, 210, 170, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 210, 0.04), 0 30px 70px -46px rgba(0, 0, 0, 0.9);
 }
-/* the reactive dot — a white core that grows/shrinks with the live voice, plus a
-   soft halo that swells with it. Siri/ChatGPT-style; driven purely by --orb-level. */
-.orb-core {
-  width: 30%;
-  height: 30%;
-  border-radius: 999px;
-  background: radial-gradient(circle at 45% 40%, #fff, rgba(255, 255, 255, 0.92) 55%, rgba(255, 255, 255, 0.35) 100%);
-  box-shadow: 0 0 calc(10px + var(--orb-level) * 34px) rgba(255, 255, 255, calc(0.35 + var(--orb-level) * 0.5));
-  transform: scale(calc(0.7 + var(--orb-level) * 1.7));
-  transition: transform 0.05s linear, box-shadow 0.08s linear;
-  will-change: transform;
-}
-/* non-reactive orbs (the pre-call hero) keep a calm, static core */
-.orb:not(.reactive) .orb-core { transform: scale(1); box-shadow: 0 0 14px rgba(255, 255, 255, 0.4); }
-.orb::before,
-.orb::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  border: 2px solid rgba(37, 99, 235, 0.4);
-  opacity: 0;
-}
-.orb.idle { animation: orb-breathe 3.6s ease-in-out infinite; }
-@keyframes orb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
-/* speaking: the orb PULSES with the voice — alive, not static */
-.orb.speaking { animation: orb-pulse 1.05s ease-in-out infinite; }
-@keyframes orb-pulse { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.06); } 60% { transform: scale(1.02); } }
-.orb.speaking::before { animation: orb-ring 1.6s ease-out infinite; }
-.orb.speaking::after { animation: orb-ring 1.6s ease-out infinite 0.8s; }
-@keyframes orb-ring {
-  0% { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(1.55); opacity: 0; }
-}
-/* listening: a slow, attentive breath */
-.orb.listening { animation: orb-breathe 4.2s ease-in-out infinite; }
-.orb.listening {
-  background: radial-gradient(circle at 35% 30%, #f87171, #dc2626 70%);
-  box-shadow: 0 12px 40px rgba(220, 38, 38, 0.4);
-}
-.orb.listening::before,
-.orb.listening::after { border-color: rgba(220, 38, 38, 0.45); }
-.orb.listening::before { animation: orb-ring 1.4s ease-out infinite; }
-.orb.listening::after { animation: orb-ring 1.4s ease-out infinite 0.7s; }
-.orb.thinking { animation: orb-breathe 1.4s ease-in-out infinite; }
-.orb.thinking::before {
-  opacity: 1;
-  border-color: transparent;
-  border-top-color: #fff;
-  animation: orb-spin 1s linear infinite;
-}
-@keyframes orb-spin { to { transform: rotate(360deg); } }
-/* thinking: tiny particles drift up out of the orb — visible reasoning */
-.orb-particles { position: absolute; inset: -30%; pointer-events: none; }
-.orb-particles i {
-  position: absolute;
-  bottom: 42%;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 8px rgba(122, 165, 248, 0.9);
-  opacity: 0;
-  animation: particle-rise 1.9s ease-out infinite;
-}
-.orb-particles i:nth-child(1) { left: 28%; animation-delay: 0s; }
-.orb-particles i:nth-child(2) { left: 46%; animation-delay: 0.35s; animation-duration: 2.2s; }
-.orb-particles i:nth-child(3) { left: 62%; animation-delay: 0.7s; }
-.orb-particles i:nth-child(4) { left: 38%; animation-delay: 1.05s; animation-duration: 1.7s; }
-.orb-particles i:nth-child(5) { left: 70%; animation-delay: 1.3s; animation-duration: 2.4s; }
-.orb-particles i:nth-child(6) { left: 22%; animation-delay: 1.55s; }
-@keyframes particle-rise {
-  0% { opacity: 0; transform: translateY(0) scale(0.6); }
-  20% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-72px) scale(1.1); }
-}
+.loading-drop-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.loading-drop-cap { margin-top: 20px; text-align: center; }
+.loading-drop-label { font-family: var(--font-serif), serif; font-style: italic; font-size: 18px; color: var(--ink); }
+.loading-drop-sub { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+.loading-drop-dots { animation: drz-loading-dots 1.4s infinite; }
+@keyframes drz-loading-dots { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+/* the voice-mentor drop (VoiceOrb.tsx) — a canvas presence that listens, thinks
+   and speaks, driven by the real audio amplitude. Replaced the old CSS .orb. */
+.voice-orb { position: relative; display: block; margin: 0 auto; }
+.voice-orb canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
 /* post-call processing steps — the machinery, made visible */
 .proc-steps { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
 .proc-step { display: flex; align-items: center; gap: 11px; font-size: 14px; color: var(--muted); transition: color 0.3s; }
@@ -2762,15 +2718,18 @@ textarea.f { line-height: 1.55; }
 .mentor-meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .mentor-fit { font-size: 18px; font-weight: 750; color: #15803d; flex: 0 0 auto; }
 .mentor-transitions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+/* neutral-warm pills: a whole row of accent chips made the card read "all red";
+   the arrow inside carries the terracotta so the accent stays a spice, not the dish */
 .mentor-transition {
   font-size: 12px;
   font-weight: 600;
   padding: 3px 11px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--paper));
-  background: color-mix(in srgb, var(--accent) 8%, var(--paper));
-  color: var(--accent);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
 }
+.mentor-transition .arw { color: var(--accent); font-weight: 700; margin: 0 2px; }
 .mentor-journey { font-size: 13.5px; line-height: 1.6; color: var(--ink); margin: 10px 0 0; }
 .mentor-why { margin: 10px 0 0; padding-left: 18px; }
 .mentor-why li { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
@@ -2933,3 +2892,49 @@ textarea.f { line-height: 1.55; }
 }
 .job-target-clear { margin-left: auto; border: none; background: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 0 2px; }
 .job-target-clear:hover { color: var(--accent); }
+
+/* ---------- mobile (≤640px): the app must WORK on a phone ----------
+   Philosophy: stack, wrap, and hide the wordy — never let anything force
+   horizontal scroll. The résumé EDITOR stays desktop-first (an A4 sheet has a
+   real width); everything a seeker touches daily must be phone-clean. */
+@media (max-width: 640px) {
+  html, body { overflow-x: hidden; } /* safety net under everything below */
+
+  /* dashboard */
+  .dash { padding: 14px 14px 70px; }
+  .dash-cards { grid-template-columns: 1fr; }
+  .dash-section-head { flex-wrap: wrap; row-gap: 6px; }
+  .dash-hint { display: none; } /* the strapline squeezed everything else */
+
+  /* job cards: votes+source move ABOVE the title (own right-aligned row)
+     instead of clipping past the right edge */
+  .rec-title-row { flex-wrap: wrap; }
+  .rec-title-side { width: 100%; order: -1; justify-content: flex-end; }
+  .rec-head { gap: 12px; }
+  .rec-card { padding: 18px 14px; }
+  .rec-fact { min-width: 42%; } /* meta band settles into a clean 2×2 */
+
+  /* landing: nav anchors hide, logo + Get started stay. !important because the
+     container carries an inline display:flex (landing styles are inline) */
+  .lp-nav-links { display: none !important; }
+
+  /* fit-chips, symmetric on phones: green pills pair up two-across; the amber
+     "!" pill gets its own full-width row. Same rule for the landing hero card
+     (.lp-role-chips, inline-styled → !important) and the app's job cards. */
+  /* hero card header: ring STAYS beside title+company (chips live full-width
+     below the header in the JSX, so nothing gets squeezed into balloons) */
+  .lp-role-head { gap: 16px !important; align-items: center !important; }
+  .lp-role-chips { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px !important; }
+  .lp-role-chips .lp-chip {
+    width: 100%;
+    box-sizing: border-box;
+    line-height: 1.3 !important;
+    border-radius: 12px !important; /* wrapped text in a 999px pill = balloon */
+    align-items: flex-start !important;
+    padding: 8px 12px !important;
+  }
+  .lp-role-chips .lp-chip.warn { grid-column: 1 / -1; }
+  .rec-chips-top { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rec-chips-top .rec-chip { width: 100%; box-sizing: border-box; border-radius: 12px; align-items: flex-start; line-height: 1.3; }
+  .rec-chips-top .rec-chip.gap { grid-column: 1 / -1; }
+}

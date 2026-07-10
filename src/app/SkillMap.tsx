@@ -12,7 +12,10 @@
  * sit below as quiet confirmation.
  */
 
-export type SkillMapEntry = { skill: string; demand: number; have: boolean; avgFit: number };
+/** `key` = canonical lowercase identity (selection/filtering); `skill` = the
+ *  résumé-ready display form. Old API payloads may lack `key` — fall back. */
+export type SkillMapEntry = { key?: string; skill: string; demand: number; have: boolean; avgFit: number };
+const keyOf = (r: SkillMapEntry) => r.key ?? r.skill.toLowerCase();
 
 export default function SkillMap({
   radar,
@@ -43,9 +46,9 @@ export default function SkillMap({
           <div className="skillmap-rows">
             {missing.map((r) => (
               <div
-                key={r.skill}
-                className={`skillmap-row${selected === r.skill ? " on" : ""}${mode === "filter" ? " clickable" : ""}`}
-                onClick={mode === "filter" ? () => onSelect?.(selected === r.skill ? null : r.skill) : undefined}
+                key={keyOf(r)}
+                className={`skillmap-row${selected === keyOf(r) ? " on" : ""}${mode === "filter" ? " clickable" : ""}`}
+                onClick={mode === "filter" ? () => onSelect?.(selected === keyOf(r) ? null : keyOf(r)) : undefined}
                 title={`${r.demand} aligned roles ask for this — it's not on your résumé yet`}
               >
                 <span className="skillmap-skill">{r.skill}</span>
@@ -65,9 +68,9 @@ export default function SkillMap({
           <div className="skillmap-haves">
             {have.map((r) => (
               <button
-                key={r.skill}
-                className={`skillmap-havechip${selected === r.skill ? " on" : ""}`}
-                onClick={mode === "filter" ? () => onSelect?.(selected === r.skill ? null : r.skill) : undefined}
+                key={keyOf(r)}
+                className={`skillmap-havechip${selected === keyOf(r) ? " on" : ""}`}
+                onClick={mode === "filter" ? () => onSelect?.(selected === keyOf(r) ? null : keyOf(r)) : undefined}
                 disabled={mode !== "filter"}
                 title={`${r.demand} aligned roles ask for this — you show it`}
               >

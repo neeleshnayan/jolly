@@ -5,8 +5,8 @@ import { formatComp } from "@/lib/format/comp";
 import { displayCompany } from "@/lib/format/company";
 import ApplyKit from "./ApplyKit";
 import SkillMap from "../SkillMap";
-import DrizzleLoader from "../DrizzleLoader";
-import DropletFit from "../DropletFit";
+import LoadingDrop from "../LoadingDrop";
+import FitRing from "../FitRing";
 
 type Job = {
   id: string;
@@ -17,7 +17,7 @@ type Job = {
   compMin: number | null;
   compMax: number | null;
   compCurrency: string | null;
-  stage: string | null;
+  minYears: number | null;
   url: string | null;
   source: string | null;
   summary: string;
@@ -31,9 +31,12 @@ type Job = {
   gaps: string[];
   why: string;
 };
-type RadarEntry = { skill: string; demand: number; have: boolean; avgFit: number };
+type RadarEntry = { key?: string; skill: string; demand: number; have: boolean; avgFit: number };
 const SOURCE_LABEL: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", consider: "a16z portfolio", sample: "Curated JD", pasted: "Curated JD" };
 const REMOTE_LABEL: Record<string, string> = { remote: "Remote", hybrid: "Hybrid", onsite: "Onsite" };
+// a model that couldn't derive a field often emits a placeholder; don't render "unknown" as if it were data
+const BLANK = new Set(["unknown", "n/a", "na", "none", "null", "-", "—", "tbd", "not specified", ""]);
+const meaningful = (s: string | null | undefined) => !!s && !BLANK.has(s.trim().toLowerCase());
 
 type Prefs = {
   currentComp?: number; // legacy
@@ -41,6 +44,7 @@ type Prefs = {
   expectedComp?: number;
   compCurrency?: "INR" | "USD" | "GBP" | "EUR";
   locations?: string[];
+  dreamCities?: string[];
   remote?: "remote" | "hybrid" | "onsite" | "any";
 };
 
@@ -193,6 +197,19 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     signal("dismiss", id);
   }
 
+  // explicit thumbs — a soft "more/less like this" that tunes the ranking (via
+  // learnDrift) without removing the role the way dismiss does
+  const [voted, setVoted] = useState<Record<string, "up" | "down">>({});
+  function vote(id: string, dir: "up" | "down") {
+    setVoted((v) => {
+      const next = { ...v };
+      if (next[id] === dir) delete next[id]; // clicking the same thumb again clears it
+      else next[id] = dir;
+      return next;
+    });
+    signal(dir, id);
+  }
+
   // application tracking: clicking "View & apply" opens the posting AND asks
   // for a one-tap confirm — honest data (no phantom applications from bounces),
   // zero forms. Confirmed rows feed the outcome funnel on this same dashboard.
@@ -250,7 +267,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     return (
       <section className="dash-section">
         <div className="dash-section-head"><h2>Recommended for you</h2></div>
-        <DrizzleLoader label="Finding roles that fit…" />
+        <LoadingDrop />
       </section>
     );
   }
@@ -267,9 +284,11 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     );
   }
 
+  // skillFilter is the CANONICAL key; m.skills are already canonical (normSkill)
   const filtered = skillFilter ? matches.filter((m) => m.skills?.some((s) => s === skillFilter || s.includes(skillFilter) || skillFilter.includes(s))) : matches;
   const top = filtered.slice(0, skillFilter ? 8 : 5);
-  const activeRadar = skillFilter ? radar.find((r) => r.skill === skillFilter) : null;
+  const activeRadar = skillFilter ? radar.find((r) => (r.key ?? r.skill) === skillFilter) : null;
+  const skillFilterLabel = activeRadar?.skill ?? skillFilter; // display form, never the raw key
 
   return (
     <section className="dash-section">
@@ -300,12 +319,12 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
         <div className="skill-callout">
           {activeRadar && !activeRadar.have ? (
             <>
-              <b>{activeRadar.demand} roles aligned with you ask for {skillFilter}</b> — it&apos;s not on your résumé yet. If you have it,
+              <b>{activeRadar.demand} roles aligned with you ask for {skillFilterLabel}</b> — it&apos;s not on your résumé yet. If you have it,
               add it (it changes your ATS hits too); if you don&apos;t, that&apos;s a conversation worth having with your mentor.
             </>
           ) : (
             <>
-              Showing roles asking for <b>{skillFilter}</b> — a strength of yours worth leading with.
+              Showing roles asking for <b>{skillFilterLabel}</b> — a strength of yours worth leading with.
             </>
           )}
           <button className="ai-cancel" onClick={() => setSkillFilter(null)}>clear filter</button>
@@ -315,7 +334,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
         {top.map((j) => (
           <div className="rec-card" key={j.id}>
             <div className="rec-head">
-              <DropletFit fit={j.fit} />
+              <FitRing fit={j.fit} />
               <div className="rec-head-main">
                 <div className="rec-title-row">
                 <div>
@@ -324,6 +343,8 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                 </div>
                 <span className="rec-title-side">
                   {j.source && <span className="rec-source">{SOURCE_LABEL[j.source] ?? j.source}</span>}
+                  <button className={`rec-vote${voted[j.id] === "up" ? " on" : ""}`} onClick={() => vote(j.id, "up")} title="More roles like this — tunes your ranking" aria-label="More like this">👍</button>
+                  <button className={`rec-vote${voted[j.id] === "down" ? " on" : ""}`} onClick={() => vote(j.id, "down")} title="Fewer roles like this — tunes your ranking" aria-label="Less like this">👎</button>
                   <button className="rec-dismiss" onClick={() => dismiss(j.id)} title="Not for me — never rank this role for me again (and teach the ranking what to avoid)">
                     ✕
                   </button>
@@ -350,7 +371,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                     <span className="rec-fact-value">{formatComp(j.compMin, j.compMax, j.location, j.compCurrency)}</span>
                   </div>
                 )}
-                {j.location && (
+                {meaningful(j.location) && (
                   <div className="rec-fact">
                     <span className="rec-fact-label">Location</span>
                     <span className="rec-fact-value">{j.location}</span>
@@ -362,10 +383,10 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
                     <span className="rec-fact-value">{REMOTE_LABEL[j.remote]}</span>
                   </div>
                 )}
-                {j.stage && (
+                {j.minYears != null && j.minYears > 0 && (
                   <div className="rec-fact">
-                    <span className="rec-fact-label">Stage</span>
-                    <span className="rec-fact-value">{j.stage}</span>
+                    <span className="rec-fact-label">Experience</span>
+                    <span className="rec-fact-value">{j.minYears}+ yrs</span>
                   </div>
                 )}
               </div>
@@ -443,6 +464,7 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
   const [floor, setFloor] = useState<number | undefined>(prefs.acceptMin ?? prefs.currentComp);
   const [expected, setExpected] = useState<number | undefined>(prefs.expectedComp);
   const [locations, setLocations] = useState((prefs.locations ?? []).join(", "));
+  const [dreamCities, setDreamCities] = useState((prefs.dreamCities ?? []).join(", "));
   const [remote, setRemote] = useState<Prefs["remote"]>(prefs.remote ?? "any");
   const [min, max, step] = COMP_SCALE[currency];
 
@@ -459,6 +481,7 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
       expectedComp: expected,
       compCurrency: currency,
       locations: locations.split(",").map((s) => s.trim()).filter(Boolean),
+      dreamCities: dreamCities.split(",").map((s) => s.trim()).filter(Boolean),
       remote,
     });
   }
@@ -518,8 +541,12 @@ function RefinePanel({ prefs, saving, onSave }: { prefs: Prefs; saving: boolean;
           </select>
         </label>
         <label className="refine-field refine-wide">
-          <span>Preferred locations (comma-separated)</span>
-          <input value={locations} onChange={(e) => setLocations(e.target.value)} placeholder="Bengaluru, Remote, New York" />
+          <span>Preferred locations — roles elsewhere won&apos;t show (remote always does)</span>
+          <input value={locations} onChange={(e) => setLocations(e.target.value)} placeholder="Bengaluru, London, New York" />
+        </label>
+        <label className="refine-field">
+          <span>Dream cities ✨ — roles here rank higher</span>
+          <input value={dreamCities} onChange={(e) => setDreamCities(e.target.value)} placeholder="Tokyo, Zürich" />
         </label>
       </div>
       <div className="refine-actions">

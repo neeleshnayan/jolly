@@ -12,32 +12,39 @@ import { db } from "@/db";
 import { profiles, skills } from "@/db/schema";
 import { resolveUserId } from "@/lib/auth/user";
 import { rankMatchesWithMeta, pickSpectrum, type RankedJob } from "@/lib/opportunities/recommend";
+import { canonSkillKey } from "@/lib/skills/canon";
+import { getLearnedSkillCasing, displaySkillSmart } from "@/lib/skills/learned";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 
-export type SkillRadarEntry = { skill: string; demand: number; have: boolean; avgFit: number };
+/** `key` is the canonical lowercase identity (matching/filtering); `skill` is
+ *  the résumé-ready display form. Never show the key; never match the label. */
+export type SkillRadarEntry = { key: string; skill: string; demand: number; have: boolean; avgFit: number };
 
 /** The skills-overlap lens: across the roles that ALIGN with this user, which
  *  skills does the market keep asking for — and which are missing from their
  *  résumé? Demand-ranked, so a missing skill becomes an actionable ("18 of
- *  your aligned roles want kubernetes"), not a vague to-do. */
-function skillRadar(matches: RankedJob[], userSkills: string[]): SkillRadarEntry[] {
-  const mine = userSkills.map((s) => s.toLowerCase().trim()).filter(Boolean);
+ *  your aligned roles want Kubernetes"), not a vague to-do. Aggregated by
+ *  CANONICAL key so "TypeScript"/"typescript"/"ts" from different extraction
+ *  models tally as one skill, displayed in résumé casing. */
+function skillRadar(matches: RankedJob[], userSkills: string[], learned: Map<string, string>): SkillRadarEntry[] {
+  const mine = userSkills.map(canonSkillKey).filter(Boolean);
   const haveSkill = (s: string) => mine.some((m) => m === s || m.includes(s) || s.includes(m));
   const tally = new Map<string, { demand: number; fitSum: number }>();
   for (const m of matches.slice(0, 60)) {
-    for (const s of m.skills) {
-      if (s.length < 2 || s.length > 40) continue;
-      const t = tally.get(s) ?? { demand: 0, fitSum: 0 };
+    // a role may list casing/alias variants of one skill; count each key once per role
+    const keys = new Set(m.skills.map(canonSkillKey).filter((k) => k.length >= 2 && k.length <= 40));
+    for (const k of keys) {
+      const t = tally.get(k) ?? { demand: 0, fitSum: 0 };
       t.demand += 1;
       t.fitSum += m.fit;
-      tally.set(s, t);
+      tally.set(k, t);
     }
   }
   return [...tally.entries()]
     .filter(([, t]) => t.demand >= 2) // one-off mentions aren't a signal
-    .map(([skill, t]) => ({ skill, demand: t.demand, have: haveSkill(skill), avgFit: t.fitSum / t.demand }))
+    .map(([key, t]) => ({ key, skill: displaySkillSmart(key, learned), demand: t.demand, have: haveSkill(key), avgFit: t.fitSum / t.demand }))
     .sort((a, b) => b.demand - a.demand || b.avgFit - a.avgFit)
     .slice(0, 16);
 }
@@ -51,6 +58,7 @@ export async function GET(req: NextRequest) {
   const spectrum = pickSpectrum(matches);
   const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   const mySkills = p ? await db.select({ name: skills.name }).from(skills).where(eq(skills.profileId, p.id)) : [];
-  const radar = skillRadar(matches, mySkills.map((s) => s.name ?? ""));
+  const learned = await getLearnedSkillCasing(); // cached ~10 min; harvests casing from the pool
+  const radar = skillRadar(matches, mySkills.map((s) => s.name ?? ""), learned);
   return NextResponse.json({ ok: true, count: matches.length, matches, spectrum, learning, skillRadar: radar });
 }

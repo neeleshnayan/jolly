@@ -85,7 +85,7 @@ function MentorStrip({ userId }: { userId: string }) {
         <a className="refine-toggle" href="/mentors">Open Mentor Connect →</a>
       </div>
       {matches === null ? (
-        <DrizzleLoader label="Finding people who've walked your path…" />
+        <DrizzleLoader row size={24} label="Finding people who've walked your path…" />
       ) : matches.length === 0 ? (
         <p className="dash-empty">No mentors to connect yet — the circle is still forming. Know someone who&apos;s made your move? Invite them via Mentor Connect.</p>
       ) : (
@@ -108,7 +108,7 @@ function MentorStrip({ userId }: { userId: string }) {
               {m.transitions.length > 0 && (
                 <span className="mentor-transitions">
                   {m.transitions.slice(0, 2).map((t, i) => (
-                    <span className="mentor-transition" key={i}>{t.from} → {t.to}</span>
+                    <span className="mentor-transition" key={i}>{t.from} <span className="arw">→</span> {t.to}</span>
                   ))}
                 </span>
               )}

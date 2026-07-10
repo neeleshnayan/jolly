@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/auth/session";
+import HeroRoles from "./HeroRoles";
+import FamousPivots from "./FamousPivots";
 
 /**
  * The front door — the "Drizzle Landing" marketing page from the design kit.
@@ -37,11 +39,6 @@ function LinkedInCTA({ size = "lg" }: { size?: "lg" | "md" }) {
   );
 }
 
-const chip = { display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 999, fontSize: 13.5, fontWeight: 600, lineHeight: 1 } as const;
-const dot = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, borderRadius: 4, fontSize: 10, fontWeight: 800 } as const;
-const metaCell = { flex: 1, minWidth: 130, padding: "14px 18px" } as const;
-const metaL = { fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#8A8172", marginBottom: 5 };
-const metaV = { fontSize: 15, fontWeight: 600, color: "#E7DECD" };
 const kicker = { fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" as const, color: ACCENT, marginBottom: 16 };
 const h2Serif = { fontFamily: '"Newsreader", Georgia, serif', fontWeight: 500, color: HEADING, lineHeight: 1.1, letterSpacing: "-0.02em", margin: 0 } as const;
 const pillar = { background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: "32px 30px 34px" } as const;
@@ -88,7 +85,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <span style={{ fontFamily: '"Quicksand", sans-serif', fontWeight: 600, fontSize: 22, color: "#ECE4D5", letterSpacing: "-0.02em" }}>drizzle</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 34 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 30, fontSize: 14.5 }}>
+              {/* hidden ≤640px (see globals.css) — logo + Get started carry mobile */}
+              <div className="lp-nav-links" style={{ display: "flex", alignItems: "center", gap: 30, fontSize: 14.5 }}>
                 <a className="lp-link" href="#how">How it works</a>
                 <a className="lp-link" href="#fit">Honest matching</a>
                 <a className="lp-link" href="#community">Community</a>
@@ -123,44 +121,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {error && <p style={{ marginTop: 18, color: "#E0B45C", fontSize: 13 }}>Sign-in didn&apos;t complete ({error}). Please try again.</p>}
           </header>
 
-          {/* HERO PRODUCT SHOT */}
+          {/* HERO PRODUCT SHOT — cycles five professions/geographies so everyone
+              sees themselves in the first ten seconds (HeroRoles.tsx) */}
           <div style={{ perspective: 1600, marginBottom: 20 }}>
             <div className="lp-float" style={{ animation: "drz-float 8s ease-in-out infinite", willChange: "transform" }}>
-              <div style={{ position: "relative", background: "#211D18", border: "1px solid rgba(230,210,170,0.12)", borderRadius: 26, padding: "clamp(24px,3vw,38px)", boxShadow: "0 50px 100px -40px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,240,210,0.04)", maxWidth: 900, margin: "0 auto" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 24, marginBottom: 22 }}>
-                  <div style={{ position: "relative", width: 104, height: 104, flexShrink: 0 }}>
-                    <svg width="104" height="104" viewBox="0 0 104 104" style={{ transform: "rotate(-90deg)" }} aria-hidden>
-                      <circle cx="52" cy="52" r="44" fill="none" stroke="rgba(230,210,170,0.10)" strokeWidth="6" />
-                      <circle cx="52" cy="52" r="44" fill="none" stroke={ACCENT} strokeWidth="6" strokeLinecap="round" strokeDasharray="276.5" strokeDashoffset="41.5" />
-                    </svg>
-                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-                      <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontWeight: 600, fontSize: 34, color: HEADING }}>85</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "#8A8172", marginTop: 3 }}>% FIT</span>
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
-                      <div>
-                        <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontWeight: 500, fontSize: "clamp(24px,3vw,32px)", color: HEADING, letterSpacing: "-0.015em", lineHeight: 1.1 }}>Data Platform Engineer</div>
-                        <div style={{ fontSize: 15.5, color: "#948B7C", marginTop: 4 }}>Figma</div>
-                      </div>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", color: "#8A8172", border: "1px solid rgba(230,210,170,0.16)", borderRadius: 7, padding: "5px 9px" }}>GREENHOUSE</span>
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginTop: 16 }}>
-                      <span style={{ ...chip, background: "rgba(166,192,131,0.13)", color: "#B6CE95", border: "1px solid rgba(166,192,131,0.22)" }}><span style={{ ...dot, background: "rgba(166,192,131,0.22)", color: "#B6CE95" }}>✓</span> Résumé shows 3 of 3 required skills</span>
-                      <span style={{ ...chip, background: "rgba(166,192,131,0.13)", color: "#B6CE95", border: "1px solid rgba(166,192,131,0.22)" }}><span style={{ ...dot, background: "rgba(166,192,131,0.22)", color: "#B6CE95" }}>✓</span> Building lines up</span>
-                      <span style={{ ...chip, background: "rgba(219,164,65,0.13)", color: "#E0B45C", border: "1px solid rgba(219,164,65,0.24)" }}><span style={{ ...dot, background: "rgba(219,164,65,0.22)", color: "#E0B45C" }}>!</span> You want more risk than this offers</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 14, overflow: "hidden" }}>
-                  <div style={{ ...metaCell, borderRight: "1px solid rgba(230,210,170,0.10)" }}><div style={metaL}>COMP</div><div style={metaV}>$235k–$376k</div></div>
-                  <div style={{ ...metaCell, borderRight: "1px solid rgba(230,210,170,0.10)" }}><div style={metaL}>LOCATION</div><div style={metaV}>San Francisco · US</div></div>
-                  <div style={{ ...metaCell, borderRight: "1px solid rgba(230,210,170,0.10)" }}><div style={metaL}>WORK STYLE</div><div style={metaV}>Hybrid</div></div>
-                  <div style={metaCell}><div style={metaL}>STAGE</div><div style={metaV}>Growth</div></div>
-                </div>
-                <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "#A79E8D", margin: "22px 0 0" }}>Own the core ML and data platform behind Figma&apos;s AI features — pipelines for prompt processing, product-facing data systems, and tooling that helps Data Science ship models.</p>
-              </div>
+              <HeroRoles />
             </div>
           </div>
 
@@ -284,6 +249,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               </div>
               <span style={{ fontSize: 14.5, color: "#948B7C" }}><span style={{ color: "#C9BFAD", fontWeight: 600 }}>200+ people</span> one step ahead on your exact path.</span>
             </div>
+
+            {/* famous pivots — the same from → to cards, played for warmth */}
+            <FamousPivots />
           </div>
         </section>
 

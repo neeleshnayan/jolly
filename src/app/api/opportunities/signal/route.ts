@@ -14,7 +14,7 @@ import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
-const KINDS = new Set(["impression", "apply_click", "applied", "dismiss"]);
+const KINDS = new Set(["impression", "apply_click", "applied", "dismiss", "up", "down"]);
 
 export async function POST(req: NextRequest) {
   try {

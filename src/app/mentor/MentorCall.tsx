@@ -8,6 +8,7 @@ import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
 import SlotPicker from "./SlotPicker";
+import VoiceOrb from "./VoiceOrb";
 import { displayCompany } from "@/lib/format/company";
 
 /** The post-call machinery, made visible: while the recap builds, show what
@@ -108,7 +109,7 @@ export default function MentorCall({ userId }: { userId: string }) {
   const voiceDataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
   const voiceSrcRef = useRef<AudioNode | null>(null);
   const lastAudioErrRef = useRef<string>(""); // surfaced in the debug panel
-  const orbRef = useRef<HTMLDivElement | null>(null); // drive --orb-level without re-rendering
+  const levelRef = useRef(0); // live 0–1 audio amplitude → the VoiceOrb canvas, no re-render
   const vadTimerRef = useRef<number | null>(null);
   // adaptive thresholds — calibrated to the room's noise floor at call start
   const speechThreshRef = useRef(SPEECH_RMS);
@@ -262,13 +263,13 @@ export default function MentorCall({ userId }: { userId: string }) {
       const target = Math.max(0, Math.min(1, (level - 0.012) * 7));
       // fast attack, gentle release — lively but not jittery (Siri-like)
       smooth += (target - smooth) * (target > smooth ? 0.5 : 0.14);
-      orbRef.current?.style.setProperty("--orb-level", smooth.toFixed(3));
+      levelRef.current = smooth; // → VoiceOrb canvas envelope
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(raf);
-      orbRef.current?.style.setProperty("--orb-level", "0");
+      levelRef.current = 0;
     };
   }, [live]);
 
@@ -1082,9 +1083,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       {!live && !review && (
         <div className="call-hero">
           <div className="hero-glow" aria-hidden />
-          <div className="orb idle">
-            <span className="orb-core" />
-          </div>
+          <VoiceOrb mode="ready" size={200} />
           <h1>Talk to your mentor</h1>
           <p className="sub">
             No buttons, no forms — just a conversation. Your mentor already knows
@@ -1125,14 +1124,7 @@ export default function MentorCall({ userId }: { userId: string }) {
 
       {live && (
         <div className="call-stage">
-          <div className={`orb reactive ${orbClass}`} ref={orbRef}>
-            <span className="orb-core" />
-            {phase === "thinking" && (
-              <span className="orb-particles" aria-hidden>
-                <i /><i /><i /><i /><i /><i />
-              </span>
-            )}
-          </div>
+          <VoiceOrb mode={orbClass as "listening" | "thinking" | "speaking" | "ready"} levelRef={levelRef} size={300} />
           <div className="call-name">Your mentor</div>
           <div className={`call-timer${remaining <= 120 ? " low" : ""}`}>
             {fmtTime(remaining)} left

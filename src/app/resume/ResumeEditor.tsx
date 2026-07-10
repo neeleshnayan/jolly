@@ -12,6 +12,7 @@ import VersionBar from "./VersionBar";
 import ResumeSheet from "./ResumeSheet";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
+import { canonSkillKey } from "@/lib/skills/canon";
 import SkillMap, { type SkillMapEntry } from "../SkillMap";
 import { displayCompany } from "@/lib/format/company";
 
@@ -896,8 +897,12 @@ export default function ResumeEditor({
   // (same containment matcher as the server) — the server snapshot only knows
   // what was on the résumé at page load, so edits wouldn't move the ✓/× split
   const liveRadar: SkillMapEntry[] = (() => {
-    const mine = data.skills.map((s) => (s.name ?? "").toLowerCase().trim()).filter(Boolean);
-    return skillRadar.map((r) => ({ ...r, have: mine.some((m) => m === r.skill || m.includes(r.skill) || r.skill.includes(m)) }));
+    const mine = data.skills.map((s) => canonSkillKey(s.name ?? "")).filter(Boolean);
+    // match on the canonical KEY, not the display label ("TypeScript" ≠ "typescript" as strings)
+    return skillRadar.map((r) => {
+      const k = r.key ?? r.skill.toLowerCase();
+      return { ...r, have: mine.some((m) => m === k || m.includes(k) || k.includes(m)) };
+    });
   })();
   /** Used ONLY from the wizard, where the user explicitly ticked the skill —
    *  their attestation, not the model's guess. */

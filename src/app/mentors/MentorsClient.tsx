@@ -146,7 +146,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
                 {m.transitions.length > 0 && (
                   <div className="mentor-transitions">
                     {m.transitions.map((t, i) => (
-                      <span className="mentor-transition" key={i}>{t.from} → {t.to}</span>
+                      <span className="mentor-transition" key={i}>{t.from} <span className="arw">→</span> {t.to}</span>
                     ))}
                   </div>
                 )}
@@ -222,7 +222,7 @@ export default function MentorsClient({ userId }: { userId: string }) {
             {me.transitions.length > 0 && (
               <div className="mentor-transitions">
                 {me.transitions.map((t, i) => (
-                  <span className="mentor-transition" key={i}>{t.from} → {t.to}</span>
+                  <span className="mentor-transition" key={i}>{t.from} <span className="arw">→</span> {t.to}</span>
                 ))}
               </div>
             )}
