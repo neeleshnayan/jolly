@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUserId } from "@/lib/auth/session";
 import HeroRoles from "./HeroRoles";
 import FamousPivots from "./FamousPivots";
+import MeaningMap from "./MeaningMap";
 
 /**
  * The front door — the "Drizzle Landing" marketing page from the design kit.
@@ -121,8 +122,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             {error && <p style={{ marginTop: 18, color: "#E0B45C", fontSize: 13 }}>Sign-in didn&apos;t complete ({error}). Please try again.</p>}
           </header>
 
-          {/* HERO PRODUCT SHOT — cycles five professions/geographies so everyone
-              sees themselves in the first ten seconds (HeroRoles.tsx) */}
+          {/* HERO PRODUCT SHOT — the job slider: cycles diverse roles/geographies
+              so everyone sees themselves in the first ten seconds (HeroRoles.tsx) */}
           <div style={{ perspective: 1600, marginBottom: 20 }}>
             <div className="lp-float" style={{ animation: "drz-float 8s ease-in-out infinite", willChange: "transform" }}>
               <HeroRoles />
@@ -167,43 +168,63 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </div>
         </section>
 
-        {/* HONEST MATCHING */}
+        {/* HONEST MATCHING · trajectory map + the two-read diagnostic */}
         <section id="fit" style={{ position: "relative", zIndex: 1, padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)" }}>
-          <div style={{ maxWidth: 1160, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "clamp(40px,6vw,80px)", alignItems: "center" }}>
-            <div>
+          <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+            <div style={{ maxWidth: 680, margin: "0 auto 44px", textAlign: "center" }}>
               <div style={kicker}>Honest matching</div>
-              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.4vw,48px)", margin: "0 0 20px" }}>Ranked to how you work — not just what you can do.</h2>
-              <p style={{ fontSize: 16.5, lineHeight: 1.6, color: "#A79E8D", margin: "0 0 26px" }}>Every role is scored against what the screen actually requires and what you&apos;d genuinely want. The one watch-out is highlighted, not buried — so you spend energy where it counts.</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {["Filtered by real screening criteria, ranked by fit", "Learns from every role you keep or skip", "Never claims a skill you don't have"].map((t) => (
-                  <div key={t} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 7, background: "rgba(166,192,131,0.14)", color: "#A6C083", fontSize: 12, fontWeight: 800, marginTop: 1 }}>✓</span>
-                    <span style={{ fontSize: 15, color: "#B9B0A0" }}>{t}</span>
-                  </div>
-                ))}
-              </div>
+              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.4vw,48px)", lineHeight: 1.1, margin: "0 0 20px" }}>Ranked to where you&apos;re going — not what you&apos;re called.</h2>
+              <p style={{ fontSize: 16.5, lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>We match on <em style={{ color: "#C9BFAD" }}>trajectory</em>, not keywords. From one starting point we surface the paths open to you — even roles that share zero words with your past — then help you refine the one that fits.</p>
             </div>
-            <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: 30 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 22 }}>
-                <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 19, color: HEADING }}>Skills across your matches</span>
+
+            <div style={{ maxWidth: 760, margin: "0 auto" }}>
+              <MeaningMap />
+            </div>
+
+            <div style={{ marginTop: "clamp(64px,9vw,104px)" }}>
+              <div style={{ maxWidth: 680, margin: "0 auto 40px", textAlign: "center" }}>
+                <div style={kicker}>The diagnostic</div>
+                <h3 style={{ ...h2Serif, fontSize: "clamp(26px,3.6vw,38px)", lineHeight: 1.12, margin: "0 0 16px" }}>Two honest reads on where you stand.</h3>
+                <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>Before it ranks a single role, drizzle takes stock — what you&apos;ve already proven, and what your target path still asks for. Together they narrate the distance between today and where you&apos;re headed.</p>
               </div>
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: ACCENT, marginBottom: 16 }}>The market keeps asking</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 26 }}>
-                {SKILLS.map((s) => (
-                  <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 120, flexShrink: 0, fontSize: 13.5, fontWeight: 600, color: "#C9BFAD" }}>{s.name}</div>
-                    <div style={{ flex: 1, height: 8, borderRadius: 6, background: "rgba(230,210,170,0.08)", overflow: "hidden" }}><div style={{ height: "100%", width: s.w, borderRadius: 6, background: "linear-gradient(90deg,#D98E6A,#C15F3C)" }} /></div>
-                    <div style={{ width: 48, textAlign: "right", fontSize: 12, color: "#8A8172" }}>{s.n}</div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20, alignItems: "stretch" }}>
+                {/* A: strengths */}
+                <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: 30 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                    <span style={{ width: 26, height: 26, borderRadius: 8, background: "rgba(166,192,131,0.16)", color: "#A6C083", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>A</span>
+                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 20, color: HEADING }}>What you&apos;re already strong at</span>
                   </div>
-                ))}
+                  <p style={{ fontSize: 14, lineHeight: 1.55, color: "#948B7C", margin: "0 0 22px" }}>Proven on your résumé — the foundation every match is built from.</p>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#A6C083", marginBottom: 14 }}>Already on your résumé</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {HAVE.map((h) => (
+                      <span key={h} style={sageSm}><span style={{ color: "#A6C083" }}>✓</span> {h}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* B: gaps */}
+                <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: 30 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                    <span style={{ width: 26, height: 26, borderRadius: 8, background: "rgba(216,142,106,0.18)", color: "#E0A579", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>B</span>
+                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 20, color: HEADING }}>What still stands in the way</span>
+                  </div>
+                  <p style={{ fontSize: 14, lineHeight: 1.55, color: "#948B7C", margin: "0 0 22px" }}>The skills your target roles keep asking for — your clearest next moves.</p>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: ACCENT, marginBottom: 16 }}>The market keeps asking</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {SKILLS.map((s) => (
+                      <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ width: 120, flexShrink: 0, fontSize: 13.5, fontWeight: 600, color: "#C9BFAD" }}>{s.name}</div>
+                        <div style={{ flex: 1, height: 8, borderRadius: 6, background: "rgba(230,210,170,0.08)", overflow: "hidden" }}><div style={{ height: "100%", width: s.w, borderRadius: 6, background: "linear-gradient(90deg,#D98E6A,#C15F3C)" }} /></div>
+                        <div style={{ width: 48, textAlign: "right", fontSize: 12, color: "#8A8172" }}>{s.n}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div style={{ height: 1, background: "rgba(230,210,170,0.08)", marginBottom: 20 }} />
-              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#A6C083", marginBottom: 14 }}>Already on your résumé</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {HAVE.map((h) => (
-                  <span key={h} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, background: "rgba(166,192,131,0.10)", color: "#A6C083", border: "1px solid rgba(166,192,131,0.18)" }}><span style={{ color: "#A6C083" }}>✓</span> {h}</span>
-                ))}
-              </div>
+
+              <p style={{ textAlign: "center", fontSize: 14.5, color: "#8A8172", margin: "28px auto 0", maxWidth: 560 }}>Strengths you build from, gaps you close — that&apos;s the route to where you want to go.</p>
             </div>
           </div>
         </section>
@@ -250,7 +271,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <span style={{ fontSize: 14.5, color: "#948B7C" }}><span style={{ color: "#C9BFAD", fontWeight: 600 }}>200+ people</span> one step ahead on your exact path.</span>
             </div>
 
-            {/* famous pivots — the same from → to cards, played for warmth */}
+            {/* inspirational figures — famous people who made dramatic trajectory
+                shifts. reinforces "the leap you're making has been made before" */}
             <FamousPivots />
           </div>
         </section>
