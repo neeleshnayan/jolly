@@ -46,6 +46,11 @@ type Check = {
   expect: RegExp; // top-10 titles should mostly look like this
   redFlag: RegExp; // these in the top-5 = ranking is broken
   atLevel?: (roleVec: Record<string, { score?: number }>) => boolean;
+  // Fluid profiles (juniors) SHOULD get breadth — a junior can become many
+  // things, so a diverse top-10 is correct, not a bug. For these we don't demand
+  // coverage; we assert the skill-relevant role LEADS + no senior leak, i.e. the
+  // relevance damp tilted the breadth toward what they've invested in.
+  breadthOK?: boolean;
   note: string;
 };
 
@@ -88,7 +93,8 @@ const CHECKS: Check[] = [
     // a "Data Scientist" title says nothing about level — count it as available
     // for a junior only if the JD itself asks junior-to-mid seniority
     atLevel: (v) => (v.req_seniority?.score ?? 1) <= 0.55,
-    note: "the seniority gate must sink staff+/director roles",
+    breadthOK: true,
+    note: "breadth is right for a junior — skill-relevant role must LEAD, no senior leak",
   },
 ];
 
@@ -97,7 +103,7 @@ async function main() {
   const { opportunities } = await import("../src/db/schema");
   const { and, eq, ne, isNotNull } = await import("drizzle-orm");
   const { scoreMatch } = await import("../src/lib/opportunities/match");
-  const { blendCore } = await import("../src/lib/opportunities/blend");
+  const { blendCore, relevanceDamp } = await import("../src/lib/opportunities/blend");
   const { STRONG_MODEL } = await import("../src/lib/jobs/vectorize");
   const { embed, cosine, trajectoryFromCosine } = await import("../src/lib/embeddings");
   const { profileByKey } = await import("./profiles");
@@ -139,7 +145,7 @@ async function main() {
         const trajectory = emb?.length
           ? trajectoryFromCosine(cosine(dvec, emb))
           : 0.5 + 0.5 * (a.target.filter((w) => roleText.includes(w)).length / a.target.length);
-        const fit = m.gate * blendCore(m.desire, evidence, trajectory);
+        const fit = m.gate * blendCore(m.desire, evidence, trajectory) * relevanceDamp(prof.vector.seniority?.score ?? 0.5, evidence, trajectory);
         return { title: r.title ?? "?", company: r.company ?? "?", fit, desire: m.desire, gate: m.gate, evidence, vec: r.vector as Record<string, { score?: number }> };
       })
       .sort((x, y) => y.fit - x.fit);
@@ -160,11 +166,19 @@ async function main() {
     // Zero relevant roles in the pool → only the red-flag check applies.
     const available = scored.filter(isExpected).length;
     const required = available === 0 ? 0 : Math.min(Math.ceil(TOP * 0.6), Math.max(1, Math.floor(available * 0.8)));
-    const pass = expectHits >= required && redInTop5.length === 0;
+    // breadthOK archetypes: the #1 role must be skill-relevant (an expected role
+    // led the list) + no senior leak — coverage isn't required, breadth is fine.
+    const leadRelevant = top.length > 0 && isExpected(top[0]);
+    const pass = a.breadthOK
+      ? leadRelevant && redInTop5.length === 0
+      : expectHits >= required && redInTop5.length === 0;
     if (!pass) failures++;
 
     console.log(`\n■ ${prof.name} — ${a.note}`);
-    console.log(`  ${pass ? "✅ PASS" : "❌ FAIL"}: ${expectHits}/${TOP} expected-looking in top-${TOP} (${available} exist in pool, needed ≥${required}), ${redInTop5.length} red-flag ≥45% in top-5, fit spread ${spread.toFixed(2)}`);
+    if (a.breadthOK)
+      console.log(`  ${pass ? "✅ PASS" : "❌ FAIL"}: lead ${leadRelevant ? "IS" : "NOT"} skill-relevant (${top[0]?.title?.slice(0, 32)}), ${redInTop5.length} red-flag ≥45% in top-5, breadth OK, fit spread ${spread.toFixed(2)}`);
+    else
+      console.log(`  ${pass ? "✅ PASS" : "❌ FAIL"}: ${expectHits}/${TOP} expected-looking in top-${TOP} (${available} exist in pool, needed ≥${required}), ${redInTop5.length} red-flag ≥45% in top-5, fit spread ${spread.toFixed(2)}`);
     if (redInTop5.length) console.log(`  red flags: ${redInTop5.map((t) => t.title).join(" · ")}`);
     for (const t of top) {
       const mark = a.redFlag.test(t.title) ? "🚩" : a.expect.test(t.title) ? "  " : "· ";

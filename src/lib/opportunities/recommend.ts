@@ -14,7 +14,7 @@ import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
 import { inferCurrency, inferCountry } from "@/lib/format/comp";
 import { toUSD, fmtMoney } from "@/lib/format/currency";
 import { scoreMatch } from "./match";
-import { blendCore } from "./blend";
+import { blendCore, relevanceDamp } from "./blend";
 import { TRUSTED_MODELS } from "@/lib/jobs/vectorize";
 import { canonSkillKey } from "@/lib/skills/canon";
 import { firstCityHit } from "@/lib/geo/canon";
@@ -337,7 +337,10 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
       // silently counts as a good (or bad) score. Weights live in blend.ts, the
       // single source the offline harnesses import too.
       const core = blendCore(m.desire, ev.evidence, traj.score);
-      const fit = Math.min(1, m.gate * core * c.factor * l.factor * (gate.marginal?.penalty ?? 1));
+      // skill-tilted breadth: for juniors, damp roles irrelevant on BOTH skills
+      // and trajectory (their gate is too permissive to do it). No-op for seniors.
+      const rel = relevanceDamp(vec.seniority?.score ?? 0.5, ev.evidence, traj.score);
+      const fit = Math.min(1, m.gate * core * rel * c.factor * l.factor * (gate.marginal?.penalty ?? 1));
       // concrete notes lead — they're the explicit knobs the user just set
       const reasons = [
         traj.targetHit >= 0.5 ? "The direction you set with your mentor" : null,

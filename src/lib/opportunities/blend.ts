@@ -34,3 +34,27 @@ export function blendCore(
   const wsum = parts.reduce((a, [, wt]) => a + wt, 0);
   return wsum > 0 ? parts.reduce((a, [x, wt]) => a + x * wt, 0) / wsum : desire;
 }
+
+/** How hard the relevance damp bites at full juniorness (experiment: tune vs the
+ *  junior archetype without breaking the others / anchors). */
+export const REL_DAMP_STRENGTH = 0.6;
+/** At/above this seniority a candidate has a real direction of their own, so the
+ *  damp is off entirely — it only helps where the gate is too permissive. */
+const JUNIOR_SENIORITY = 0.55;
+
+/**
+ * Skill-tilted breadth. A low-seniority candidate clears every low-bar gate, so
+ * off-discipline ENTRY roles (SDR, intern, support) float up on generic desire
+ * alone and dilute the roles they've actually invested in. For juniors ONLY,
+ * damp a role by how IRRELEVANT it is — low on BOTH evidence (skills they have)
+ * AND trajectory (where they've said they're heading) — scaled by how junior
+ * they are. Breadth survives; it just tilts toward skills + stated direction.
+ * A role strong on EITHER signal is spared (max), so a stated target still wins
+ * even before the skills exist. Seniors (≥0.55) are untouched → returns 1.
+ */
+export function relevanceDamp(userSeniority: number, evidence: number | null, trajectory: number | null): number {
+  const juniorness = Math.max(0, (JUNIOR_SENIORITY - userSeniority) / JUNIOR_SENIORITY);
+  if (juniorness === 0) return 1;
+  const relevance = Math.max(evidence ?? 0.5, trajectory ?? 0.5); // null → neutral, never punished for missing data
+  return 1 - juniorness * REL_DAMP_STRENGTH * (1 - relevance);
+}

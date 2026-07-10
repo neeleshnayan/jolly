@@ -22,7 +22,7 @@ type Rec = { gate: number; desire: number; evidence: number | null; trajectory: 
 
 async function main() {
   const { scoreMatch } = await import("../src/lib/opportunities/match");
-  const { blendCore } = await import("../src/lib/opportunities/blend");
+  const { blendCore, relevanceDamp } = await import("../src/lib/opportunities/blend");
   const { embed, cosine, trajectoryFromCosine } = await import("../src/lib/embeddings");
   const { PROFILES } = await import("./profiles");
 
@@ -47,7 +47,7 @@ async function main() {
       const evidence = mustHit === null && niceHit === null ? null : mustHit !== null ? 0.35 + 0.55 * mustHit + 0.1 * (niceHit ?? mustHit) : 0.5 + 0.5 * (niceHit as number);
       const emb = f.embedding;
       const trajectory = emb?.length ? trajectoryFromCosine(cosine(dirByKey.get(p.key)!, emb)) : null;
-      const fit = m.gate * blendCore(m.desire, evidence, trajectory);
+      const fit = m.gate * blendCore(m.desire, evidence, trajectory) * relevanceDamp(p.vector.seniority?.score ?? 0.5, evidence, trajectory);
       cell.set(`${p.key}|${f.key}`, { gate: m.gate, desire: m.desire, evidence, trajectory, fit });
     }
   }
