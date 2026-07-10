@@ -68,6 +68,10 @@ type JobRow = {
   url: string | null;
   vectorizedAt: string | null;
   createdAt: string;
+  model: string | null;
+  promptV: number | null;
+  needsReview: boolean;
+  hasEmbedding: boolean;
 };
 
 export default function AdminPanel() {
@@ -78,6 +82,7 @@ export default function AdminPanel() {
   const [inferCount, setInferCount] = useState("10");
   const [inferBatch, setInferBatch] = useState("5");
   const [inferPause, setInferPause] = useState("30");
+  const [forceRevec, setForceRevec] = useState(false); // re-vectorize already-done rows too
   type Progress = { running: boolean; total: number; done: number; failed: number; current: string | null };
   const [prog, setProg] = useState<Progress | null>(null);
   // poll live progress while a run is active
@@ -120,11 +125,17 @@ export default function AdminPanel() {
   const [jobsTotal, setJobsTotal] = useState(0);
   const [jobStatus, setJobStatus] = useState<"all" | "pending" | "vectorized">("all");
   const [jobQ, setJobQ] = useState("");
+  const [jobModel, setJobModel] = useState(""); // "" = any, or a model / "none"
+  const [jobMissing, setJobMissing] = useState<"" | "comp" | "yoe" | "remote">("");
+  const [jobFlagged, setJobFlagged] = useState(false);
   const [jobPage, setJobPage] = useState(0);
   const PAGE = 50;
+  type JobFilter = { status: "all" | "pending" | "vectorized"; q: string; model: string; missing: string; flagged: boolean; page: number };
   type Stats = {
     verticals: { vertical: string; total: number; done: number }[];
     boards: { company: string | null; total: number; done: number }[];
+    models: { model: string; n: number }[];
+    missing: { noComp: number; noYoe: number; noRemote: number; flaggedN: number };
   };
   const [stats, setStats] = useState<Stats | null>(null);
 
@@ -132,15 +143,18 @@ export default function AdminPanel() {
   // post-inference refresh — reloads what the user is actually looking at.
   // (A stale closure here once refreshed the "all" list while the operator sat
   // on the vectorized tab, hiding freshly processed jobs.)
-  const jobParamsRef = useRef({ status: "all" as "all" | "pending" | "vectorized", q: "", page: 0 });
+  const jobParamsRef = useRef<JobFilter>({ status: "all", q: "", model: "", missing: "", flagged: false, page: 0 });
 
   // paged on purpose — a 500-row dump once crashed the operator's browser
-  const loadJobs = useCallback(async (over?: Partial<{ status: "all" | "pending" | "vectorized"; q: string; page: number }>) => {
+  const loadJobs = useCallback(async (over?: Partial<JobFilter>) => {
     const next = { ...jobParamsRef.current, ...over };
     jobParamsRef.current = next;
     try {
       const params = new URLSearchParams({ status: next.status, limit: String(PAGE), offset: String(next.page * PAGE) });
       if (next.q.trim()) params.set("q", next.q.trim());
+      if (next.model) params.set("model", next.model);
+      if (next.missing) params.set("missing", next.missing);
+      if (next.flagged) params.set("flagged", "1");
       const r = await fetch(`/api/admin/jobs?${params}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -201,12 +215,12 @@ export default function AdminPanel() {
     const n = Math.max(1, parseInt(inferCount, 10) || 10);
     const b = Math.max(1, parseInt(inferBatch, 10) || 5);
     const p = Math.max(0, parseInt(inferPause, 10) || 30);
-    setFetchLog([`Vectorizing up to ${n} pending job(s) — batches of ${b}, ${p}s cooldown. Leave this page open…`]);
+    setFetchLog([`${forceRevec ? "Re-vectorizing" : "Vectorizing"} up to ${n} job(s) — granite → escalate to gemma3, batches of ${b}, ${p}s cooldown. Leave this page open…`]);
     try {
       const r = await fetch("/api/admin/run-inference", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ count: n, batch: b, sleepSec: p }),
+        body: JSON.stringify({ count: n, batch: b, sleepSec: p, force: forceRevec, tiered: true }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -408,6 +422,20 @@ export default function AdminPanel() {
               <div className="admin-stat-n">{m.agents.reduce((s, a) => s + a.runs, 0)}</div>
               <div className="admin-stat-l">Agent runs · {m.agents.reduce((s, a) => s + a.errors, 0)} errors</div>
             </div>
+            {/* agent_runs misses vectorization — the extract/embed path doesn't go
+                through runAgent, so it never logs there. The DB row counts (same
+                stat the Jobs tab shows) are the real vectorize ledger. */}
+            {(() => {
+              const done = (stats?.models ?? []).filter((x) => x.model !== "none");
+              const total = done.reduce((s, x) => s + x.n, 0);
+              const breakdown = [...done].sort((a, b) => b.n - a.n).map((x) => `${x.model.split(":")[0]} ${x.n.toLocaleString()}`).join(" · ");
+              return (
+                <div className="admin-stat" title="Opportunities with a stored vector, by model — the ground truth (agent_runs undercounts because the vectorize path bypasses that log)">
+                  <div className="admin-stat-n">{total.toLocaleString()}</div>
+                  <div className="admin-stat-l">Roles vectorized{breakdown ? ` · ${breakdown}` : ""}</div>
+                </div>
+              );
+            })()}
           </div>
 
           <section className="admin-section">
@@ -504,9 +532,9 @@ export default function AdminPanel() {
               {fetching ? "Pulling boards…" : "⟳ Fetch jobs"}
             </button>
             <span className="admin-infer">
-              <label className="admin-knob" title="Total pending jobs to vectorize this run">
+              <label className="admin-knob" title="How many rows this run processes (cap 2000 — enough to sweep the whole pool)">
                 total
-                <input className="admin-count" type="number" min={1} max={50} value={inferCount} onChange={(e) => setInferCount(e.target.value)} />
+                <input className="admin-count" type="number" min={1} max={2000} value={inferCount} onChange={(e) => setInferCount(e.target.value)} />
               </label>
               <label className="admin-knob" title="Jobs per batch before a cooldown">
                 batch
@@ -516,20 +544,30 @@ export default function AdminPanel() {
                 pause&nbsp;(sec)
                 <input className="admin-count" type="number" min={0} max={120} value={inferPause} onChange={(e) => setInferPause(e.target.value)} />
               </label>
+              <label className="admin-knob admin-force" title="Backfill: also reprocess rows vectorized BEFORE the schema fixes. Rows already on the new schema are skipped, so this only ever does the ones that need it — repeat until it reports the backfill is complete.">
+                <input type="checkbox" checked={forceRevec} onChange={(e) => setForceRevec(e.target.checked)} />
+                backfill&nbsp;old
+              </label>
               <button
                 className="btn-primary"
                 onClick={() => void runInference()}
-                disabled={inferring || fetching || pending === 0}
-                title={pending ? `${pending} pending in total — this run only vectorizes what you set in "total"` : undefined}
+                disabled={inferring || fetching || (!forceRevec && pending === 0)}
+                title={forceRevec ? "Only rows NOT yet on the new schema (pending first, then oldest) — already-redone rows are skipped, so it converges to zero" : pending ? `${pending} pending in total — this run only vectorizes what you set in "total"` : undefined}
               >
-                {inferring ? "Vectorizing…" : `▶ Vectorize ${Math.min(Number(inferCount) || 10, pending || 0)} job${(Math.min(Number(inferCount) || 10, pending || 0)) === 1 ? "" : "s"}`}
+                {inferring
+                  ? forceRevec ? "Backfilling…" : "Vectorizing…"
+                  : forceRevec
+                    ? `♻ Backfill up to ${Math.min(Number(inferCount) || 10, 2000)}`
+                    : `▶ Vectorize ${Math.min(Number(inferCount) || 10, pending || 0)} job${Math.min(Number(inferCount) || 10, pending || 0) === 1 ? "" : "s"}`}
               </button>
             </span>
           </div>
           <p className="admin-note">
-            Fetch is cheap (no GPU) — run it anytime. Inference runs batches of 5 with a 30s cooldown for thermal headroom.
-            Vectorized roles rank for every user on their next dashboard load. Heads-up: inference competes with live mentor
-            calls for the GPU — run it between calls.
+            Fetch is cheap (no GPU) — run it anytime. Inference runs <b>gemma3 end to end</b> (~27s/role — granite was
+            demoted: it scored every role ~0.6 on every axis, useless for ranking), in batches with a cooldown for thermal
+            headroom. <b>Backfill&nbsp;old</b> widens the run to rows that <i>need</i> redoing — pending, pre-schema-fix, or
+            granite-era vectors; already-redone rows are skipped, so repeat runs converge and finish with &quot;backfill
+            complete&quot;. Heads-up: inference competes with live mentor calls for the GPU — run it between calls.
           </p>
 
           {inferring && prog && prog.total > 0 && (
@@ -597,11 +635,41 @@ export default function AdminPanel() {
                   onChange={(e) => setJobQ(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (setJobPage(0), void loadJobs({ q: jobQ, page: 0 }))}
                 />
+                {/* model filter — driven by the live model distribution */}
+                <select
+                  className="f-box"
+                  value={jobModel}
+                  onChange={(e) => { setJobModel(e.target.value); setJobPage(0); void loadJobs({ model: e.target.value, page: 0 }); }}
+                  title="Filter by the model that vectorized the row"
+                >
+                  <option value="">any model</option>
+                  {(stats?.models ?? []).map((m) => (
+                    <option key={m.model} value={m.model}>{m.model} ({m.n})</option>
+                  ))}
+                </select>
+                {/* missing-field filters — the null IS the flag (no redundant column) */}
+                {([["comp", "no comp", stats?.missing.noComp], ["yoe", "no yrs", stats?.missing.noYoe], ["remote", "no style", stats?.missing.noRemote]] as const).map(([k, label, n]) => (
+                  <button
+                    key={k}
+                    className={`admin-tab${jobMissing === k ? " active" : ""}`}
+                    onClick={() => { const v = jobMissing === k ? "" : k; setJobMissing(v); setJobPage(0); void loadJobs({ missing: v, page: 0 }); }}
+                    title={`Vectorized rows missing this field${n != null ? ` (${n})` : ""}`}
+                  >
+                    {label}{n != null ? ` ${n}` : ""}
+                  </button>
+                ))}
+                <button
+                  className={`admin-tab${jobFlagged ? " active" : ""}`}
+                  onClick={() => { const v = !jobFlagged; setJobFlagged(v); setJobPage(0); void loadJobs({ flagged: v, page: 0 }); }}
+                  title={`Rows the model self-flagged as likely-wrong${stats?.missing.flaggedN != null ? ` (${stats.missing.flaggedN})` : ""}`}
+                >
+                  ⚑ flagged{stats?.missing.flaggedN ? ` ${stats.missing.flaggedN}` : ""}
+                </button>
               </span>
             </div>
             <table className="admin-table admin-jobs-table">
               <thead>
-                <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Status</th><th>Added</th><th></th></tr>
+                <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Model</th><th>Status</th><th>Added</th><th></th></tr>
               </thead>
               <tbody>
                 {jobs.map((j) => {
@@ -627,13 +695,22 @@ export default function AdminPanel() {
                       <td className="admin-dim">{formatComp(j.compMin, j.compMax, j.location) ?? "—"}</td>
                       <td className="admin-dim">{j.domain ?? "—"}{j.companyStage && j.companyStage !== "unknown" ? ` · ${j.companyStage}` : ""}</td>
                       <td className="admin-dim">{j.source}</td>
+                      <td className="admin-dim" style={{ whiteSpace: "nowrap" }}>
+                        {j.model ? (
+                          <>
+                            <span title={`${j.model}${j.promptV ? ` · prompt v${j.promptV}` : ""}`}>{j.model.replace(/:.*/, "")}{j.promptV ? ` v${j.promptV}` : ""}</span>
+                            {j.needsReview && <span title="model self-flagged as likely-wrong" style={{ color: "#e0b45c", marginLeft: 4 }}>⚑</span>}
+                            {j.hasEmbedding && <span title="has trajectory embedding" style={{ opacity: 0.55, marginLeft: 4 }}>⊹</span>}
+                          </>
+                        ) : "—"}
+                      </td>
                       <td>{j.vectorizedAt ? <span style={{ whiteSpace: "nowrap" }} title={new Date(j.vectorizedAt).toLocaleString()}>✓ {fmtAgo(j.vectorizedAt)}</span> : <span className="admin-pending">pending</span>}</td>
                       <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
                       <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
                     </tr>,
                     expandedId === j.id ? (
                       <tr key={`${j.id}-detail`} className="detail-row">
-                        <td colSpan={10}>
+                        <td colSpan={11}>
                           {!d ? (
                             <span className="admin-dim">Loading extraction…</span>
                           ) : (

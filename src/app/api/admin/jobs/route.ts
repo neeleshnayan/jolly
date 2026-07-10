@@ -53,10 +53,19 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(100, Math.max(10, Number(p.get("limit") ?? 50)));
   const offset = Math.max(0, Number(p.get("offset") ?? 0));
 
+  const model = p.get("model") ?? ""; // exact model, or "none" for un-stamped
+  const missing = p.get("missing") ?? ""; // comp | yoe | remote — field is empty
+  const flagged = p.get("flagged") === "1"; // needs_review self-flag
+
   const conds: SQL[] = [];
   if (status === "pending") conds.push(isNull(opportunities.vectorizedAt));
   if (status === "vectorized") conds.push(isNotNull(opportunities.vectorizedAt));
   if (q) conds.push(or(ilike(opportunities.title, `%${q}%`), ilike(opportunities.company, `%${q}%`))!);
+  if (model) conds.push(model === "none" ? isNull(opportunities.vectorizeModel) : eq(opportunities.vectorizeModel, model));
+  if (missing === "comp") conds.push(and(isNull(opportunities.compMin), isNull(opportunities.compMax))!);
+  if (missing === "yoe") conds.push(sql`(${opportunities.facts} ->> 'min_years_experience') is null`);
+  if (missing === "remote") conds.push(or(isNull(opportunities.remote), eq(opportunities.remote, "unknown"))!);
+  if (flagged) conds.push(sql`(${opportunities.facts} ->> 'needs_review')::boolean is true`);
   const where = conds.length ? and(...conds) : undefined;
 
   // sequential on one warm socket (see metrics route — the pooler punishes
@@ -76,6 +85,10 @@ export async function GET(req: NextRequest) {
       url: opportunities.url,
       vectorizedAt: opportunities.vectorizedAt,
       createdAt: opportunities.createdAt,
+      model: opportunities.vectorizeModel,
+      promptV: sql<number | null>`(${opportunities.facts} ->> 'prompt_v')::int`,
+      needsReview: sql<boolean>`coalesce((${opportunities.facts} ->> 'needs_review')::boolean, false)`,
+      hasEmbedding: sql<boolean>`${opportunities.embedding} is not null`,
     })
     .from(opportunities)
     .where(where)
@@ -112,8 +125,23 @@ export async function GET(req: NextRequest) {
     .groupBy(opportunities.company)
     .orderBy(sql`2 desc`)
     .limit(20);
+  // model distribution — powers the model filter + shows sweep progress at a glance
+  const models = await db
+    .select({ model: sql<string>`coalesce(${opportunities.vectorizeModel}, 'none')`, n: sql<number>`count(*)::int` })
+    .from(opportunities)
+    .where(isNotNull(opportunities.vectorizedAt))
+    .groupBy(sql`1`)
+    .orderBy(sql`2 desc`);
+  const [{ noComp, noYoe, noRemote, flaggedN }] = await db
+    .select({
+      noComp: sql<number>`count(*) filter (where comp_min is null and comp_max is null and vectorized_at is not null)::int`,
+      noYoe: sql<number>`count(*) filter (where (facts ->> 'min_years_experience') is null and vectorized_at is not null)::int`,
+      noRemote: sql<number>`count(*) filter (where (remote is null or remote = 'unknown') and vectorized_at is not null)::int`,
+      flaggedN: sql<number>`count(*) filter (where (facts ->> 'needs_review')::boolean is true)::int`,
+    })
+    .from(opportunities);
 
-  return NextResponse.json({ ok: true, jobs: rows, total, pending, stats: { verticals, boards } });
+  return NextResponse.json({ ok: true, jobs: rows, total, pending, stats: { verticals, boards, models, missing: { noComp, noYoe, noRemote, flaggedN } } });
 }
 
 export async function DELETE(req: NextRequest) {
