@@ -21,8 +21,14 @@ const SCHEMA_NAME = "vectorize_role";
  *  escalating everything to itself and stalling the sweep.
  *  v4 (2026-07-11): anchored req_technical_depth to the WORK not the title — it
  *  was under-scored for junior eng roles (New Grad SWE at 0.4), so the gate
- *  couldn't separate a non-technical person from entry-level engineering. */
-export const VECTORIZE_PROMPT_VERSION = 4;
+ *  couldn't separate a non-technical person from entry-level engineering.
+ *  v5 (2026-07-11): two failures from the v4 batch audit (tools/v4-audit.ts):
+ *  (a) tech_depth OVER-scored on tool-touching GTM/legal/design roles (Brand
+ *  Designer 0.7, Commercial Counsel 0.6 — mentions of AI/SQL/dashboards raised
+ *  the bar), which wrongly gates non-technical candidates out of their own
+ *  roles; (b) hourly/weekly/monthly pay stored raw ($24/hr → comp_max 24),
+ *  which reads as below every comp floor — comp must be ANNUALIZED. */
+export const VECTORIZE_PROMPT_VERSION = 5;
 
 // exported so the model bake-off tool runs the EXACT production extraction
 export function vectorizeJsonSchema(): Record<string, unknown> {
@@ -44,7 +50,10 @@ FACTS:
   directly from the LOCATION field (Zürich→Switzerland, Bangalore→India,
   Paris→France, "New York, NY"→United States, Dubai→United Arab Emirates). Full
   country name; "Remote" only if the JD truly gives no geographic location.
-- comp_min / comp_max (only if the JD states a range; else null)
+- comp_min / comp_max: ANNUAL amounts, only if the JD states pay; else null.
+  If the JD gives hourly/weekly/monthly pay, ANNUALIZE it (hourly ×2080,
+  weekly ×52, monthly ×12): "$24–26/hour" → 49920–54080; "$3,850/week" →
+  200200–200200. Never store a raw hourly or weekly number.
 - comp_currency: ISO code ("USD","INR","GBP","EUR","SGD"…) for the comp range.
   Use the JD's explicit symbol/words if given; otherwise INFER from the location's
   market — you know a Bangalore salary is INR, London GBP, Berlin EUR, SF USD.
@@ -108,6 +117,12 @@ VECTOR — what the role REQUIRES (0 = low/left, 1 = high/right):
   tools) is NOT technical depth — depth = BUILDING software/systems or
   quantitative/scientific rigor. A Content Marketer with "analytics & SEO" is
   still 0.2. "New Grad"/"Associate" lowers req_seniority, NOT req_technical_depth.
+  Do NOT raise the score because the JD name-drops AI, SQL, data, dashboards, or
+  automation — a role stays in ITS OWN band no matter how tech-flavored the
+  company: Commercial Counsel supporting a sales org → 0.2; Brand Designer → 0.2;
+  Director of Growth Marketing who "lives in SQL" → 0.3; Sales Strategy &
+  Planning Manager → 0.3; a "GTM/Marketing Ops Engineer" configuring automations
+  is technical-ADJACENT → 0.4–0.6, not 0.7+.
 - req_breadth — 0.15 = deep specialist in one system/domain (compiler engineer,
   tax counsel, one-model researcher); 0.5 = owns a lane plus its adjacencies; 0.9 =
   true cross-functional generalist (founding engineer, chief of staff). Commit to

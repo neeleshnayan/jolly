@@ -15,7 +15,11 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^['"]|['"].*$/g, "");
 }
 process.env.LLM_PROVIDER_VECTORIZE = "ollama";
-const N = Number(process.argv.find((a) => a.startsWith("--n="))?.split("=")[1] ?? 100);
+const arg = (k: string, d: number) => Number(process.argv.find((a) => a.startsWith(`--${k}=`))?.split("=")[1] ?? d);
+const N = arg("n", 100);
+const BATCH = arg("batch", 0); // 0 = no cooldown; else pause after every BATCH rows
+const COOLDOWN = arg("cooldown", 0); // seconds of GPU/thermal rest between batches
+const sleep = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
 
 async function main() {
   const { db } = await import("../src/db");
@@ -40,9 +44,8 @@ async function main() {
     limit ${N}
   `) as unknown as { id: string; title: string; company: string; location: string; raw_text: string; source: string }[];
 
-  console.log(`test-crunch: ${rows.length} rows → v${VECTORIZE_PROMPT_VERSION} (${STRONG_MODEL}) + embeddings\n`);
+  console.log(`test-crunch: ${rows.length} rows → v${VECTORIZE_PROMPT_VERSION} (${STRONG_MODEL}) + embeddings${BATCH ? ` · ${COOLDOWN}s cooldown / ${BATCH} rows` : ""}\n`);
   let ok = 0, fail = 0;
-  const t0 = Number(process.env.__T0 ?? 0);
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     try {
@@ -55,9 +58,13 @@ async function main() {
       fail++;
       console.log(`  [${i + 1}/${rows.length}] ✗ ${(r.title ?? "?").slice(0, 42)} — ${(e as Error).message.slice(0, 50)}`);
     }
+    // GPU/thermal breather between batches (skip after the final row)
+    if (BATCH && COOLDOWN && (i + 1) % BATCH === 0 && i < rows.length - 1) {
+      console.log(`  — cooldown ${COOLDOWN}s —`);
+      await sleep(COOLDOWN);
+    }
   }
   console.log(`\ndone: ${ok} ok, ${fail} failed. Now run: npx tsx tools/anchors.ts && npx tsx tools/match-sanity.ts`);
-  void t0;
   process.exit(0);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

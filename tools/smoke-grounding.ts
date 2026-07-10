@@ -57,7 +57,7 @@ async function main() {
     .orderBy(desc(opportunities.vectorizedAt))
     .limit(N);
 
-  console.log(`SMOKE TEST — ${rows.length} freshest v3 rows, every claim vs source text\n${"=".repeat(74)}`);
+  console.log(`SMOKE TEST — ${rows.length} freshest vectorized rows, every claim vs source text\n${"=".repeat(74)}`);
   let flagged = 0;
   const tally = { checks: 0, fails: 0 };
   const check = (title: string, name: string, ok: boolean | null, detail = "") => {

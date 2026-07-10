@@ -52,7 +52,53 @@ export async function extractRole(jd: string, model?: string): Promise<Opportuni
     ...(model ? { model } : {}),
     keepAlive: "15m",
   });
-  return opportunityExtraction.parse(res.data);
+  const out = opportunityExtraction.parse(res.data);
+  reconcileTechDepth(out);
+  return out;
+}
+
+// gemma's req_technical_depth SCORE has a stuck upward prior: any role at a
+// tech company or with tech-flavored language (AI/SQL/data/automation) comes back
+// 0.6–0.85 no matter how explicitly the rubric bands it lower. Two prompt
+// sharpenings (v4, v5) moved it ZERO, so the fix is a deterministic consistency
+// guard rather than more prose. Design (learned from holdout tests that caught
+// finance/accounting/AE/PM gaps):
+//   BUILD   — genuine engineering. Checked FIRST → NEVER capped, even at a
+//             marketing company. A Software/ML/Security/Data/Infra Engineer or
+//             SRE is technical regardless of what the org sells.
+//   NONTECH — the open-ended set of non-building functions (GTM, legal, finance,
+//             accounting, ops, PM, HR, design…). Matched on title OR domain.
+//   ENG_NOUN — an engineer/developer/architect noun sitting inside a NONTECH
+//             function ("Sales Engineer", "GTM Engineer") = the rubric's
+//             technical-ADJACENT band → 0.6 ceiling; everything else → 0.35.
+// Deliberately NO tech-flavor exemption: "AI Native" in a sales title or "AI
+// sales" as a domain must NOT rescue a salesperson (that was the v5.0 bug).
+const BUILD = /\b(software|backend|frontend|full.?stack|infrastructure|infra|platform engineer|systems engineer|embedded|firmware|compiler|devops|\bSRE\b|site reliability|security engineer|reliability engineer|ML engineer|machine learning engineer|data engineer|research engineer|robotics|hardware engineer)\b/i;
+// NOTE: intentionally NO trailing \b on the group — these are PREFIXES (market→
+// marketing, financ→financial, recruit→recruiter, complian→compliance). Short
+// ambiguous tokens carry their own \b…\b (sales, HR, support) to avoid
+// over-matching (Salesforce, supporting-cast prose).
+const NONTECH = /\b(?:market|brand|content|communicat|sales\b|account exec|account manager|business develop|partnership|revenue|customer success|customer support|\bsupport\b|recruit|talent|people ops|human resources|\bHR\b|legal|counsel|attorney|paralegal|complian|privacy|financ|accounting|accountant|controller|payroll|bookkeep|procurement|operations|program manager|project manager|chief of staff|workplace|facilities|office manager|copywrit|community|creative|design)/i;
+const ENG_NOUN = /\b(engineer|developer|architect)\b/i;
+export function reconcileTechDepth(out: OpportunityExtraction): void {
+  const td = out.vector.req_technical_depth;
+  if (!td || typeof td.score !== "number") return;
+  const title = out.facts.title ?? "";
+  const domain = out.facts.domain ?? "";
+  // real engineering wins outright — hands off (checked on the TITLE, which names
+  // the discipline; domain can be the company's industry, e.g. "fintech")
+  if (BUILD.test(title)) return;
+  // non-technical function? title is authoritative; domain corroborates but a
+  // BUILD-flavored domain ("AI infra") is not a non-tech signal
+  const nonTechTitle = NONTECH.test(title);
+  const nonTechDomain = domain !== "" && NONTECH.test(domain) && !BUILD.test(domain);
+  if (!nonTechTitle && !nonTechDomain) return; // ambiguous (analyst/strategist/PM-less) → trust gemma
+  // engineer/architect NOUN inside a non-tech function = technical-adjacent (0.6);
+  // otherwise the rubric floor for GTM/legal/finance/ops (0.35)
+  const cap = ENG_NOUN.test(title) ? 0.6 : 0.35;
+  if (td.score <= cap) return;
+  td.rationale = `${td.rationale ? td.rationale + " · " : ""}capped ${td.score}→${cap}: ${nonTechTitle ? `title "${title.slice(0, 38)}"` : `domain "${domain}"`} is non-technical`;
+  td.score = cap;
 }
 
 /** Scrub skills IN PLACE (drops sentences/traits/degrees/duration, 55-char cap)
@@ -94,6 +140,11 @@ export function applyRowAuthority(out: OpportunityExtraction, row: RowMeta): voi
     out.facts.title = out.facts.title || row.title || "";
     out.facts.company = out.facts.company || row.company || "";
   }
+  // re-run the consistency guard now that the AUTHORITATIVE title is in place —
+  // gemma sometimes emits an empty title/domain (observed live: Brand Designer
+  // JD → title "", domain ""), so the in-extractRole pass had nothing to judge.
+  // Idempotent: a row already at/below its cap is untouched.
+  reconcileTechDepth(out);
 }
 
 /** Persist an extraction to its row, stamping the model + prompt version and
