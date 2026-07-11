@@ -27,6 +27,25 @@ export default function DeepgramMentorCall({ userId }: { userId: string }) {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: "smooth" });
   }, [turns]);
 
+  // When a call ENDS — via the End button OR an unexpected drop — open the
+  // "Since we spoke" follow-up. Keying off `live` (not the button) means a
+  // dropped call still gets its recap instead of vanishing silently.
+  useEffect(() => {
+    if (live || recap || !startedAt.current) return;
+    const userSaid = turns.filter((t) => t.role === "you").map((t) => t.text).join(" ").trim();
+    if (userSaid.length < 30) return; // nothing meaningful to recap
+    const transcript = turns.map((t) => `${t.role === "you" ? "You" : "Mentor"}: ${t.text}`).join("\n");
+    setRecap({ loading: true, summary: "", insights: [] });
+    fetch("/api/mentor/summary", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, transcript }),
+    })
+      .then((r) => r.json())
+      .then((j) => setRecap({ loading: false, summary: j.summary ?? "", insights: j.insights ?? [] }))
+      .catch(() => setRecap({ loading: false, summary: "", insights: [] }));
+  }, [live, recap, turns, userId]);
+
   async function begin() {
     setRecap(null);
     setSaved(false);
@@ -34,23 +53,9 @@ export default function DeepgramMentorCall({ userId }: { userId: string }) {
     await start();
   }
 
-  async function end() {
+  function end() {
+    // recap fires from the live→false effect above (covers button + drop)
     stop();
-    const transcript = turns.map((t) => `${t.role === "you" ? "You" : "Mentor"}: ${t.text}`).join("\n");
-    const userSaid = turns.filter((t) => t.role === "you").map((t) => t.text).join(" ").trim();
-    if (userSaid.length < 30) return; // nothing to recap
-    setRecap({ loading: true, summary: "", insights: [] });
-    try {
-      const res = await fetch("/api/mentor/summary", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, transcript }),
-      });
-      const j = await res.json();
-      setRecap({ loading: false, summary: j.summary ?? "", insights: j.insights ?? [] });
-    } catch {
-      setRecap({ loading: false, summary: "", insights: [] });
-    }
   }
 
   async function saveToMap() {
