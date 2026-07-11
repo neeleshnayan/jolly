@@ -85,9 +85,19 @@ export function reconcileTechDepth(out: OpportunityExtraction): void {
   if (!td || typeof td.score !== "number") return;
   const title = out.facts.title ?? "";
   const domain = out.facts.domain ?? "";
-  // real engineering wins outright — hands off (checked on the TITLE, which names
-  // the discipline; domain can be the company's industry, e.g. "fintech")
-  if (BUILD.test(title)) return;
+  // real engineering wins outright — never capped, AND never left absurdly
+  // under-scored: gemma occasionally flakes a full-stack/ML/security engineer
+  // low (observed: Software Engineer, Full Stack @ 0.35), which would wrongly
+  // drop the role's bar and let a non-technical candidate clear it. Floor it into
+  // the rubric's build band. (Checked on the TITLE — domain can be the company's
+  // industry, e.g. "fintech".)
+  if (BUILD.test(title)) {
+    if (td.score < 0.6) {
+      td.rationale = `${td.rationale ? td.rationale + " · " : ""}floored ${td.score}→0.6: title "${title.slice(0, 38)}" is real engineering`;
+      td.score = 0.6;
+    }
+    return;
+  }
   // non-technical function? title is authoritative; domain corroborates but a
   // BUILD-flavored domain ("AI infra") is not a non-tech signal
   const nonTechTitle = NONTECH.test(title);

@@ -27,8 +27,13 @@ const SCHEMA_NAME = "vectorize_role";
  *  Designer 0.7, Commercial Counsel 0.6 — mentions of AI/SQL/dashboards raised
  *  the bar), which wrongly gates non-technical candidates out of their own
  *  roles; (b) hourly/weekly/monthly pay stored raw ($24/hr → comp_max 24),
- *  which reads as below every comp floor — comp must be ANNUALIZED. */
-export const VECTORIZE_PROMPT_VERSION = 5;
+ *  which reads as below every comp floor — comp must be ANNUALIZED.
+ *  v6 (2026-07-11): the v5 batch audit found the reconcileTechDepth guard was
+ *  one-directional — it CAPPED over-scored non-tech roles but never FLOORED an
+ *  under-scored real engineer (Software Engineer, Full Stack came back 0.35).
+ *  The guard is now symmetric (floor BUILD titles at 0.6). Pipeline change, so
+ *  the stamp bumps to re-crunch every row through the same guard. */
+export const VECTORIZE_PROMPT_VERSION = 6;
 
 // exported so the model bake-off tool runs the EXACT production extraction
 export function vectorizeJsonSchema(): Record<string, unknown> {
