@@ -2778,6 +2778,38 @@ textarea.f { line-height: 1.55; }
 }
 
 
+/* ---------- Live résumé metrics (client-side) ---------- */
+.resume-metrics {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 15px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.rm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rm-head > span:first-child { font-weight: 650; font-size: 14px; }
+.rm-sub { font-size: 11.5px; color: var(--muted); }
+.rm-bar { display: flex; flex-direction: column; gap: 4px; }
+.rm-bar-top { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+.rm-track { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--line) 60%, transparent); overflow: hidden; }
+.rm-fill { height: 100%; border-radius: 999px; transition: width 0.25s ease; }
+.rm-flags { margin-top: 2px; display: flex; flex-direction: column; gap: 6px; }
+.rm-flags-title { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.rm-flag { display: flex; gap: 7px; align-items: baseline; font-size: 12px; line-height: 1.4; }
+.rm-flag-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #f59e0b 18%, transparent);
+  color: #b45309;
+}
+:root[data-theme="dark"] .rm-flag-tag { color: #fbbf24; }
+.rm-flag-text { color: var(--muted); }
+
 /* ---------- Mentor Connect (/mentors) ---------- */
 .mentors-wrap { max-width: 760px; margin: 0 auto; padding: 26px 22px 90px; }
 .mentors-head h1 { margin: 10px 0 6px; font-size: 32px; letter-spacing: -0.03em; }

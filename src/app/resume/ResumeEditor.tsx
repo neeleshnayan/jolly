@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { apiFetch } from "@/lib/client/api-fetch";
+import { downloadOrPrintPdf } from "@/lib/client/pdf";
 import AtsRing from "../AtsRing";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -15,6 +16,7 @@ import UserChip from "../UserChip";
 import Brand from "../Brand";
 import { canonSkillKey } from "@/lib/skills/canon";
 import SkillMap, { type SkillMapEntry } from "../SkillMap";
+import ResumeMetrics from "./ResumeMetrics";
 import { displayCompany } from "@/lib/format/company";
 
 // ---- local shapes (avoid pulling drizzle into the client bundle) ----
@@ -493,18 +495,13 @@ export default function ResumeEditor({
   async function downloadLetterPdf() {
     setLetterPdfBusy(true);
     try {
-      const r = await fetch("/api/cover-letters/pdf", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ u: userId, content: letterText }),
-      });
-      if (!r.ok) return;
-      const blob = await r.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${(data.profile.fullName || "cover-letter").trim().replace(/\s+/g, "-")}-cover-letter.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      // server route on Node; on Cloudflare it 501s → print the visible letter
+      // sheet (it carries the .resume print styling too).
+      await downloadOrPrintPdf(
+        "/api/cover-letters/pdf",
+        `${(data.profile.fullName || "cover-letter").trim().replace(/\s+/g, "-")}-cover-letter.pdf`,
+        { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ u: userId, content: letterText }) },
+      );
     } finally {
       setLetterPdfBusy(false);
     }
@@ -698,18 +695,12 @@ export default function ResumeEditor({
     setStatus("Building your PDF…");
     try {
       await flush(); // make sure the latest edits are in the PDF
-      const res = await fetch(`/api/resume/pdf?u=${userId}`);
-      if (!res.ok) throw new Error("PDF failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(data.profile.fullName || "resume").replace(/\s+/g, "_")}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatus("");
-    } catch {
-      setStatus("PDF failed — try again");
+      const mode = await downloadOrPrintPdf(
+        `/api/resume/pdf?u=${userId}`,
+        `${(data.profile.fullName || "resume").replace(/\s+/g, "_")}.pdf`,
+      );
+      // on Cloudflare the server route 501s → we fell back to the print dialog
+      setStatus(mode === "print" ? "Opening print dialog — choose “Save as PDF”." : "");
     } finally {
       setPdfBusy(false);
     }
@@ -2020,6 +2011,9 @@ export default function ResumeEditor({
                     )}
                   </div>
                 ) : null}
+
+                {/* live, client-side résumé hygiene — instant, no server */}
+                <ResumeMetrics data={data} pages={pages} />
 
                 {/* the market's skill demand — shown, never auto-added */}
                 <SkillMap radar={liveRadar} mode="view" />

@@ -10,7 +10,7 @@
  * EEOC/demographic questions are deliberately absent: those are the user's
  * alone to answer.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AtsRing from "../AtsRing";
 import DrizzleLoader from "../DrizzleLoader";
 
@@ -58,6 +58,26 @@ export default function ApplyKit({
   const [pickedVersion, setPickedVersion] = useState("");
   const [versionState, setVersionState] = useState<"idle" | "loading" | "done">("idle");
   const [frameKey, setFrameKey] = useState(0); // bump to re-render the iframe after a restore
+  const resumeFrameRef = useRef<HTMLIFrameElement>(null);
+  // PDF: server route on Node (direct download); on Cloudflare it 501s (no
+  // puppeteer) → print the true-to-print iframe (/resume/print) instead — real
+  // selectable text, rendered on the user's own machine, zero server.
+  async function downloadResumePdf() {
+    try {
+      const res = await fetch(`/api/resume/pdf?u=${userId}`);
+      if (!res.ok) throw new Error(`pdf ${res.status}`);
+      const blob = await res.blob();
+      if (blob.type && !blob.type.includes("pdf")) throw new Error("not a pdf");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "resume.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      resumeFrameRef.current?.contentWindow?.print();
+    }
+  }
   // the print iframe carries the app's dark body background; a fixed-height
   // iframe left ~800px of that showing below a short résumé (the "black
   // component"). Measure the real content height on load and fit to it.
@@ -256,9 +276,9 @@ export default function ApplyKit({
                     </a>
                   )}
                   {docTab === "resume" && (
-                    <a className="ghost-btn" href={`/api/resume/pdf?u=${userId}`} target="_blank" rel="noopener noreferrer">
+                    <button className="ghost-btn" onClick={() => void downloadResumePdf()}>
                       ↓ PDF
-                    </a>
+                    </button>
                   )}
                   {docTab === "letter" && letterText && (
                     <button className="ghost-btn" onClick={() => void copy("letter", letterText)}>
@@ -358,6 +378,7 @@ export default function ApplyKit({
                         embed=1 restores the page margins (puppeteer adds them for PDF) */}
                     <iframe
                       key={frameKey}
+                      ref={resumeFrameRef}
                       className="applykit-resume-frame"
                       src={`/resume/print?u=${userId}&embed=1`}
                       title="Your résumé"
