@@ -32,6 +32,13 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 /** Batch-embed. Returns one 768d vector per input, in order. */
 export async function embed(texts: string[]): Promise<number[][]> {
   if (!texts.length) return [];
+  // On Cloudflare, Ollama/nomic is unreachable (no localhost) and the pool is
+  // nomic-embedded, so a CF embedding model would be a different vector space
+  // anyway. Fail FAST here (a 30s hang to localhost gets the Worker killed) →
+  // ranking uses its lexical trajectory fallback.
+  if (process.env.DEPLOY_TARGET === "cloudflare") {
+    throw new Error("embeddings unavailable on Cloudflare — lexical fallback");
+  }
   const r = await fetch(`${BASE}/api/embed`, {
     method: "POST",
     headers: { "content-type": "application/json" },

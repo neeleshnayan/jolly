@@ -12,8 +12,8 @@
     "DEPLOY_TARGET": "cloudflare",
     "LLM_PROVIDER": "cloudflare",
     "CF_ACCOUNT_ID": "6ccc25465024c8f2009b4474357c298e",
-    "CF_MODEL": "@cf/meta/llama-3.1-8b-instruct",
-    "CF_LIVE_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "CF_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "CF_LIVE_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
     "RESUME_VISION_PROVIDER": "cloudflare",
     "CF_VISION_MODEL": "@cf/meta/llama-3.2-11b-vision-instruct"
   },

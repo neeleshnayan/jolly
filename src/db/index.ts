@@ -40,14 +40,27 @@ function init(): DB {
   // keep_alive detects half-open sockets (the network flap leaves connections
   // that look alive but never answer — queries queued on them hang forever);
   // max_lifetime recycles every socket within 5 minutes, bounding any wedge.
-  const client = postgres(connectionString, {
-    prepare: false,
-    max: 4,
-    idle_timeout: 120,
-    connect_timeout: 10,
-    keep_alive: 30,
-    max_lifetime: 300,
-  });
+  const onCF = process.env.DEPLOY_TARGET === "cloudflare";
+  const client = onCF
+    ? postgres(connectionString, {
+        // Workers + Hyperdrive: `fetch_types` runs a type-introspection query on
+        // connect that HANGS through the pooler (the Worker gets killed for never
+        // responding). And keep_alive/max_lifetime are timer-based — Workers freeze
+        // the isolate between requests, so those timers misbehave. Hyperdrive does
+        // the real pooling at the edge, so keep the driver lean.
+        prepare: false,
+        fetch_types: false,
+        max: 5,
+        idle_timeout: 20,
+      })
+    : postgres(connectionString, {
+        prepare: false,
+        max: 4,
+        idle_timeout: 120,
+        connect_timeout: 10,
+        keep_alive: 30,
+        max_lifetime: 300,
+      });
   g.__jollyDb = drizzle(client, { schema });
   return g.__jollyDb;
 }

@@ -3,7 +3,7 @@
  * and pick a 3-role "spectrum" to prime the mentor before a call. Uses the
  * CACHED scoring vector (recomputed only when missing) so this is cheap.
  */
-import { and, desc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { certifications, education, experiences, insights, opportunities, profiles, rankingSignals, resumeThemes, skills } from "@/db/schema";
 import { deriveCandidateQuals, hardGate } from "./gates";
@@ -18,7 +18,7 @@ import { blendCore, relevanceDamp } from "./blend";
 import { TRUSTED_MODELS } from "@/lib/jobs/vectorize";
 import { canonSkillKey } from "@/lib/skills/canon";
 import { firstCityHit } from "@/lib/geo/canon";
-import { embed, cosine, trajectoryFromCosine, directionEmbedText } from "@/lib/embeddings";
+import { embed, trajectoryFromCosine, directionEmbedText } from "@/lib/embeddings";
 import type { ScoringVector } from "@/lib/scoring/schema";
 import type { OpportunityVector, OpportunityFacts } from "./schema";
 
@@ -272,7 +272,30 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
     // user's list). Scoring is in-process arithmetic, so the real cost is
     // payload — revisit with per-user precomputed scores past ~1k roles.
     db
-      .select()
+      // Trajectory (semantic direction match) is computed IN POSTGRES via pgvector
+      // (`embedding_vec <=> :dir` → cosine distance), so the 768-float vectors never
+      // leave the DB — just one distance float per row. This killed the ~4MB payload
+      // that made the query slow/flaky through Hyperdrive on Workers, and it lets CF
+      // do real semantic trajectory (no embedding compute on the Worker). rawText is
+      // a legacy summary fallback (≤220 chars ever used), so cap it too.
+      .select({
+        id: opportunities.id,
+        title: opportunities.title,
+        company: opportunities.company,
+        location: opportunities.location,
+        remote: opportunities.remote,
+        compMin: opportunities.compMin,
+        compMax: opportunities.compMax,
+        domain: opportunities.domain,
+        url: opportunities.url,
+        source: opportunities.source,
+        vector: opportunities.vector,
+        facts: opportunities.facts,
+        rawText: sql<string | null>`left(${opportunities.rawText}, 300)`.as("rawText"),
+        trajDist: directionVec
+          ? sql<number | null>`embedding_vec <=> ${`[${directionVec.join(",")}]`}::vector`.as("trajDist")
+          : sql<number | null>`null`.as("trajDist"),
+      })
       .from(opportunities)
       .where(and(
         isNotNull(opportunities.vectorizedAt),
@@ -317,16 +340,17 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
       // evidence: the role's asked-for skills vs what the résumé proves
       const roleSkills = [...new Set([...(f.must_have_skills ?? []), ...(f.nice_to_have_skills ?? [])].map(normSkill).filter(Boolean))];
       const ev = skillEvidence(mySkills, (f.must_have_skills ?? []).map(normSkill).filter(Boolean), (f.nice_to_have_skills ?? []).map(normSkill).filter(Boolean));
-      // trajectory: SEMANTIC (embedding cosine of direction vs role) when both
-      // vectors exist; lexical word-overlap as the fallback while the embedding
-      // column fills mid-crunch, or when the user set no direction. targetHit
-      // (for the "you set this with your mentor" reason) stays lexical.
+      // trajectory: SEMANTIC when a direction is set — pgvector computed the cosine
+      // DISTANCE to the direction in-DB (r.trajDist); score = trajectoryFromCosine(
+      // 1 - distance). Lexical word-overlap is the fallback when there's no direction
+      // or the role has no vector (trajDist null). targetHit stays lexical (for the
+      // "you set this with your mentor" reason).
       const roleText = ` ${(r.title ?? "").toLowerCase()} ${(r.domain ?? "").toLowerCase()} ${(f.summary ?? "").toLowerCase()} ${roleSkills.join(" ")} `;
-      const roleEmb = r.embedding as number[] | null;
+      const trajDist = (r as { trajDist?: number | null }).trajDist;
       let traj: { score: number | null; targetHit: number };
-      if (directionVec && roleEmb?.length) {
+      if (directionVec && trajDist != null) {
         traj = {
-          score: trajectoryFromCosine(cosine(directionVec, roleEmb)),
+          score: trajectoryFromCosine(1 - Number(trajDist)),
           targetHit: targetWords.length ? targetWords.filter((w) => roleText.includes(w)).length / targetWords.length : 0,
         };
       } else {
