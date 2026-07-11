@@ -217,6 +217,11 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
   // the Apply Kit rides the same click that opens the ATS tab; the ranked job
   // travels with it so the kit's diagnostics don't re-rank anything
   const [kitFor, setKitFor] = useState<{ id: string; title: string; job?: Job } | null>(null);
+  // "re-tuning" state: after a mentor call, the review route retunes the ranking
+  // in the background (target-role fill first, ~2-5s). ?retuning=1 shows a banner
+  // and refetches so the list updates IN PLACE rather than flashing the pre-call
+  // ranking — the demo's payoff ("your matches just moved to what we discussed").
+  const [retuning, setRetuning] = useState(false);
   // deep link from the résumé editor's redesign handoff: /dashboard?applykit=<id>
   // opens the kit for that role with the freshly tailored documents
   useEffect(() => {
@@ -229,6 +234,28 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     url.searchParams.delete("applykit"); // one-shot: a reload shouldn't re-open it
     window.history.replaceState({}, "", url);
   }, [matches]);
+
+  // ?retuning=1 (from "See your updated matches" after a call): the review route
+  // fills the new target-role in ~2-5s, then rankMatches reflects it live. Hold a
+  // banner and refetch a couple times to pick up the retuned direction in place,
+  // then clear it. One-shot param (a reload shouldn't re-trigger it).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("retuning") !== "1") return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("retuning");
+    window.history.replaceState({}, "", url);
+    setRetuning(true);
+    let cancelled = false;
+    void (async () => {
+      for (const ms of [3000, 3500]) {
+        await new Promise((r) => setTimeout(r, ms));
+        if (cancelled) return;
+        await load();
+      }
+      if (!cancelled) setRetuning(false);
+    })();
+    return () => { cancelled = true; };
+  }, [load]);
   function onApplyClick(id: string, title?: string | null) {
     signal("apply_click", id);
     setKitFor({ id, title: title ?? "this role", job: matches?.find((j) => j.id === id) });
@@ -263,10 +290,17 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
     }
   }
 
+  const retuneBanner = retuning ? (
+    <div style={{ margin: "0 0 14px", padding: "12px 16px", borderRadius: 12, background: "rgba(208,122,84,0.10)", border: "1px solid rgba(208,122,84,0.28)", fontSize: 14, color: "var(--fg)" }}>
+      ✨ Re-tuning your matches to what you just talked through…
+    </div>
+  ) : null;
+
   if (loading && !matches) {
     return (
       <section className="dash-section">
         <div className="dash-section-head"><h2>Recommended for you</h2></div>
+        {retuneBanner}
         <LoadingDrop />
       </section>
     );
@@ -292,6 +326,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
 
   return (
     <section className="dash-section">
+      {retuneBanner}
       <div className="dash-section-head">
         <h2>Recommended for you</h2>
         <span className="dash-hint">

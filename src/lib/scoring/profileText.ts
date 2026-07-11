@@ -8,7 +8,7 @@ type FullProfile = NonNullable<Awaited<ReturnType<typeof getFullProfile>>>;
 
 export function buildProfileText(
   full: FullProfile,
-  insights: { dimension: string; content: string; confidence: number | null }[],
+  insights: { dimension: string; content: string; confidence: number | null; stance?: string }[],
 ): string {
   const p = full.profile;
   const exp = full.experiences
@@ -22,9 +22,19 @@ export function buildProfileText(
     .map((e) => `- ${e.degree ?? ""} ${e.field ?? ""} @ ${e.institution ?? "?"}`.trim())
     .join("\n");
   const skills = full.skills.map((sk) => sk.name).join(", ");
-  const learned = insights.length
-    ? insights.map((i) => `- [${i.dimension}] ${i.content}`).join("\n")
+  // conviction = settled traits (score on these); exploration = paths they're just
+  // sampling (kept separate + explicitly de-weighted so a curiosity doesn't harden
+  // into a trait in the vector).
+  const conviction = insights.filter((i) => (i.stance ?? "conviction") !== "exploration");
+  const exploring = insights.filter((i) => i.stance === "exploration");
+  const learned = conviction.length
+    ? conviction.map((i) => `- [${i.dimension}] ${i.content}`).join("\n")
     : "(no mentor-call insights yet)";
+  const exploringBlock = exploring.length
+    ? `\n\nCurrently EXPLORING (paths they are sampling — NOT settled traits; weight lightly, do not let these dominate the vector):\n${exploring
+        .map((i) => `- [${i.dimension}] ${i.content}`)
+        .join("\n")}`
+    : "";
 
   return `Name: ${p.fullName ?? "?"}
 Headline: ${p.headline ?? "?"}
@@ -39,7 +49,7 @@ ${edu || "(none)"}
 Skills: ${skills || "(none)"}
 
 What the mentor has learned so far:
-${learned}`;
+${learned}${exploringBlock}`;
 }
 
 // bullets may now contain rich-text HTML (links, bold); the LLM wants plain text

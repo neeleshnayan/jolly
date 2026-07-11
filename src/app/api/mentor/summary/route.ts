@@ -5,6 +5,9 @@
  * user to correct; only /api/mentor/review commits the approved version.
  */
 import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { insights as insightsTable, profiles } from "@/db/schema";
 import { runAgent } from "@/agents/run";
 import { insightExtractor } from "@/agents/insight-extractor";
 import { summarizeCall } from "@/lib/mentor/summarize";
@@ -54,8 +57,22 @@ export async function POST(req: Request) {
     // evict the live model BEFORE the 27B loads — its 5m keep_alive otherwise
     // holds VRAM and the big model OOMs ("cudaMalloc failed" post-call)
     await releaseLiveModel();
+    // reconcile-on-extract: hand the extractor what we already know so it can
+    // reinforce/refine/contradict instead of just piling on (best-effort).
+    let currentInsights: { id: string; dimension: string; content: string }[] = [];
+    try {
+      const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+      if (p) {
+        currentInsights = await db
+          .select({ id: insightsTable.id, dimension: insightsTable.dimension, content: insightsTable.content })
+          .from(insightsTable)
+          .where(and(eq(insightsTable.profileId, p.id), eq(insightsTable.status, "active")));
+      }
+    } catch {
+      /* reconciliation is best-effort — fall back to plain extraction */
+    }
     const extraction = (
-      await runAgent(insightExtractor, { transcript: capped }, { userId: userId ?? "anon" })
+      await runAgent(insightExtractor, { transcript: capped, currentInsights }, { userId: userId ?? "anon" })
     ).output;
 
     return NextResponse.json({ ok: true, summary, insights: extraction.insights });

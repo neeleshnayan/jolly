@@ -22,7 +22,7 @@ type Metrics = {
   recentRuns: { agent: string; status: string; model: string | null; duration_ms: number | null; error: string | null; created_at: string }[];
   mentorDiary?: {
     lane: { holder: { userId: string; forSec: number } | null; waitingCount: number };
-    bookings: { slot_at: string; who: string }[];
+    insights: { dimension: string; content: string; stance: string | null; confidence: number | null; who: string; created_at: string }[];
     pastCalls: { created_at: string; duration_sec: number | null; summary: string; who: string }[];
   };
 };
@@ -369,17 +369,22 @@ export default function AdminPanel() {
             </p>
             <div className="diary-grid">
               <div>
-                <h3 className="diary-h">Booked slots</h3>
-                {!m.mentorDiary?.bookings?.length ? (
-                  <p className="dash-empty">No upcoming bookings.</p>
+                <h3 className="diary-h">What the mentor&apos;s learned</h3>
+                {!m.mentorDiary?.insights?.length ? (
+                  <p className="dash-empty">No insights captured yet (they persist at review-save).</p>
                 ) : (
                   <table className="admin-table">
-                    <thead><tr><th>When</th><th>Who</th></tr></thead>
+                    <thead><tr><th>Who</th><th>Dimension</th><th>Insight</th><th>When</th></tr></thead>
                     <tbody>
-                      {m.mentorDiary.bookings.map((b, i) => (
+                      {m.mentorDiary.insights.map((ins, i) => (
                         <tr key={i}>
-                          <td>{new Date(b.slot_at).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
-                          <td>{b.who}</td>
+                          <td>{ins.who}</td>
+                          <td>
+                            {ins.dimension}
+                            {ins.stance === "exploration" ? <span className="admin-dim"> · exploring</span> : ins.stance === "conviction" ? <span className="admin-dim"> · conviction</span> : ""}
+                          </td>
+                          <td className="admin-dim">{ins.content}</td>
+                          <td>{fmtAgo(ins.created_at)}</td>
                         </tr>
                       ))}
                     </tbody>

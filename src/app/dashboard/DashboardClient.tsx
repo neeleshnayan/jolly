@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Recommendations from "./Recommendations";
+import ExploredPaths from "./ExploredPaths";
 import DrizzleLoader from "../DrizzleLoader";
 import Brand from "../Brand";
 import UserChip from "../UserChip";
@@ -41,6 +42,10 @@ export default function DashboardClient({
           <div className="dash-card-desc">Your profile, diagnosis &amp; applications</div>
         </a>
       </div>
+
+      {/* the exploration memory — "welcome back, here's what you tried on". Hidden
+          until there's a branch, so it only shows for returning explorers. */}
+      <ExploredPaths userId={userId} />
 
       <Recommendations userId={userId} />
 

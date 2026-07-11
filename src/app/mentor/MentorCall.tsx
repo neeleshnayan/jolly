@@ -7,7 +7,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RnnoiseWorkletNode } from "@sapphi-red/web-noise-suppressor";
 import UserChip from "../UserChip";
 import Brand from "../Brand";
-import SlotPicker from "./SlotPicker";
 import VoiceOrb from "./VoiceOrb";
 import { displayCompany } from "@/lib/format/company";
 
@@ -109,6 +108,17 @@ export default function MentorCall({ userId }: { userId: string }) {
   const voiceDataRef = useRef<Float32Array<ArrayBuffer>>(new Float32Array(0));
   const voiceSrcRef = useRef<AudioNode | null>(null);
   const lastAudioErrRef = useRef<string>(""); // surfaced in the debug panel
+  // streaming turn: sentences arrive one at a time and queue up as <audio>
+  // elements (each prebuffering the next while the current one plays)
+  const audioQueueRef = useRef<{ text: string; audio: HTMLAudioElement }[]>([]);
+  const playingRef = useRef(false); // an audio element is currently playing
+  const streamDoneRef = useRef(false); // the turn-stream sent its 'end' frame
+  const turnFinishedRef = useRef(false); // finishTurn already ran for this turn
+  const streamAbortRef = useRef<AbortController | null>(null);
+  // per-turn latency marks (all performance.now()): speechEnd → submit → first
+  // sentence frame → first audio playing. Surfaced in the debug panel + console.
+  const turnClockRef = useRef<{ speechEnd: number; submit?: number; firstSentence?: number; done?: boolean } | null>(null);
+  const [lastTiming, setLastTiming] = useState(""); // debug: last turn's felt-latency split
   const levelRef = useRef(0); // live 0–1 audio amplitude → the VoiceOrb canvas, no re-render
   const vadTimerRef = useRef<number | null>(null);
   // adaptive thresholds — calibrated to the room's noise floor at call start
@@ -133,7 +143,7 @@ export default function MentorCall({ userId }: { userId: string }) {
 
   const [live, setLive] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [status, setStatus] = useState("");
+  const [, setStatus] = useState(""); // value is vestigial (orb+caption convey state); setStatus kept for call sites
   const [error, setError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [spokenText, setSpokenText] = useState("");
@@ -333,33 +343,13 @@ export default function MentorCall({ userId }: { userId: string }) {
     return list.map((t) => `${t.role === "user" ? "You" : "Mentor"}: ${t.text}`).join("\n");
   }
 
-  // Stream the mentor's reply as it's synthesized: /api/voice/stream pipes
-  // voicebox's chunked audio/wav, so playback starts in ~1s instead of waiting
-  // for the whole clip. A streaming source often reports duration=Infinity, so
-  // the caption reveal falls back to a words-per-second estimate.
-  function playText(text: string) {
-    audioRef.current?.pause();
-    // stage directions sneak past the prompt on small models — "(Pause,
-    // letting the silence hang)" would be SPOKEN by TTS and shown in the
-    // caption. Strip parentheticals that OPEN with an acting verb; ones
-    // carrying real content ("(TxB's first marketplace)") are untouched.
-    text = text
-      .replace(
-        /\s*[(*\[]\s*(?:pauses?|pausing|beat\b|silence|laughs?|laughing|chuckles?|chuckling|sighs?|sighing|smiles?|smiling|nods?|nodding|leans?|leaning|softly|gently|warmly|quietly|thoughtfully|clears throat|takes a (?:deep )?breath|lets? the silence)[^)*\]]*[)*\]]\s*/gi,
-        " ",
-      )
-      .replace(/\s{2,}/g, " ")
-      .trim();
-    maybeRevealRoles(text); // if the mentor named a role, surface the cards
-    maybeRevealMentors(text); // if the mentor offered a PERSON, surface them
-    if (!text.trim()) {
-      if (liveRef.current) {
-        enter("idle");
-        setStatus("Listening — just start talking.");
-      }
-      return;
-    }
-    const audio = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}`);
+  // Wire one <audio> element to the orb + caption + reveal animation and play
+  // it. /api/voice/stream pipes Kokoro's chunked audio, so playback starts in
+  // ~1s instead of waiting for the whole clip. A streaming source often reports
+  // duration=Infinity, so the caption reveal falls back to a words-per-second
+  // estimate. onDone fires exactly once when the clip finishes (or gives up) —
+  // the caller decides whether that ends the turn or advances a sentence queue.
+  function wireAndPlay(text: string, audio: HTMLAudioElement, onDone: () => void) {
     audioRef.current = audio;
     // Tap the mentor's voice for the reactive orb via captureStream(): a COPY of
     // the audio, so playback stays on the element's own output path. (The old
@@ -368,6 +358,20 @@ export default function MentorCall({ userId }: { userId: string }) {
     audio.addEventListener(
       "playing",
       () => {
+        // one-shot per-turn latency mark: first audio actually playing. Split the
+        // felt gap into hang (silence-detect + upload) / stt+llm (server turn) / tts.
+        const clk = turnClockRef.current;
+        if (clk && !clk.done && clk.submit) {
+          clk.done = true;
+          const t = performance.now();
+          const felt = Math.round(t - clk.speechEnd);
+          const hang = Math.round(clk.submit - clk.speechEnd);
+          const net = clk.firstSentence ? Math.round(clk.firstSentence - clk.submit) : -1;
+          const tts = clk.firstSentence ? Math.round(t - clk.firstSentence) : -1;
+          const line = `felt ${felt}ms = hang ${hang} + stt+llm ${net} + tts ${tts}`;
+          setLastTiming(line);
+          console.log(`[mentor-timing] ${line}`);
+        }
         const ctx = ctxRef.current;
         const cap = (audio as HTMLAudioElement & { captureStream?: () => MediaStream }).captureStream?.();
         if (!ctx || !cap || cap.getAudioTracks().length === 0) return;
@@ -399,22 +403,16 @@ export default function MentorCall({ userId }: { userId: string }) {
       const d = audio.duration && isFinite(audio.duration) ? audio.duration : estDur;
       setRevealFrac(Math.min(1, audio.currentTime / d));
     };
+    let finished = false;
     const done = () => {
+      if (finished) return;
+      finished = true;
       setRevealFrac(1);
-      promptEndRef.current = performance.now(); // the answer-delay clock starts now
-      if (pendingEndRef.current) {
-        pendingEndRef.current = false;
-        endSessionRef.current(); // the mentor's closing line just finished
-        return;
-      }
-      if (liveRef.current) {
-        enter("idle");
-        setStatus("Listening — just start talking.");
-      }
+      onDone();
     };
     audio.onended = done;
     // "no supported source" = the stream endpoint fumbled its first chunk
-    // (voicebox hiccup) — ONE fresh attempt beats a silent turn. Never retry
+    // (Kokoro hiccup) — ONE fresh attempt beats a silent turn. Never retry
     // once real playback started; that would restart the sentence.
     const failedLoad = (msg: string) => {
       lastAudioErrRef.current = `${msg} at ${new Date().toLocaleTimeString()}`;
@@ -422,7 +420,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       if (neverPlayed && !audio.dataset.retried && liveRef.current) {
         audio.dataset.retried = "1";
         window.setTimeout(() => {
-          if (audioRef.current !== audio) return; // a newer turn took over
+          if (audioRef.current !== audio) return; // a newer turn/sentence took over
           const again = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}&retry=1`);
           again.dataset.retried = "1";
           audioRef.current = again;
@@ -440,6 +438,94 @@ export default function MentorCall({ userId }: { userId: string }) {
     };
     audio.onerror = () => failedLoad(`audio element error (code ${audio.error?.code ?? "?"}: ${audio.error?.message || "unknown"})`);
     void audio.play().catch((e) => failedLoad(`play() rejected: ${e instanceof Error ? e.message : String(e)}`));
+  }
+
+  // Legacy one-shot playback (used only by the /api/voice/turn fallback path,
+  // which hands back the WHOLE reply at once). The streaming path uses the
+  // sentence queue below instead.
+  function playText(text: string) {
+    stopPlayback();
+    // stage directions sneak past the prompt on small models — "(Pause,
+    // letting the silence hang)" would be SPOKEN by TTS and shown in the
+    // caption. Strip parentheticals that OPEN with an acting verb; ones
+    // carrying real content ("(TxB's first marketplace)") are untouched.
+    text = text
+      .replace(
+        /\s*[(*\[]\s*(?:pauses?|pausing|beat\b|silence|laughs?|laughing|chuckles?|chuckling|sighs?|sighing|smiles?|smiling|nods?|nodding|leans?|leaning|softly|gently|warmly|quietly|thoughtfully|clears throat|takes a (?:deep )?breath|lets? the silence)[^)*\]]*[)*\]]\s*/gi,
+        " ",
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    maybeRevealRoles(text); // if the mentor named a role, surface the cards
+    maybeRevealMentors(text); // if the mentor offered a PERSON, surface them
+    if (!text.trim()) {
+      if (liveRef.current) {
+        enter("idle");
+        setStatus("Listening — just start talking.");
+      }
+      return;
+    }
+    const audio = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}`);
+    wireAndPlay(text, audio, endTurn);
+  }
+
+  // ---- streaming sentence queue ----
+  // The mentor's reply arrives one sentence at a time (see submitTurn). Each is
+  // turned into a prebuffering <audio> and played back-to-back, so the mentor
+  // starts speaking after sentence 1 instead of the whole paragraph.
+  function endTurn() {
+    if (turnFinishedRef.current) return;
+    turnFinishedRef.current = true;
+    promptEndRef.current = performance.now(); // the answer-delay clock starts now
+    if (pendingEndRef.current) {
+      pendingEndRef.current = false;
+      endSessionRef.current(); // the mentor's closing line just finished
+      return;
+    }
+    if (liveRef.current) {
+      enter("idle");
+      setStatus("Listening — just start talking.");
+    }
+  }
+  function pumpQueue() {
+    if (playingRef.current) return;
+    const next = audioQueueRef.current.shift();
+    if (!next) {
+      if (streamDoneRef.current) endTurn(); // queue drained and no more coming
+      return;
+    }
+    playingRef.current = true;
+    // reveal the cards as the sentence STARTS — synced to when the name is spoken
+    maybeRevealRoles(next.text);
+    maybeRevealMentors(next.text);
+    wireAndPlay(next.text, next.audio, () => {
+      playingRef.current = false;
+      pumpQueue();
+    });
+  }
+  function enqueueSentence(text: string) {
+    const audio = new Audio(`/api/voice/stream?text=${encodeURIComponent(text)}`);
+    audio.preload = "auto"; // start fetching this sentence while the prior one plays
+    audioQueueRef.current.push({ text, audio });
+    pumpQueue();
+  }
+  function stopPlayback() {
+    try {
+      audioRef.current?.pause();
+    } catch {}
+    for (const q of audioQueueRef.current) {
+      try {
+        q.audio.pause();
+      } catch {}
+    }
+    audioQueueRef.current = [];
+    playingRef.current = false;
+  }
+  function abortTurnStream() {
+    try {
+      streamAbortRef.current?.abort();
+    } catch {}
+    streamAbortRef.current = null;
   }
 
   // ---- signal helpers ----
@@ -501,7 +587,10 @@ export default function MentorCall({ userId }: { userId: string }) {
       if (rms > bargeThreshRef.current && speechBandFraction() > SPEECH_BAND_MIN) {
         if (++bargeCountRef.current >= BARGE_FRAMES) {
           bargeCountRef.current = 0;
-          audioRef.current?.pause();
+          // take the floor: stop the current sentence, drop any queued ones, and
+          // abort the in-flight stream so no more sentences are generated/spoken
+          abortTurnStream();
+          stopPlayback();
           turnMetaRef.current = { answerDelaySec: null, speechSec: null, barged: true }; // they took the floor
           beginRecording(now);
         }
@@ -561,37 +650,143 @@ export default function MentorCall({ userId }: { userId: string }) {
       return;
     }
     turnMetaRef.current.speechSec = Math.round(((now - speechStartRef.current) / 1000) * 10) / 10;
+    // latency clock starts at the moment they actually stopped talking (last
+    // voiced frame), so the silence-hang shows up as its own chunk
+    turnClockRef.current = { speechEnd: lastVoiceRef.current };
     try {
       mr.stop(); // → onstop → submitTurn
     } catch {}
   }
 
+  // Build the multipart body for a turn (shared by the streaming path and the
+  // legacy fallback). Whisper decodes PCM WAV reliably but 500s on webm/opus, so
+  // transcode to 16kHz mono WAV in the browser before sending.
+  async function turnFormData(blob: Blob): Promise<FormData> {
+    let audioBlob = blob;
+    let filename = "turn.wav";
+    try {
+      audioBlob = await toWav(blob);
+    } catch {
+      filename = blob.type.includes("ogg") ? "turn.ogg" : "turn.webm";
+    }
+    const fd = new FormData();
+    fd.append("audio", audioBlob, filename);
+    fd.append("userId", userId);
+    fd.append(
+      "history",
+      JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))),
+    );
+    const secondsLeft = callStartRef.current
+      ? Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000))
+      : limitRef.current; // clock not started yet — report a full tank
+    fd.append("secondsLeft", String(secondsLeft));
+    fd.append("timing", JSON.stringify(turnMetaRef.current)); // HOW they spoke, not what they said
+    fd.append("brain", brainRef.current); // debug A/B — server ignores unless dev/admin
+    return fd;
+  }
+
+  // Reset per-turn stream state and arm a fresh abort controller.
+  function resetTurnStream(): AbortController {
+    audioQueueRef.current = [];
+    playingRef.current = false;
+    streamDoneRef.current = false;
+    turnFinishedRef.current = false;
+    const ac = new AbortController();
+    streamAbortRef.current = ac;
+    return ac;
+  }
+
+  // Read the NDJSON turn stream: push the user line, speak each sentence as it
+  // lands, push the full assistant reply, finalize. Shared by voice turns and
+  // card dives. state.progressed flips once any frame arrives (past fallback).
+  async function consumeTurnStream(res: Response, state: { progressed: boolean }): Promise<void> {
+    if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let full = "";
+    let assistantPushed = false;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let msg: { t: string; text?: string; ended?: boolean; replyText?: string; message?: string; roles?: CallRole[] };
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (msg.t === "user") {
+          state.progressed = true;
+          if (msg.text) pushTurn({ role: "user", text: msg.text });
+        } else if (msg.t === "cards" && Array.isArray(msg.roles) && msg.roles.length) {
+          // B2: fresh direction recs — surface them + make them dive-able (B1)
+          spectrumRef.current = msg.roles;
+          setRoleCards(msg.roles);
+        } else if (msg.t === "nospeech") {
+          enter("idle");
+          setStatus("Didn't catch that — go ahead.");
+          return;
+        } else if (msg.t === "sentence" && msg.text) {
+          state.progressed = true;
+          if (turnClockRef.current && !turnClockRef.current.firstSentence) turnClockRef.current.firstSentence = performance.now();
+          full += (full ? " " : "") + msg.text;
+          enqueueSentence(msg.text);
+        } else if (msg.t === "end") {
+          if (msg.ended) pendingEndRef.current = true; // end the call after this reply plays
+          const replyText = msg.replyText || full;
+          if (replyText && !assistantPushed) {
+            pushTurn({ role: "assistant", text: replyText });
+            assistantPushed = true;
+          }
+          streamDoneRef.current = true;
+          if (!playingRef.current && audioQueueRef.current.length === 0) endTurn();
+        } else if (msg.t === "error") {
+          throw new Error(msg.message || "stream error");
+        }
+      }
+    }
+    // stream closed without an explicit 'end' — make sure the turn finalizes
+    streamDoneRef.current = true;
+    if (!playingRef.current && audioQueueRef.current.length === 0) endTurn();
+  }
+
+  // Streaming voice turn: falls back to the one-shot /api/voice/turn if the
+  // stream can't even start (so a hiccup never silently drops a turn).
   async function submitTurn(blob: Blob) {
     enter("thinking");
     setStatus("Thinking…");
+    if (turnClockRef.current) turnClockRef.current.submit = performance.now();
+    const ac = resetTurnStream();
+    const state = { progressed: false };
     try {
-      // Whisper (via voicebox) decodes PCM WAV reliably but 500s on webm/opus,
-      // so transcode to 16kHz mono WAV in the browser before sending.
-      let audioBlob = blob;
-      let filename = "turn.wav";
-      try {
-        audioBlob = await toWav(blob);
-      } catch {
-        filename = blob.type.includes("ogg") ? "turn.ogg" : "turn.webm";
+      const fd = await turnFormData(blob);
+      const res = await fetch("/api/voice/turn-stream", { method: "POST", body: fd, signal: ac.signal });
+      await consumeTurnStream(res, state);
+    } catch (err) {
+      if (ac.signal.aborted) return; // barged / superseded — expected, not an error
+      if (!state.progressed) {
+        console.warn("[mentor] stream turn failed before start — falling back", err);
+        await submitTurnLegacy(blob);
+        return;
       }
-      const fd = new FormData();
-      fd.append("audio", audioBlob, filename);
-      fd.append("userId", userId);
-      fd.append(
-        "history",
-        JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))),
-      );
-      const secondsLeft = callStartRef.current
-        ? Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000))
-        : limitRef.current; // clock not started yet — report a full tank
-      fd.append("secondsLeft", String(secondsLeft));
-      fd.append("timing", JSON.stringify(turnMetaRef.current)); // HOW they spoke, not what they said
-      fd.append("brain", brainRef.current); // debug A/B — server ignores unless dev/admin
+      // mid-stream failure after we'd already started speaking: don't restart
+      lastAudioErrRef.current = `stream turn error: ${err instanceof Error ? err.message : String(err)}`;
+      streamDoneRef.current = true;
+      if (!playingRef.current && audioQueueRef.current.length === 0) endTurn();
+    }
+  }
+
+  // One-shot fallback: the whole reply comes back at once, then plays. Kept for
+  // resilience if the streaming endpoint is unavailable.
+  async function submitTurnLegacy(blob: Blob) {
+    try {
+      const fd = await turnFormData(blob);
       const res = await fetch("/api/voice/turn", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Turn failed");
@@ -604,6 +799,7 @@ export default function MentorCall({ userId }: { userId: string }) {
       if (json.ended) pendingEndRef.current = true; // end the call after this reply plays
       if (json.replyText) {
         pushTurn({ role: "assistant", text: json.replyText });
+        turnFinishedRef.current = false;
         playText(json.replyText);
       } else {
         enter("idle");
@@ -612,6 +808,48 @@ export default function MentorCall({ userId }: { userId: string }) {
     } catch (err) {
       enter("idle");
       setStatus(err instanceof Error ? err.message : "Something went wrong.");
+    }
+  }
+
+  // Card as a DOORWAY: clicking a path card fires a text turn that names the role,
+  // so the mentor's role-dossier capability fires and it DIVES into that path —
+  // what it really is, which skills transfer, comp arc, who made the jump. No
+  // audio, no STT — reuses the same streaming reply pipeline as a spoken turn.
+  async function sendCardDive(role: CallRole) {
+    if (!liveRef.current) return;
+    const co = displayCompany(role.company);
+    const prompt = `Walk me through ${role.title}${co ? ` at ${co}` : ""} — what would that path actually look like for me, and who's made that jump?`;
+    abortTurnStream(); // if the mentor's mid-sentence, take the floor
+    stopPlayback();
+    setRoleCards(null); // collapse the trio — we're diving into one
+    turnClockRef.current = null; // text turn, no speech-latency clock
+    enter("thinking");
+    setStatus("Exploring that path…");
+    // remember this branch for the explored-paths comparison (fire-and-forget)
+    void fetch("/api/mentor/explored", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, label: role.title, company: role.company, kind: role.kind, source: "card_dive", summary: { why: role.why } }),
+    }).catch(() => {});
+    const ac = resetTurnStream();
+    const state = { progressed: false };
+    try {
+      const fd = new FormData();
+      fd.append("text", prompt);
+      fd.append("userId", userId);
+      fd.append("history", JSON.stringify(turnsRef.current.map((t) => ({ role: t.role, content: t.text }))));
+      const secondsLeft = callStartRef.current
+        ? Math.max(0, limitRef.current - Math.floor((Date.now() - callStartRef.current) / 1000))
+        : limitRef.current;
+      fd.append("secondsLeft", String(secondsLeft));
+      fd.append("brain", brainRef.current);
+      const res = await fetch("/api/voice/turn-stream", { method: "POST", body: fd, signal: ac.signal });
+      await consumeTurnStream(res, state);
+    } catch (err) {
+      if (ac.signal.aborted) return;
+      lastAudioErrRef.current = `dive error: ${err instanceof Error ? err.message : String(err)}`;
+      enter("idle");
+      setStatus("Listening — just start talking.");
     }
   }
 
@@ -838,7 +1076,8 @@ export default function MentorCall({ userId }: { userId: string }) {
     voiceAnalyserRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     ctxRef.current?.close().catch(() => {});
-    audioRef.current?.pause();
+    abortTurnStream();
+    stopPlayback();
     enter("idle");
     setLive(false);
     setStatus("Session ended. Pulling together a recap…");
@@ -1075,6 +1314,7 @@ export default function MentorCall({ userId }: { userId: string }) {
                 mentor brain: {brain === "anthropic" ? "anthropic (toggle)" : health.config.mentorProvider} · client audio:{" "}
                 {lastAudioErrRef.current || "no errors this session"}
               </div>
+              {lastTiming && <div className="debug-line">⏱ last turn: {lastTiming}</div>}
             </>
           )}
         </div>
@@ -1111,7 +1351,6 @@ export default function MentorCall({ userId }: { userId: string }) {
               <button className="btn call-cta" onClick={startSession}>
                 Start the call
               </button>
-              <SlotPicker userId={userId} />
             </>
           )}
           <div className="call-facts">
@@ -1178,13 +1417,28 @@ export default function MentorCall({ userId }: { userId: string }) {
 
           {roleCards && (
             <div className="call-roles">
-              <div className="call-roles-head">Which of these pulls at you?</div>
+              <div className="call-roles-head">Which of these pulls at you? <span className="call-roles-hint">tap one to explore it</span></div>
               <div className="call-roles-row">
                 {roleCards.map((r, i) => (
-                  <div className="call-role" key={i} style={{ animationDelay: `${i * 120}ms` }}>
+                  <div
+                    className="call-role call-role-btn"
+                    key={i}
+                    style={{ animationDelay: `${i * 120}ms` }}
+                    role="button"
+                    tabIndex={0}
+                    title={`Explore ${r.title} at ${displayCompany(r.company)}`}
+                    onClick={() => sendCardDive(r)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        sendCardDive(r);
+                      }
+                    }}
+                  >
                     <span className="call-role-kind">{r.kind}</span>
                     <div className="call-role-title">{r.title}</div>
                     <div className="call-role-co">{displayCompany(r.company)}</div>
+                    <div className="call-role-cta">Explore this path →</div>
                   </div>
                 ))}
               </div>
@@ -1322,6 +1576,12 @@ export default function MentorCall({ userId }: { userId: string }) {
                 <span className={`status-line ${saveState === "error" ? "error" : ""}`}>
                   {saveMsg}
                 </span>
+                {saveState === "saved" && (
+                  // the payoff hop: the call just retuned the list — send them to it
+                  <a className="btn" href="/dashboard?retuning=1" style={{ width: "auto", margin: 0, padding: "12px 28px", textDecoration: "none" }}>
+                    See your updated matches →
+                  </a>
+                )}
               </div>
             </>
           )}

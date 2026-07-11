@@ -17,9 +17,8 @@
  *
  * Cached in-memory ~10 min; rebuilding is one grouped scan of facts.
  */
-import { sql, ne, isNotNull, and } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { opportunities } from "@/db/schema";
 import { TRUSTED_MODELS } from "@/lib/jobs/vectorize";
 import { canonSkillKey, displaySkill } from "./canon";
 

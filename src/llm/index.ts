@@ -2,11 +2,13 @@ import type { LLMProvider } from "./types";
 import { anthropicProvider } from "./anthropic";
 import { ollamaProvider } from "./ollama";
 import { openrouterProvider } from "./openrouter";
+import { cloudflareProvider } from "./cloudflare";
 
 const PROVIDERS: Record<string, LLMProvider> = {
   ollama: ollamaProvider,
   anthropic: anthropicProvider,
   openrouter: openrouterProvider,
+  cloudflare: cloudflareProvider,
 };
 
 /**

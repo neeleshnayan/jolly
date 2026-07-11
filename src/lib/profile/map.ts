@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { profiles, experiences, insights, mentorProbes, mentorCalls, applications, applicationEvents } from "@/db/schema";
 import { buildTrajectory, type TrajectoryPoint } from "@/lib/mentor/trajectory";
@@ -6,7 +6,7 @@ import { buildTrajectory, type TrajectoryPoint } from "@/lib/mentor/trajectory";
 export interface MentorMap {
   profile: { fullName: string | null; headline: string | null } | null;
   experiences: { title: string | null; org: string | null }[];
-  insights: { dimension: string; content: string; confidence: number | null }[];
+  insights: { dimension: string; content: string; confidence: number | null; stance?: string }[];
   probes: { question: string; rationale: string | null; dimension: string | null }[];
   // continuity: the relationship, not just the person
   previousCalls: { summary: string; createdAt: Date }[];
@@ -37,6 +37,7 @@ export async function getMentorMap(userId: string): Promise<MentorMap> {
         dimension: insights.dimension,
         content: insights.content,
         confidence: insights.confidence,
+        stance: sql<string>`coalesce(${insights.data}->>'stance', 'conviction')`,
         createdAt: insights.createdAt, // dated — the trajectory needs WHEN
       })
       .from(insights)

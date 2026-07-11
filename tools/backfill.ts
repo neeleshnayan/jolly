@@ -9,6 +9,9 @@
  *   npx tsx tools/backfill.ts                 # sweep everything that needs it
  *   npx tsx tools/backfill.ts --limit=50      # bounded run
  *   npx tsx tools/backfill.ts --sleep=0       # no cooldown (watch thermals)
+ *   npx tsx tools/backfill.ts --limit=200 --macro=50 --macrosleep=300
+ *                                             # 200 rows, a 5-min cooloff every 50
+ *                                             # (thermal/VRAM breather on long runs)
  *
  * Don't run while the dev-server sweep is active — the DB evidence guard in the
  * admin route can't see this process (same GPU, double work).
@@ -37,14 +40,45 @@ async function main() {
   // embeddings in one nomic-only pass. Roughly halves the sweep + no thrash.
   process.env.EMBED_INLINE = "0";
   const { runInference } = await import("@/lib/jobs/fetch");
-  const result = await runInference({
-    limit: Number(arg("limit") ?? 2000),
-    batchSize: Number(arg("batch") ?? 5),
-    sleepMs: Number(arg("sleep") ?? 5) * 1000,
-    force: true,
-    tiered: true,
-    log: (line) => console.log(line),
-  });
+  const limit = Number(arg("limit") ?? 2000);
+  const batchSize = Number(arg("batch") ?? 5);
+  const sleepMs = Number(arg("sleep") ?? 5) * 1000;
+  // macro-batching: on long runs, a longer cooloff every `macro` rows lets the
+  // card breathe (thermals + VRAM) beyond the per-batch `sleep`. macro=0 → one
+  // continuous run (default, unchanged behavior).
+  const macro = Number(arg("macro") ?? 0);
+  const macroSleepMs = Number(arg("macrosleep") ?? 300) * 1000;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  let vectorized = 0;
+  let failed = 0;
+  let remaining = 0;
+  if (macro > 0) {
+    let budget = limit;
+    let chunk = 0;
+    while (budget > 0) {
+      const take = Math.min(macro, budget);
+      chunk++;
+      console.log(`\n=== macro-batch ${chunk}: up to ${take} rows (${vectorized} vectorized so far) ===`);
+      const r = await runInference({ limit: take, batchSize, sleepMs, force: true, tiered: true, log: (line) => console.log(line) });
+      vectorized += r.vectorized;
+      failed += r.failed;
+      remaining = r.remaining;
+      budget -= take;
+      // converged (nothing more needs work) or a dead macro-batch → stop, don't spin
+      if (r.vectorized === 0) { console.log("nothing more needs vectorizing — stopping."); break; }
+      if (budget > 0 && remaining > 0) {
+        console.log(`\n--- cooling off ${macroSleepMs / 1000}s before the next 50 ---`);
+        await sleep(macroSleepMs);
+      }
+    }
+  } else {
+    const r = await runInference({ limit, batchSize, sleepMs, force: true, tiered: true, log: (line) => console.log(line) });
+    vectorized = r.vectorized;
+    failed = r.failed;
+    remaining = r.remaining;
+  }
+  const result = { vectorized, failed, remaining };
   console.log(`\nvectorized ${result.vectorized}, failed ${result.failed}, ${result.remaining} remaining`);
 
   // Phase 2 — embeddings (nomic only, gemma now idle → no eviction)

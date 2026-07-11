@@ -59,6 +59,8 @@ export async function* mentorTurn(input: {
   // A/B override from the in-call debug toggle ("ollama" | "anthropic").
   // Callers are responsible for gating WHO may set this (see /api/voice/turn).
   brain?: string;
+  // B2: a caller-computed brief appended to this turn (e.g. live direction recs).
+  extraBrief?: string;
 }): AsyncIterable<string> {
   const { map, spectrum, circle } = await callContext(input.userId);
   const turnIndex = input.messages.filter((m) => m.role === "assistant").length;
@@ -76,7 +78,7 @@ export async function* mentorTurn(input: {
   let usage: Usage | null = null;
   yield* provider.streamChat({
     systemCore: core,
-    system: delta + brief,
+    system: delta + brief + (input.extraBrief ?? ""),
     messages: input.messages,
     maxTokens: 400, // spoken turns should be short
     onUsage: (u) => {

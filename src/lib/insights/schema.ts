@@ -23,10 +23,21 @@ export const insightDimensionEnum = z.enum([
   "blocker",
 ]);
 
+// conviction = who they ARE / genuinely want; exploration = a path they're merely
+// sampling this call. The guard that keeps "curious about marketing" from
+// hardening into "is a marketer".
+export const insightStance = z.enum(["conviction", "exploration"]).catch("conviction");
+// how a new insight relates to what we already know — drives supersession.
+export const insightMode = z.enum(["new", "reinforces", "refines", "contradicts"]).catch("new");
+
 export const extractedInsight = z.object({
   dimension: insightDimensionEnum,
   content: z.string(),
   confidence: confidence01.default(0.6),
+  stance: insightStance.default("conviction"),
+  mode: insightMode.default("new"),
+  // id of the existing active insight this reinforces/refines/contradicts
+  targetId: z.string().optional().catch(undefined),
 });
 
 export const insightExtraction = z.object({

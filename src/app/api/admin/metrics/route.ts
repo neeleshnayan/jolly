@@ -25,7 +25,7 @@ export async function GET() {
     for (const q of qs) out.push(await q());
     return out;
   };
-  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel, spendByUser, bookings, pastCalls] = await run<unknown>([
+  const [calls, callsByUser, edits, apps, agents, recentRuns, activity, byModel, spendByUser, mentorInsights, pastCalls] = await run<unknown>([
     () => db.execute(sql`select count(*)::int as n from sources where kind = 'mentor_call'`),
     () => db.execute(sql`
       select coalesce(p.full_name, p.email, 'unknown') as who, count(*)::int as n, max(s.created_at) as last_at
@@ -88,12 +88,15 @@ export async function GET() {
       left join profiles p on p.id = ar.profile_id
       left join profiles pm on pm.user_id::text = (ar.meta->>'userId')
       group by 1 order by cost_usd desc, runs desc limit 30`),
-    // the mentor's diary: who's booked (upcoming) …
+    // the mentor's diary: what the mentor has LEARNED — the live insight map,
+    // newest first (stance shows conviction vs exploration from reconcile-A)
     () => db.execute(sql`
-      select b.slot_at, coalesce(p.full_name, p.email, 'unknown') as who
-      from call_bookings b join profiles p on p.id = b.profile_id
-      where b.status = 'booked' and b.slot_at > now() - interval '30 minutes'
-      order by b.slot_at asc limit 20`),
+      select i.dimension, left(i.content, 160) as content,
+             i.data->>'stance' as stance, i.confidence::float8 as confidence,
+             coalesce(p.full_name, p.email, 'unknown') as who, i.created_at
+      from insights i join profiles p on p.id = i.profile_id
+      where i.status = 'active'
+      order by i.created_at desc limit 20`),
     // … and what calls already happened (continuity recaps)
     () => db.execute(sql`
       select c.created_at, c.duration_sec, left(c.summary, 140) as summary,
@@ -112,6 +115,6 @@ export async function GET() {
     spendByUser,
     agents,
     recentRuns,
-    mentorDiary: { lane: queueStatus(), bookings, pastCalls },
+    mentorDiary: { lane: queueStatus(), insights: mentorInsights, pastCalls },
   });
 }

@@ -3,6 +3,11 @@ node_modules/
 .next/
 out/
 build/
+# Cloudflare / OpenNext build output + local state (never commit these)
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*
 .env
 .env.local
 .env*.local

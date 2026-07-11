@@ -10,7 +10,7 @@ import OrbShowcase from "./OrbShowcase";
  * Dark, warm, editorial (Newsreader serif + Hanken Grotesk). Every CTA is the
  * LinkedIn sign-in. Static server component; hover/animation live in globals.css.
  */
-export const metadata = { title: "drizzle — the job search, finally on your side" };
+export const metadata = { title: "drizzle — a career copilot that knows you" };
 
 const ACCENT = "#D07A54";
 const HEADING = "#F1EADC";
@@ -62,10 +62,13 @@ const SKILLS = [
 const HAVE = ["Python ×24", "SQL ×18", "Tableau ×9", "dbt ×6", "Pandas ×5", "Excel ×4"];
 // peers a step or two ahead on the same path. Photos are hotlinked stock
 // placeholders (never committed); real mentor photos swap in later.
+// a coherent real-world ladder for the "Data Analyst" persona — each peer one
+// rung further, ending at the target role the diagnostic + Meaning Map point to
+// (Data Platform Engineer). Not random trajectories.
 const PEERS = [
-  { name: "Priya S.", role: "Data Platform Eng", company: "Stripe", from: "Data Analyst", to: "Data Platform Eng", stepsLabel: "1 step ahead", mentored: "12 people", quote: "The SQL-to-pipelines jump is smaller than it looks — happy to show you the path I took.", shared: "4 skills in common", photo: "https://randomuser.me/api/portraits/women/68.jpg" },
-  { name: "Marcus O.", role: "ML Engineer", company: "Ramp", from: "Backend SWE", to: "ML Engineer", stepsLabel: "2 steps ahead", mentored: "8 people", quote: "Made this exact leap last year. The trick was picking one model project and going deep.", shared: "made the leap last year", photo: "https://randomuser.me/api/portraits/men/32.jpg" },
-  { name: "Lena K.", role: "Founding Engineer", company: "seed startup", from: "Product Manager", to: "Founding Engineer", stepsLabel: "1 step ahead", mentored: "5 people", quote: "PM to founding eng felt impossible until I did it. Ask me anything — open to referrals.", shared: "open to referrals", photo: "https://randomuser.me/api/portraits/women/44.jpg" },
+  { name: "Priya Sharma", role: "Analytics Engineer", company: "Stripe", from: "Data Analyst", to: "Analytics Engineer", stepsLabel: "1 step ahead", mentored: "12 people", shared: "SQL & dbt in common", photo: "https://randomuser.me/api/portraits/women/26.jpg" },
+  { name: "Marcus Reyes", role: "Data Engineer", company: "Ramp", from: "Analytics Engineer", to: "Data Engineer", stepsLabel: "2 steps ahead", mentored: "8 people", shared: "made the leap last year", photo: "https://randomuser.me/api/portraits/men/32.jpg" },
+  { name: "Grace Kim", role: "Data Platform Engineer", company: "Figma", from: "Data Engineer", to: "Data Platform Engineer", stepsLabel: "3 steps ahead", mentored: "5 people", shared: "open to referrals", photo: "https://randomuser.me/api/portraits/women/44.jpg" },
 ];
 const sageSm = { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, background: "rgba(166,192,131,0.10)", color: "#A6C083", border: "1px solid rgba(166,192,131,0.18)" } as const;
 const pTick = { flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: 6, background: "rgba(166,192,131,0.16)", color: "#A6C083", fontSize: 10, fontWeight: 800, marginTop: 1 } as const;
@@ -118,18 +121,17 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             </div>
 
             <h1 className="lp-serif" style={{ fontWeight: 500, color: HEADING, fontSize: "clamp(42px,7.4vw,82px)", lineHeight: 1.02, letterSpacing: "-0.025em", margin: "0 0 24px", maxWidth: "15ch", textWrap: "balance" }}>
-              The job search, finally <span style={{ fontStyle: "italic", color: "#D98E6A" }}>on your side.</span>
+              A <span style={{ fontStyle: "italic", color: "#D98E6A" }}>career copilot</span> that knows you.
             </h1>
 
-            <p style={{ fontSize: "clamp(17px,2.3vw,21px)", lineHeight: 1.55, color: "#A79E8D", margin: "0 0 40px", maxWidth: 620 }}>
-              drizzle is an AI career copilot that learns who you&apos;re becoming, matches you <em style={{ color: "#C9BFAD", fontStyle: "italic" }}>honestly</em>, and applies in one motion — so action beats inaction.
+            <p style={{ fontSize: "clamp(17px,2.3vw,21px)", lineHeight: 1.55, color: "#A79E8D", margin: "0 0 40px", maxWidth: 640 }}>
+              drizzle learns who you&apos;re <em style={{ color: "#C9BFAD", fontStyle: "italic" }}>becoming</em>, then aligns every role, the mentors ahead of you, and your next move to where you&apos;re headed — honestly, for the whole climb.
             </p>
 
             <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "center", marginBottom: 20 }}>
               <LinkedInCTA size="md" />
               <a className="lp-ghost" href="#how" style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid rgba(230,210,170,0.18)", color: "#D6CCBA", fontWeight: 600, fontSize: 16.5, padding: "16px 24px", borderRadius: 14 }}>See how it works →</a>
             </div>
-            <div style={{ fontSize: 13, color: "#7C7365" }}>No résumé upload needed · <span style={{ color: "#A6C083" }}>Runs at cost</span></div>
             {error && <p style={{ marginTop: 18, color: "#E0B45C", fontSize: 13 }}>Sign-in didn&apos;t complete ({error}). Please try again.</p>}
           </header>
 
@@ -156,8 +158,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <section id="how" style={{ position: "relative", zIndex: 1, background: "#1A1712", borderTop: "1px solid rgba(230,210,170,0.07)", borderBottom: "1px solid rgba(230,210,170,0.07)", padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)", marginTop: 60 }}>
           <div style={{ maxWidth: 1160, margin: "0 auto" }}>
             <div style={{ maxWidth: 640, marginBottom: 56 }}>
-              <div style={kicker}>01 · A copilot that remembers</div>
-              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.6vw,50px)", lineHeight: 1.08 }}>Not another job board.<br /><span style={{ fontStyle: "italic", color: "#D98E6A" }}>A career copilot.</span></h2>
+              <div style={kicker}>01 · One copilot, end to end</div>
+              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.6vw,50px)", lineHeight: 1.08 }}>A mentor who remembers —<br /><span style={{ fontStyle: "italic", color: "#D98E6A" }}>and does the rest.</span></h2>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20, alignItems: "stretch" }}>
               {/* featured: the AI mentor, alive — reuses the real call-time VoiceOrb */}
@@ -277,7 +279,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                     <span style={{ color: ACCENT, fontWeight: 700 }}>→</span>
                     <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 17, color: "#F4EEE1" }}>{p.to}</span>
                   </div>
-                  <p style={{ margin: "16px 0 0", fontFamily: '"Newsreader", Georgia, serif', fontStyle: "italic", fontSize: 15.5, lineHeight: 1.5, color: "#D8CFBE" }}>&ldquo;{p.quote}&rdquo;</p>
                   <div style={{ marginTop: "auto", paddingTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
                     <span style={{ ...sageSm, alignSelf: "flex-start" }}><span style={{ color: "#A6C083" }}>✓</span> {p.shared}</span>
                     <a className="lp-ghost" href="/api/auth/linkedin" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: "rgba(216,142,106,0.12)", border: "1px solid rgba(216,142,106,0.3)", color: "#F1D9C6", fontWeight: 600, fontSize: 14.5, padding: "12px 18px", borderRadius: 11 }}>Request intro <span style={{ color: ACCENT }}>→</span></a>
@@ -303,8 +304,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <div style={{ maxWidth: 1160, margin: "0 auto" }}>
             <div style={{ maxWidth: 660, margin: "0 auto clamp(40px,5vw,56px)", textAlign: "center" }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 9, border: "1px solid rgba(166,192,131,0.28)", background: "rgba(166,192,131,0.08)", borderRadius: 999, padding: "7px 16px", marginBottom: 22, fontSize: 12.5, fontWeight: 700, letterSpacing: "0.04em", color: "#A6C083" }}>04 · Runs at cost</div>
-              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.4vw,48px)", lineHeight: 1.12, margin: "0 0 16px", textWrap: "balance" }}>Priced to keep the lights on — <span style={{ fontStyle: "italic", color: "#D98E6A" }}>never to profit.</span></h2>
-              <p style={{ fontSize: "clamp(16px,2vw,18px)", lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>Free while you&apos;re finding your footing — step up only when you want more.</p>
+              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.4vw,48px)", lineHeight: 1.12, margin: "0 0 16px", textWrap: "balance" }}>A career runs 40 years. <span style={{ fontStyle: "italic", color: "#D98E6A" }}>Investing in yours is the best return there is.</span></h2>
+              <p style={{ fontSize: "clamp(16px,2vw,18px)", lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>So we price at cost — enough to keep the lights on, never a cent for profit. Free while you&apos;re finding your footing; step up only when you want more.</p>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(268px,1fr))", gap: 18, alignItems: "stretch", maxWidth: 1040, margin: "0 auto" }}>

@@ -56,19 +56,33 @@ export async function ensureStarterThemes(userId: string) {
   ]);
 }
 
-/** After a mentor call: rename the pending TBD theme to the recommended target role. */
+/** After a mentor call: set the target-role theme to what the call landed on.
+ *  Every call retunes the direction, not just the first — so we update the
+ *  EXISTING target-role theme (by kind, whatever it's now named), falling back to
+ *  the pending TBD seed, and creating one if neither exists. The old version only
+ *  matched the TBD *name*, so call 2+ (after the theme was renamed) silently
+ *  no-op'd and the ranking direction froze at whatever call 1 decided. */
 export async function fillTargetTheme(userId: string, role: string, rationale: string) {
   const pid = await profileIdFor(userId);
-  const [tbd] = await db
-    .select({ id: resumeThemes.id })
+  const themes = await db
+    .select({ id: resumeThemes.id, name: resumeThemes.name, latentAttributes: resumeThemes.latentAttributes })
     .from(resumeThemes)
-    .where(and(eq(resumeThemes.profileId, pid), eq(resumeThemes.name, TBD_THEME_NAME)))
-    .limit(1);
-  if (!tbd) return { ok: false as const };
-  await db
-    .update(resumeThemes)
-    .set({ name: `Target: ${role}`, latentAttributes: { kind: "target_role", role, rationale } })
-    .where(eq(resumeThemes.id, tbd.id));
+    .where(eq(resumeThemes.profileId, pid));
+  // prefer the pending TBD seed (first call); else the already-filled target-role
+  // theme (later calls); else nothing to update.
+  const target =
+    themes.find((t) => t.name === TBD_THEME_NAME) ??
+    themes.find((t) => (t.latentAttributes as { kind?: string } | null)?.kind === "target_role");
+  const latentAttributes = { kind: "target_role" as const, role, rationale };
+  if (target) {
+    await db
+      .update(resumeThemes)
+      .set({ name: `Target: ${role}`, latentAttributes })
+      .where(eq(resumeThemes.id, target.id));
+  } else {
+    // safety: a user whose starter themes never seeded still gets a target theme
+    await db.insert(resumeThemes).values({ profileId: pid, name: `Target: ${role}`, latentAttributes });
+  }
   return { ok: true as const };
 }
 

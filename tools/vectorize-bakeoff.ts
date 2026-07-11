@@ -67,9 +67,12 @@ async function unload(base: string, model: string) {
 
 async function main() {
   loadEnvLocal();
-  process.env.LLM_PROVIDER_VECTORIZE = "ollama";
+  // default to local ollama, but respect an explicit override (e.g. =cloudflare
+  // to bake off a CF Workers AI model against the local pool)
+  if (!process.env.LLM_PROVIDER_VECTORIZE) process.env.LLM_PROVIDER_VECTORIZE = "ollama";
   const base = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
   const models = arg("models", "gemma4:latest").split(",").map((s) => s.trim()).filter(Boolean);
+  const stored = arg("stored", ""); // reuse THIS model's extraction from the DB (no re-run) as the baseline
   const n = Number(arg("n", "5"));
   const jdcap = Number(arg("jdcap", "12000")); // chars of JD fed to the model
   const minjd = Number(arg("minjd", "600")); // only sample JDs at least this long
@@ -79,19 +82,26 @@ async function main() {
 
   const { db } = await import("@/db");
   const { opportunities } = await import("@/db/schema");
-  const { sql, and, isNotNull } = await import("drizzle-orm");
+  const { sql, and, isNotNull, eq } = await import("drizzle-orm");
   const { getProvider } = await import("@/llm");
   const { VECTORIZE_PROMPT, vectorizeJsonSchema } = await import("@/agents/opportunity-vectorizer");
 
-  // a diverse sample: real JDs with enough prose, random across the pool
+  // a diverse sample: real JDs with enough prose, random across the pool. With
+  // --stored=<model>, only sample JDs THAT model already extracted, so we can
+  // reuse its stored facts as the baseline instead of re-running it.
   const rows = await db
-    .select({ id: opportunities.id, title: opportunities.title, company: opportunities.company, location: opportunities.location, rawText: opportunities.rawText })
+    .select({ id: opportunities.id, title: opportunities.title, company: opportunities.company, location: opportunities.location, rawText: opportunities.rawText, facts: opportunities.facts })
     .from(opportunities)
-    .where(and(isNotNull(opportunities.rawText), sql`length(${opportunities.rawText}) >= ${minjd}`))
+    .where(and(
+      isNotNull(opportunities.rawText),
+      sql`length(${opportunities.rawText}) >= ${minjd}`,
+      ...(stored ? [isNotNull(opportunities.facts), eq(opportunities.vectorizeModel, stored)] : []),
+    ))
     .orderBy(sql`random()`)
     .limit(n);
 
-  console.log(`Bake-off: ${models.join(" vs ")} on ${rows.length} JD(s)\n${"=".repeat(64)}`);
+  const displayModels = stored ? [...models, stored] : models;
+  console.log(`Bake-off: ${displayModels.join(" vs ")} on ${rows.length} JD(s)${stored ? ` — ${stored} reused from DB` : ""}\n${"=".repeat(64)}`);
 
   const provider = getProvider("vectorize");
   const schema = vectorizeJsonSchema();
@@ -125,15 +135,22 @@ async function main() {
     console.log(`  …${model} unloaded`);
   }
 
+  // stored baseline: reuse the extraction already in the DB (no model run)
+  if (stored) {
+    for (let i = 0; i < rows.length; i++) {
+      results[i][stored] = { ms: null, facts: (rows[i].facts ?? {}) as Facts, fromDb: true };
+    }
+  }
+
   // side-by-side, per JD
   console.log(`\n${"=".repeat(64)}\nSIDE BY SIDE\n${"=".repeat(64)}`);
   for (let i = 0; i < rows.length; i++) {
     console.log(`\n■ ${rows[i].title} @ ${rows[i].company}  (location: ${rows[i].location ?? "—"})`);
-    for (const model of models) {
-      const r = results[i][model] as { ms?: number; facts?: Facts; error?: string };
+    for (const model of displayModels) {
+      const r = results[i][model] as { ms?: number | null; facts?: Facts; error?: string; fromDb?: boolean };
       if (r.error) { console.log(`  ${model}: ERROR ${r.error}`); continue; }
       const f = r.facts!;
-      console.log(`  ${model}  (${((r.ms ?? 0) / 1000).toFixed(1)}s)`);
+      console.log(`  ${model}  (${r.fromDb ? "stored" : `${((r.ms ?? 0) / 1000).toFixed(1)}s`})`);
       console.log(`     country: ${f.country ?? "—"}   remote: ${f.remote ?? "—"}   stage: ${f.company_stage ?? "—"}   comp: ${f.comp_min ?? "?"}–${f.comp_max ?? "?"} ${f.comp_currency ?? ""}   years: ${f.min_years_experience ?? "—"}`);
       console.log(`     must:  ${(f.must_have_skills ?? []).join(", ")}`);
       console.log(`     nice:  ${(f.nice_to_have_skills ?? []).join(", ")}`);
@@ -147,6 +164,40 @@ async function main() {
     const times = results.map((r) => (r[model] as { ms?: number })?.ms).filter((x): x is number => typeof x === "number");
     const avg = times.length ? times.reduce((a, b) => a + b, 0) / times.length / 1000 : 0;
     console.log(`  ${model}: ${avg.toFixed(1)}s avg  (${times.length}/${rows.length} ok)`);
+  }
+
+  // agreement of each fresh model vs the stored baseline (field-by-field), so a
+  // big sample is digestible without eyeballing every JD
+  if (stored) {
+    console.log(`\n${"=".repeat(64)}\nAGREEMENT vs ${stored} (stored baseline)`);
+    const baseFacts = (i: number) => ((results[i][stored] as { facts?: Facts })?.facts ?? {}) as Facts;
+    const num = (x: number | null | undefined) => (x ?? null);
+    for (const model of models) {
+      let ok = 0, country = 0, comp = 0, years = 0, remote = 0, reviewAgree = 0;
+      let mustSum = 0, niceSum = 0, baseMust = 0, baseNice = 0, flagged = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const r = results[i][model] as { facts?: Facts; error?: string };
+        if (r.error || !r.facts) continue;
+        ok++;
+        const a = r.facts, b = baseFacts(i);
+        if ((a.country ?? "") === (b.country ?? "")) country++;
+        if (num(a.comp_min) === num(b.comp_min) && num(a.comp_max) === num(b.comp_max)) comp++;
+        if (num(a.min_years_experience) === num(b.min_years_experience)) years++;
+        if ((a.remote ?? "") === (b.remote ?? "")) remote++;
+        if (!!a.needs_review === !!b.needs_review) reviewAgree++;
+        if (a.needs_review) flagged++;
+        mustSum += a.must_have_skills?.length ?? 0;
+        niceSum += a.nice_to_have_skills?.length ?? 0;
+        baseMust += b.must_have_skills?.length ?? 0;
+        baseNice += b.nice_to_have_skills?.length ?? 0;
+      }
+      const pct = (x: number) => (ok ? `${Math.round((100 * x) / ok)}%` : "—");
+      const av = (x: number) => (ok ? (x / ok).toFixed(1) : "—");
+      console.log(`\n  ${model} vs ${stored}  (${ok} JDs):`);
+      console.log(`    same value → country ${pct(country)} · comp ${pct(comp)} · years ${pct(years)} · remote ${pct(remote)} · needs_review-agree ${pct(reviewAgree)}`);
+      console.log(`    avg skills → ${model}: ${av(mustSum)} must / ${av(niceSum)} nice    ${stored}: ${av(baseMust)} must / ${av(baseNice)} nice`);
+      console.log(`    ${model} self-flagged needs_review on ${flagged}/${ok}`);
+    }
   }
 
   const out = `${SCRATCH}/vectorize-bakeoff.json`;

@@ -16,20 +16,20 @@ const ACCENT = "#D07A54";
 
 type Great = { name: string; initials: string; img: string; from: string; to: string; note: string; grad: string };
 
-const wiki = (file: string, width = 220) =>
-  `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
-
+// Direct upload.wikimedia.org thumbnail URLs (resolved via the Wikipedia REST
+// summary API) — stable and reliable, unlike the Special:FilePath redirect which
+// 404'd/429'd. Any that fail still fall back to warm initials.
 const GREATS: Great[] = [
-  { name: "Albert Einstein", initials: "AE", img: wiki("Albert Einstein Head.jpg"), from: "Patent clerk", to: "Physics, rewritten", note: "Kept the day job while drafting relativity", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
-  { name: "Marie Curie", initials: "MC", img: wiki("Marie Curie c1920.jpg"), from: "Governess", to: "Two Nobel Prizes", note: "Self-taught between tutoring jobs", grad: "linear-gradient(140deg,#8FA36E,#5F7A44)" },
-  { name: "Jane Goodall", initials: "JG", img: wiki("Jane Goodall 2015.jpg"), from: "Secretary", to: "Primatologist", note: "Sailed to Gombe with no degree", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
-  { name: "Mark Zuckerberg", initials: "MZ", img: wiki("Mark Zuckerberg F8 2019 Keynote (32830578717) (cropped).jpg"), from: "Psych undergrad", to: "CEO, Meta", note: "Shipped v1 from a dorm room", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
-  { name: "Sam Altman", initials: "SA", img: wiki("Sam Altman CropEdit James Tamim.jpg"), from: "Stanford dropout", to: "CEO, OpenAI", note: "Founder → investor → AGI — pick a lane? No.", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
-  { name: "Steve Jobs", initials: "SJ", img: wiki("Steve Jobs Headshot 2010-CROP.jpg"), from: "Reed dropout", to: "Apple, reinvented", note: "A calligraphy class he sat in on became the Mac's fonts", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
-  { name: "Dario Amodei", initials: "DA", img: wiki("Dario Amodei.jpg"), from: "Physicist", to: "CEO, Anthropic", note: "Biophysics PhD → AI safety", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
-  { name: "Amitabh Bachchan", initials: "AB", img: wiki("Amitabh Bachchan December 2013.jpg"), from: "Shipping-firm clerk", to: "Cinema legend", note: "Once rejected by All India Radio for his voice", grad: "linear-gradient(140deg,#8FA36E,#5F7A44)" },
-  { name: "Vera Wang", initials: "VW", img: wiki("Vera Wang 2018.jpg"), from: "Figure skater", to: "Fashion icon", note: "Designed her first dress at 40", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
-  { name: "Arnold Schwarzenegger", initials: "AS", img: wiki("Arnold Schwarzenegger by Gage Skidmore 4.jpg"), from: "Bodybuilder", to: "Governor of California", note: "Mr. Universe → Hollywood → the Capitol", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
+  { name: "Albert Einstein", initials: "AE", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Albert_Einstein_Head_cleaned.jpg/330px-Albert_Einstein_Head_cleaned.jpg", from: "Patent clerk", to: "Physics, rewritten", note: "Kept the day job while drafting relativity", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
+  { name: "Marie Curie", initials: "MC", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Marie_Curie_c._1920s.jpg/330px-Marie_Curie_c._1920s.jpg", from: "Governess", to: "Two Nobel Prizes", note: "Self-taught between tutoring jobs", grad: "linear-gradient(140deg,#8FA36E,#5F7A44)" },
+  { name: "Jane Goodall", initials: "JG", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Deputy_Secretary_Higginbottom_Poses_for_a_Photo_With_Dr._Jane_Goodall_and_the_State_Department%27s_Global_Health_Diplomacy_Director_Jordan_in_Washington_%2822365513310%29_%282%29_%28cropped_2%29.jpg/330px-thumbnail.jpg", from: "Secretary", to: "Primatologist", note: "Sailed to Gombe with no degree", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
+  { name: "Mark Zuckerberg", initials: "MZ", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/F20250904AH-2824_%2854778373111%29_%283x4_cropped_on_Zuckerberg_following_the_rule_of_thirds%29.jpg/330px-F20250904AH-2824_%2854778373111%29_%283x4_cropped_on_Zuckerberg_following_the_rule_of_thirds%29.jpg", from: "Psych undergrad", to: "CEO, Meta", note: "Shipped v1 from a dorm room", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
+  { name: "Sam Altman", initials: "SA", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Meeting_with_Masayoshi_Son_and_Sam_Altman_%28February_3%2C_2025%29_%283x4_cropped_on_Altman%29.jpg/330px-Meeting_with_Masayoshi_Son_and_Sam_Altman_%28February_3%2C_2025%29_%283x4_cropped_on_Altman%29.jpg", from: "Stanford dropout", to: "CEO, OpenAI", note: "Founder → investor → AGI — pick a lane? No.", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
+  { name: "Steve Jobs", initials: "SJ", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Steve_Jobs_Headshot_2010_%28cropped_4%29.jpg/330px-Steve_Jobs_Headshot_2010_%28cropped_4%29.jpg", from: "Reed dropout", to: "Apple, reinvented", note: "A calligraphy class he sat in on became the Mac's fonts", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
+  { name: "Dario Amodei", initials: "DA", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Dario_Amodei_at_TechCrunch_Disrupt_2023_01_%28cropped%29.jpg/330px-Dario_Amodei_at_TechCrunch_Disrupt_2023_01_%28cropped%29.jpg", from: "Physicist", to: "CEO, Anthropic", note: "Biophysics PhD → AI safety", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
+  { name: "Amitabh Bachchan", initials: "AB", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Indian_actor_Amitabh_Bachchan.jpg/330px-Indian_actor_Amitabh_Bachchan.jpg", from: "Shipping-firm clerk", to: "Cinema legend", note: "Once rejected by All India Radio for his voice", grad: "linear-gradient(140deg,#8FA36E,#5F7A44)" },
+  { name: "Vera Wang", initials: "VW", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Vera_Wang_2009_portrait_Tribeca.jpg/330px-Vera_Wang_2009_portrait_Tribeca.jpg", from: "Figure skater", to: "Fashion icon", note: "Designed her first dress at 40", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
+  { name: "Arnold Schwarzenegger", initials: "AS", img: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Arnold_Schwarzenegger_%2833730956438%29_%28cropped%29.jpg/330px-Arnold_Schwarzenegger_%2833730956438%29_%28cropped%29.jpg", from: "Bodybuilder", to: "Governor of California", note: "Mr. Universe → Hollywood → the Capitol", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
 ];
 
 function Face({ g }: { g: Great }) {
@@ -87,7 +87,6 @@ export default function FamousPivots() {
           </div>
         </div>
       </div>
-      <p style={{ textAlign: "center", fontSize: 12, color: "#6F6759", margin: "20px auto 0", maxWidth: 460, fontStyle: "italic" }}>*Not in the drizzle circle. Yet. The people who are made moves just as real — theirs just aren&apos;t on Wikipedia.</p>
     </div>
   );
 }

@@ -9,12 +9,28 @@ type DB = ReturnType<typeof drizzle<typeof schema>>;
 // otherwise piles up until the pooler hits its connection limit).
 const g = globalThis as unknown as { __jollyDb?: DB };
 
+function resolveConnectionString(): string {
+  // On Cloudflare Workers the DB goes through the Hyperdrive binding (edge pooling
+  // + query cache); its connectionString is only available in the request context.
+  // require (not import) + the DEPLOY_TARGET guard so local/Node never loads the
+  // CF-only module.
+  if (process.env.DEPLOY_TARGET === "cloudflare") {
+    try {
+      const { getCloudflareContext } = require("@opennextjs/cloudflare") as typeof import("@opennextjs/cloudflare");
+      const env = getCloudflareContext().env as unknown as { HYPERDRIVE?: { connectionString?: string } };
+      if (env.HYPERDRIVE?.connectionString) return env.HYPERDRIVE.connectionString;
+    } catch {
+      /* fall through to DATABASE_URL */
+    }
+  }
+  const cs = process.env.DATABASE_URL;
+  if (!cs) throw new Error("DATABASE_URL is not set (Supabase connection string).");
+  return cs;
+}
+
 function init(): DB {
   if (g.__jollyDb) return g.__jollyDb;
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set (Supabase connection string).");
-  }
+  const connectionString = resolveConnectionString();
   // `prepare: false` is required with the Supabase transaction pooler (6543).
   // Tuning learned the hard way: the pooler intermittently hangs NEW connection
   // attempts, and the default 30s connect_timeout turned that into 30-120s API

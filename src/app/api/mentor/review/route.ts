@@ -50,14 +50,13 @@ export async function POST(req: Request) {
         await db.insert(mentorCalls).values({ profileId: p.id, summary: summary.trim().slice(0, 2000), durationSec: durationSec ?? null });
       }
     }
-    // in the background: refresh the cached scoring AND fill the TBD target-role
-    // theme from what the call revealed. Sequential (shared local GPU).
+    // in the background: fill the target-role theme AND refresh cached scoring.
+    // Sequential (shared local GPU) — and ORDER MATTERS. The visible payoff (recs
+    // following the new direction) only needs target_role, which rankMatches reads
+    // live and embeds on the fly; it does NOT need the fresh scoring vector. So the
+    // fast target-role fill runs FIRST → "See your updated matches" reflects the
+    // call in ~2-5s instead of behind the 10-30s full re-score.
     after(async () => {
-      try {
-        await computeAndSaveScoring(userId);
-      } catch (err) {
-        console.warn("[/api/mentor/review] scoring refresh failed", err);
-      }
       try {
         const [full, map] = await Promise.all([getFullProfile(userId), getMentorMap(userId)]);
         if (full) {
@@ -67,6 +66,11 @@ export async function POST(req: Request) {
         }
       } catch (err) {
         console.warn("[/api/mentor/review] target-role fill failed", err);
+      }
+      try {
+        await computeAndSaveScoring(userId);
+      } catch (err) {
+        console.warn("[/api/mentor/review] scoring refresh failed", err);
       }
     });
     return NextResponse.json({ ok: true, ...result });

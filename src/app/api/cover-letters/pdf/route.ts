@@ -15,6 +15,10 @@ export const maxDuration = 60;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export async function POST(req: NextRequest) {
+  // puppeteer can't run on Workers — CF gets Browser Rendering later (see next.config)
+  if (process.env.DEPLOY_TARGET === "cloudflare") {
+    return NextResponse.json({ error: "PDF export isn't available on this deployment yet." }, { status: 501 });
+  }
   const body = (await req.json().catch(() => ({}))) as { u?: string; content?: string };
   const userId = await resolveUserId(body.u);
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
