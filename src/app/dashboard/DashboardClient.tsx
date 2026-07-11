@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/client/api-fetch";
 import Recommendations from "./Recommendations";
 import ExploredPaths from "./ExploredPaths";
 import DrizzleLoader from "../DrizzleLoader";
@@ -76,7 +77,7 @@ function MentorStrip({ userId }: { userId: string }) {
   const [matches, setMatches] = useState<Mini[] | null>(null);
 
   useEffect(() => {
-    fetch(`/api/mentors?u=${userId}`, { cache: "no-store" })
+    apiFetch(`/api/mentors?u=${userId}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setMatches((j.matches ?? []).slice(0, 3)))
       .catch(() => setMatches([]));

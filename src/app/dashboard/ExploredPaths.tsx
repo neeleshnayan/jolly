@@ -8,6 +8,7 @@
  * at least one branch, so first-timers see no clutter.
  */
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/client/api-fetch";
 import { displayCompany } from "@/lib/format/company";
 
 type Path = {
@@ -35,7 +36,7 @@ export default function ExploredPaths({ userId }: { userId: string }) {
   const [committing, setCommitting] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/mentor/explored", { cache: "no-store" })
+    apiFetch("/api/mentor/explored", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setPaths(j.paths ?? []))
       .catch(() => setPaths([]));

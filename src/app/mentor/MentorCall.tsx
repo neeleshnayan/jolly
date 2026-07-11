@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/client/api-fetch";
 // type-only: the runtime import happens inside startSession — the module's
 // RnnoiseWorkletNode extends AudioWorkletNode at class-definition time, which
 // crashes SSR (no AudioWorkletNode in Node). Browser-only, loaded on demand.
@@ -990,7 +991,7 @@ export default function MentorCall({ userId }: { userId: string }) {
 
     // silently pre-load the 3-role spectrum; it's revealed only if the mentor
     // brings a role up during the call (a surprise, not a spoiler)
-    fetch(`/api/opportunities/matches?u=${userId}`)
+    apiFetch(`/api/opportunities/matches?u=${userId}`)
       .then((r) => r.json())
       .then((j) => {
         spectrumRef.current = (j.spectrum ?? []).map(

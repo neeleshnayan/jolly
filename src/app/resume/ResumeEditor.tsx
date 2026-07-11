@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { apiFetch } from "@/lib/client/api-fetch";
 import AtsRing from "../AtsRing";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -885,7 +886,7 @@ export default function ResumeEditor({
   const [skillRadar, setSkillRadar] = useState<SkillMapEntry[]>([]);
   const [targetOptions, setTargetOptions] = useState<{ id: string; title: string | null; company: string | null }[]>([]);
   useEffect(() => {
-    fetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" })
+    apiFetch(`/api/opportunities/matches?u=${userId}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         setSkillRadar(j.skillRadar ?? []);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/client/api-fetch";
 import { formatComp } from "@/lib/format/comp";
 import { displayCompany } from "@/lib/format/company";
 import ApplyKit from "./ApplyKit";
@@ -96,7 +97,8 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
       // edited since; a passive load serves the cached ranking instantly and
       // recomputes in the background.
       const url = `/api/opportunities/matches?u=${userId}${refresh ? "&refresh=1" : ""}`;
-      const r = await fetch(url, { cache: "no-store" });
+      // apiFetch: retry the cold-isolate hang (free-tier CF) — the failed hit warms it
+      const r = await apiFetch(url, { cache: "no-store" });
       const j = await r.json();
       setMatches(j.matches ?? []);
       setLearning(j.learning ?? null);
@@ -110,7 +112,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
 
   useEffect(() => {
     void load();
-    fetch(`/api/preferences?u=${userId}`, { cache: "no-store" })
+    apiFetch(`/api/preferences?u=${userId}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setPrefs(j.preferences ?? {}))
       .catch(() => {});
