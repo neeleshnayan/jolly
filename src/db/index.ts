@@ -4,54 +4,30 @@ import * as schema from "./schema";
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
-// Cache the client on globalThis so Next's dev hot-reload reuses ONE pool across
-// module re-evaluations instead of leaking a new pool per reload (which
-// otherwise piles up until the pooler hits its connection limit).
+const onCF = process.env.DEPLOY_TARGET === "cloudflare";
+
+// Node: ONE shared pool on globalThis — a persistent process, and this also stops
+// Next's dev hot-reload from leaking a new pool per reload.
 const g = globalThis as unknown as { __jollyDb?: DB };
+// Cloudflare Workers: ONE client PER REQUEST, keyed by the request's execution
+// context. A client cached across requests reuses a socket that Cloudflare severs
+// when it freezes the isolate between requests → the intermittent fast-500s we
+// saw. Fresh-per-request is the documented Hyperdrive + postgres.js pattern;
+// Hyperdrive does the real connection pooling at the edge.
+const cfClients = new WeakMap<object, DB>();
 
-function resolveConnectionString(): string {
-  // On Cloudflare Workers the DB goes through the Hyperdrive binding (edge pooling
-  // + query cache); its connectionString is only available in the request context.
-  // require (not import) + the DEPLOY_TARGET guard so local/Node never loads the
-  // CF-only module.
-  if (process.env.DEPLOY_TARGET === "cloudflare") {
-    try {
-      const { getCloudflareContext } = require("@opennextjs/cloudflare") as typeof import("@opennextjs/cloudflare");
-      const env = getCloudflareContext().env as unknown as { HYPERDRIVE?: { connectionString?: string } };
-      if (env.HYPERDRIVE?.connectionString) return env.HYPERDRIVE.connectionString;
-    } catch {
-      /* fall through to DATABASE_URL */
-    }
-  }
-  const cs = process.env.DATABASE_URL;
-  if (!cs) throw new Error("DATABASE_URL is not set (Supabase connection string).");
-  return cs;
-}
-
-function init(): DB {
-  if (g.__jollyDb) return g.__jollyDb;
-  const connectionString = resolveConnectionString();
-  // `prepare: false` is required with the Supabase transaction pooler (6543).
-  // Tuning learned the hard way: the pooler intermittently hangs NEW connection
-  // attempts, and the default 30s connect_timeout turned that into 30-120s API
-  // stalls (admin metrics fans out 8 parallel queries → 8 cold opens). So:
-  // fewer connections (max 4), keep them warm much longer (idle 120s), and
-  // fail a hanging connect fast (10s) so the retry lands on a good socket.
-  // keep_alive detects half-open sockets (the network flap leaves connections
-  // that look alive but never answer — queries queued on them hang forever);
-  // max_lifetime recycles every socket within 5 minutes, bounding any wedge.
-  const onCF = process.env.DEPLOY_TARGET === "cloudflare";
+function makeDb(connectionString: string): DB {
   const client = onCF
     ? postgres(connectionString, {
-        // Workers + Hyperdrive: `fetch_types` runs a type-introspection query on
-        // connect that HANGS through the pooler (the Worker gets killed for never
-        // responding). And keep_alive/max_lifetime are timer-based — Workers freeze
-        // the isolate between requests, so those timers misbehave. Hyperdrive does
-        // the real pooling at the edge, so keep the driver lean.
+        // `fetch_types` runs a type-introspection query on connect that hangs
+        // through the pooler on Workers; the timer-based keep_alive/max_lifetime
+        // misbehave because Workers freeze the isolate between requests.
         prepare: false,
         fetch_types: false,
-        max: 5,
-        idle_timeout: 20,
+        // the ranking path fans out ~11 parallel queries; max:1 serialized them
+        // through the pooler (~6s + hangs). Let them run concurrently.
+        max: 8,
+        idle_timeout: 10,
       })
     : postgres(connectionString, {
         prepare: false,
@@ -61,7 +37,35 @@ function init(): DB {
         keep_alive: 30,
         max_lifetime: 300,
       });
-  g.__jollyDb = drizzle(client, { schema });
+  return drizzle(client, { schema });
+}
+
+function init(): DB {
+  if (onCF) {
+    try {
+      // require (not import) so local/Node builds never load the CF-only module
+      const { getCloudflareContext } = require("@opennextjs/cloudflare") as typeof import("@opennextjs/cloudflare");
+      const cf = getCloudflareContext();
+      // key on the per-request ExecutionContext → a fresh client each request.
+      // (env is shared across requests, so it's only the last-resort key.)
+      const key = (cf.ctx ?? cf.env) as object;
+      let reqDb = cfClients.get(key);
+      if (!reqDb) {
+        const env = cf.env as unknown as { HYPERDRIVE?: { connectionString?: string } };
+        const cs = env.HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
+        if (!cs) throw new Error("Hyperdrive binding / DATABASE_URL not configured");
+        reqDb = makeDb(cs);
+        cfClients.set(key, reqDb);
+      }
+      return reqDb;
+    } catch {
+      /* no CF request context (e.g. build time) → fall through to a global client */
+    }
+  }
+  if (g.__jollyDb) return g.__jollyDb;
+  const cs = process.env.DATABASE_URL;
+  if (!cs) throw new Error("DATABASE_URL is not set (Supabase connection string).");
+  g.__jollyDb = makeDb(cs);
   return g.__jollyDb;
 }
 

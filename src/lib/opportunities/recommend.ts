@@ -76,7 +76,10 @@ async function userVector(userId: string, wait = false): Promise<ScoringVector |
       return saved.scoring as unknown as ScoringVector;
     }
   }
-  recomputeScoringInBackground(userId);
+  // NOT on Cloudflare: a floating background promise (no ctx.waitUntil) making
+  // network calls wedges the Worker isolate — the next request then fast-fails.
+  // Serve the cached vector; the 4090 box (or an explicit Refresh) recomputes it.
+  if (process.env.DEPLOY_TARGET !== "cloudflare") recomputeScoringInBackground(userId);
   return saved.scoring as unknown as ScoringVector;
 }
 
