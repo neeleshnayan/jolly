@@ -22,7 +22,6 @@ import { canonSkillKey } from "../skills/canon";
 import { inferCurrency, inferCountry } from "../format/comp";
 import { toUSD, fmtMoney } from "../format/currency";
 import { firstCityHit } from "../geo/canon";
-import { trajectoryFromCosine } from "../embeddings";
 import type { ScoringVector } from "../scoring/schema";
 import type { Preferences } from "../preferences";
 import type { OpportunityVector, OpportunityFacts } from "./schema";
@@ -110,6 +109,18 @@ export type LearnedDrift = {
   events: number;
 };
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+
+// cosine → the 0.5–1 trajectory band, via the FIXED nomic calibration (see
+// lib/embeddings for the derivation). Inlined here so rank-core stays free of
+// any module that reads process.env at load — the Deno ranker imports this tree.
+const COS_LO = 0.62;
+const COS_HI = 0.8;
+/** cosine similarity → trajectory score. Below the floor reads 0.5 (a miss
+ *  dents, never buries), dead-on reads ~1.0. */
+export function trajectoryFromCosine(cos: number): number {
+  return 0.5 + 0.5 * clamp01((cos - COS_LO) / (COS_HI - COS_LO));
+}
+
 /** the signal kinds that train drift — exported so learnDrift's query filters
  *  on exactly the kinds distillSignals weights (one source of truth) */
 export const SIGNAL_KINDS = Object.keys(EVENT_WEIGHT);

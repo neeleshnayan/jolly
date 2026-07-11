@@ -29,13 +29,20 @@ function loadEnvLocal() {
 }
 
 const FN = `
+-- the user's DIRECTION embedding, maintained by the ingestion box (nomic) when
+-- a mentor call sets/updates the target role. Lets the Edge ranker (no nomic)
+-- still compute semantic trajectory; Node overrides it with a live embed.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS direction_vec vector(768);
+
 CREATE OR REPLACE FUNCTION get_ranking_inputs(p_user uuid, p_trusted text[], p_direction text DEFAULT NULL)
 RETURNS jsonb
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public
 AS $fn$
 WITH me AS (
-  SELECT id, scoring, scoring_stale, preferences, about_overrides
+  SELECT id, scoring, scoring_stale, preferences, about_overrides,
+         -- explicit p_direction (Node's live embed) wins; else the stored vector
+         coalesce(p_direction::vector, direction_vec) AS dir
   FROM profiles WHERE user_id = p_user LIMIT 1
 )
 SELECT jsonb_build_object(
@@ -72,8 +79,8 @@ SELECT jsonb_build_object(
                  o.comp_min AS "compMin", o.comp_max AS "compMax",
                  o.domain, o.url, o.source, o.vector, o.facts,
                  left(o.raw_text, 300) AS "rawText",
-                 CASE WHEN p_direction IS NOT NULL AND o.embedding_vec IS NOT NULL
-                      THEN (o.embedding_vec <=> p_direction::vector)::float8 END AS "trajDist"
+                 CASE WHEN (SELECT dir FROM me) IS NOT NULL AND o.embedding_vec IS NOT NULL
+                      THEN (o.embedding_vec <=> (SELECT dir FROM me))::float8 END AS "trajDist"
           FROM opportunities o
           WHERE o.vectorized_at IS NOT NULL
             AND (o.vectorize_model = ANY(p_trusted) OR o.source = 'sample')
@@ -84,6 +91,7 @@ $fn$;
 REVOKE ALL ON FUNCTION get_ranking_inputs(uuid, text[], text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION get_ranking_inputs(uuid, text[], text) FROM anon;
 REVOKE ALL ON FUNCTION get_ranking_inputs(uuid, text[], text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION get_ranking_inputs(uuid, text[], text) TO service_role;
 `;
 
 async function main() {
