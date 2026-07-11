@@ -215,7 +215,7 @@ export default function AdminPanel() {
     const n = Math.max(1, parseInt(inferCount, 10) || 10);
     const b = Math.max(1, parseInt(inferBatch, 10) || 5);
     const p = Math.max(0, parseInt(inferPause, 10) || 30);
-    setFetchLog([`${forceRevec ? "Re-vectorizing" : "Vectorizing"} up to ${n} job(s) — granite → escalate to gemma3, batches of ${b}, ${p}s cooldown. Leave this page open…`]);
+    setFetchLog([`${forceRevec ? "Re-vectorizing" : "Vectorizing"} up to ${n} job(s) — gemma3:27b end to end, batches of ${b}, ${p}s cooldown. Leave this page open…`]);
     try {
       const r = await fetch("/api/admin/run-inference", {
         method: "POST",
