@@ -910,6 +910,12 @@ a { color: var(--accent); }
 @keyframes drz-float { 0%, 100% { transform: translateY(0) rotate(-0.3deg); } 50% { transform: translateY(-14px) rotate(0.3deg); } }
 @keyframes drz-bob { 0%, 100% { transform: translateY(0) scaleY(1); } 30% { transform: translateY(-4px) scaleY(1.06); } 60% { transform: translateY(1px) scaleY(0.95); } }
 @keyframes drz-glow { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 0.85; transform: scale(1.08); } }
+/* "I'm broke" cinematic panel — falling rain + the pulsing chosen path */
+.lp-rain { animation: drz-rainfall 0.9s linear infinite; }
+.lp-pathpulse { animation: drz-pathpulse 3.2s ease-in-out infinite; }
+@keyframes drz-rainfall { 0% { transform: translateY(-24px); } 100% { transform: translateY(0); } }
+@keyframes drz-pathpulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) { .lp-rain, .lp-pathpulse { animation: none; } }
 /* hero role card cycling — content swap fades in (key change retriggers) */
 .lp-role-swap { animation: drz-role-in 0.55s ease both; }
 @keyframes drz-role-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

@@ -3,6 +3,7 @@ import { getSessionUserId } from "@/lib/auth/session";
 import HeroRoles from "./HeroRoles";
 import FamousPivots from "./FamousPivots";
 import MeaningMap from "./MeaningMap";
+import OrbShowcase from "./OrbShowcase";
 
 /**
  * The front door — the "Drizzle Landing" marketing page from the design kit.
@@ -48,20 +49,30 @@ const pillarTitle = { fontFamily: '"Newsreader", Georgia, serif', fontWeight: 50
 const pillarBody = { fontSize: 15, lineHeight: 1.6, color: "#9E9484" } as const;
 
 const SOURCES = ["Greenhouse", "Lever", "Ashby", "Workday", "LinkedIn"];
+// real, atomic, canonically-cased skills (same taxonomy the app displays) for the
+// landing's Data Analyst → Data Platform Engineer persona — NOT vague competencies.
+// four keeps "Gaps to close" to a clean two rows (chips are wider than the
+// strengths side because of the "N roles" demand tag)
 const SKILLS = [
-  { name: "ML infrastructure", w: "72%", n: "5 roles" },
-  { name: "feature pipelines", w: "58%", n: "4 roles" },
-  { name: "model serving", w: "46%", n: "3 roles" },
-  { name: "workflow orchestration", w: "38%", n: "2 roles" },
+  { name: "Kubernetes", n: "6 roles" },
+  { name: "Airflow", n: "5 roles" },
+  { name: "Spark", n: "4 roles" },
+  { name: "Terraform", n: "3 roles" },
 ];
-const HAVE = ["python ×20", "sql ×11", "react ×6", "dbt ×4", "aws ×3", "airflow ×3"];
+const HAVE = ["Python ×24", "SQL ×18", "Tableau ×9", "dbt ×6", "Pandas ×5", "Excel ×4"];
+// peers a step or two ahead on the same path. Photos are hotlinked stock
+// placeholders (never committed); real mentor photos swap in later.
 const PEERS = [
-  { initials: "PS", name: "Priya S.", now: "Data Platform Eng · Stripe", from: "Data Analyst", to: "Data Platform Eng", shared: "4 skills in common", grad: "linear-gradient(140deg,#D98E6A,#C15F3C)" },
-  { initials: "MO", name: "Marcus O.", now: "ML Engineer · Ramp", from: "Backend SWE", to: "ML Engineer", shared: "made the leap last year", grad: "linear-gradient(140deg,#C89B6A,#A9673A)" },
-  { initials: "LK", name: "Lena K.", now: "Founding Engineer · seed startup", from: "Product Manager", to: "Founding Engineer", shared: "open to referrals", grad: "linear-gradient(140deg,#8FA36E,#5F7A44)" },
+  { name: "Priya S.", role: "Data Platform Eng", company: "Stripe", from: "Data Analyst", to: "Data Platform Eng", stepsLabel: "1 step ahead", mentored: "12 people", quote: "The SQL-to-pipelines jump is smaller than it looks — happy to show you the path I took.", shared: "4 skills in common", photo: "https://randomuser.me/api/portraits/women/68.jpg" },
+  { name: "Marcus O.", role: "ML Engineer", company: "Ramp", from: "Backend SWE", to: "ML Engineer", stepsLabel: "2 steps ahead", mentored: "8 people", quote: "Made this exact leap last year. The trick was picking one model project and going deep.", shared: "made the leap last year", photo: "https://randomuser.me/api/portraits/men/32.jpg" },
+  { name: "Lena K.", role: "Founding Engineer", company: "seed startup", from: "Product Manager", to: "Founding Engineer", stepsLabel: "1 step ahead", mentored: "5 people", quote: "PM to founding eng felt impossible until I did it. Ask me anything — open to referrals.", shared: "open to referrals", photo: "https://randomuser.me/api/portraits/women/44.jpg" },
 ];
 const sageSm = { display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, background: "rgba(166,192,131,0.10)", color: "#A6C083", border: "1px solid rgba(166,192,131,0.18)" } as const;
-const stackAv = { width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#F3ECDE", border: "2px solid #1A1712" } as const;
+const pTick = { flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: 6, background: "rgba(166,192,131,0.16)", color: "#A6C083", fontSize: 10, fontWeight: 800, marginTop: 1 } as const;
+const pTickWarm = { ...pTick, background: "rgba(216,142,106,0.18)", color: "#E0A579" } as const;
+const pTickMono = { ...pTick, background: "rgba(230,210,170,0.10)", color: "#B4AA98" } as const;
+const priceCard = { display: "flex", flexDirection: "column" as const, background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: "clamp(26px,3vw,32px)" } as const;
+const priceBtn = { marginTop: "auto", textAlign: "center" as const, border: "1px solid rgba(230,210,170,0.22)", color: "#E7DECD", fontWeight: 600, fontSize: 15, padding: "13px 20px", borderRadius: 12, display: "block" } as const;
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   if (await getSessionUserId()) redirect("/dashboard");
@@ -145,24 +156,36 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <section id="how" style={{ position: "relative", zIndex: 1, background: "#1A1712", borderTop: "1px solid rgba(230,210,170,0.07)", borderBottom: "1px solid rgba(230,210,170,0.07)", padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)", marginTop: 60 }}>
           <div style={{ maxWidth: 1160, margin: "0 auto" }}>
             <div style={{ maxWidth: 640, marginBottom: 56 }}>
-              <div style={kicker}>One copilot, end to end</div>
-              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.6vw,50px)", lineHeight: 1.08 }}>Not another job board.<br />A mentor that <span style={{ fontStyle: "italic", color: "#D98E6A" }}>remembers.</span></h2>
+              <div style={kicker}>01 · A copilot that remembers</div>
+              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.6vw,50px)", lineHeight: 1.08 }}>Not another job board.<br /><span style={{ fontStyle: "italic", color: "#D98E6A" }}>A career copilot.</span></h2>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20 }}>
-              <div className="lp-pillar" style={pillar}>
-                <div style={pillarIcon}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" stroke="#D98E6A" strokeWidth="1.8" /><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" stroke="#D98E6A" strokeWidth="1.8" strokeLinecap="round" /></svg></div>
-                <div style={pillarTitle}>A mentor who remembers</div>
-                <div style={pillarBody}>Short voice calls build a real read on who you&apos;re becoming — and every session picks up where you left off.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20, alignItems: "stretch" }}>
+              {/* featured: the AI mentor, alive — reuses the real call-time VoiceOrb */}
+              <div className="lp-pillar" style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20 }}>
+                <div style={{ height: 236, position: "relative", background: "radial-gradient(circle at 50% 42%, #221913 0%, #16110B 78%)", borderBottom: "1px solid rgba(230,210,170,0.08)" }}>
+                  <OrbShowcase />
+                </div>
+                <div style={{ padding: "26px 30px 32px" }}>
+                  <div style={{ ...pillarTitle, fontSize: 24 }}>Understands where you&apos;re headed</div>
+                  <div style={pillarBody}>A short voice call reads who you&apos;re becoming — then drizzle surfaces the roles that fit and introduces you to people already on that path.</div>
+                </div>
               </div>
-              <div className="lp-pillar" style={pillar}>
-                <div style={pillarIcon}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden><circle cx="12" cy="12" r="8" stroke="#D98E6A" strokeWidth="1.8" /><circle cx="12" cy="12" r="3.4" stroke="#D98E6A" strokeWidth="1.8" /><circle cx="12" cy="12" r="0.6" fill="#D98E6A" /></svg></div>
-                <div style={pillarTitle}>Honestly matched roles</div>
-                <div style={pillarBody}>Ranked by what you&apos;d genuinely want and what the screen truly requires — the one watch-out surfaced, never buried.</div>
-              </div>
-              <div className="lp-pillar" style={pillar}>
-                <div style={pillarIcon}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M7 4h7l4 4v12H7z" stroke="#D98E6A" strokeWidth="1.8" strokeLinejoin="round" /><path d="M14 4v4h4" stroke="#D98E6A" strokeWidth="1.8" strokeLinejoin="round" /><path d="M9.5 12.5h5M9.5 15.5h5" stroke="#D98E6A" strokeWidth="1.6" strokeLinecap="round" /></svg></div>
-                <div style={pillarTitle}>Apply in one motion</div>
-                <div style={pillarBody}>Tailored résumé, cover letter, and every fiddly application answer — staged the moment you click apply.</div>
+              {/* two pointer cards */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <div className="lp-pillar" style={{ flex: 1, display: "flex", gap: 18, alignItems: "flex-start", ...pillar, padding: "28px 28px" }}>
+                  <div style={{ ...pillarIcon, width: 50, height: 50, marginBottom: 0, flexShrink: 0 }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden><circle cx="12" cy="12" r="8" stroke="#D98E6A" strokeWidth="1.8" /><circle cx="12" cy="12" r="3.4" stroke="#D98E6A" strokeWidth="1.8" /><circle cx="12" cy="12" r="0.6" fill="#D98E6A" /></svg></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...pillarTitle, fontSize: 22, marginBottom: 7 }}>Honestly matched roles</div>
+                    <div style={{ ...pillarBody, fontSize: 14.5 }}>Ranked by what you&apos;d genuinely want and what the screen truly requires — the one watch-out surfaced, never buried.</div>
+                  </div>
+                </div>
+                <div className="lp-pillar" style={{ flex: 1, display: "flex", gap: 18, alignItems: "flex-start", ...pillar, padding: "28px 28px" }}>
+                  <div style={{ ...pillarIcon, width: 50, height: 50, marginBottom: 0, flexShrink: 0 }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M7 4h7l4 4v12H7z" stroke="#D98E6A" strokeWidth="1.8" strokeLinejoin="round" /><path d="M14 4v4h4" stroke="#D98E6A" strokeWidth="1.8" strokeLinejoin="round" /><path d="M9.5 12.5h5M9.5 15.5h5" stroke="#D98E6A" strokeWidth="1.6" strokeLinecap="round" /></svg></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...pillarTitle, fontSize: 22, marginBottom: 7 }}>Apply in one motion</div>
+                    <div style={{ ...pillarBody, fontSize: 14.5 }}>Tailored résumé, cover letter, and every fiddly application answer — staged the moment you click apply.</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -172,7 +195,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <section id="fit" style={{ position: "relative", zIndex: 1, padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)" }}>
           <div style={{ maxWidth: 1000, margin: "0 auto" }}>
             <div style={{ maxWidth: 680, margin: "0 auto 44px", textAlign: "center" }}>
-              <div style={kicker}>Honest matching</div>
+              <div style={kicker}>02 · A direction, not a keyword</div>
               <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.4vw,48px)", lineHeight: 1.1, margin: "0 0 20px" }}>Ranked to where you&apos;re going — not what you&apos;re called.</h2>
               <p style={{ fontSize: 16.5, lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>We match on <em style={{ color: "#C9BFAD" }}>trajectory</em>, not keywords. From one starting point we surface the paths open to you — even roles that share zero words with your past — then help you refine the one that fits.</p>
             </div>
@@ -181,22 +204,19 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <MeaningMap />
             </div>
 
-            <div style={{ marginTop: "clamp(64px,9vw,104px)" }}>
-              <div style={{ maxWidth: 680, margin: "0 auto 40px", textAlign: "center" }}>
+            <div style={{ marginTop: "clamp(46px,6vw,76px)", maxWidth: 860, marginLeft: "auto", marginRight: "auto" }}>
+              <div style={{ textAlign: "center", marginBottom: 26 }}>
                 <div style={kicker}>The diagnostic</div>
-                <h3 style={{ ...h2Serif, fontSize: "clamp(26px,3.6vw,38px)", lineHeight: 1.12, margin: "0 0 16px" }}>Two honest reads on where you stand.</h3>
-                <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>Before it ranks a single role, drizzle takes stock — what you&apos;ve already proven, and what your target path still asks for. Together they narrate the distance between today and where you&apos;re headed.</p>
+                <h3 style={{ ...h2Serif, fontSize: "clamp(22px,3vw,30px)", lineHeight: 1.15, margin: 0 }}>Two honest reads on where you stand.</h3>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20, alignItems: "stretch" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(262px,1fr))", gap: 16 }}>
                 {/* A: strengths */}
-                <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: 30 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                    <span style={{ width: 26, height: 26, borderRadius: 8, background: "rgba(166,192,131,0.16)", color: "#A6C083", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>A</span>
-                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 20, color: HEADING }}>What you&apos;re already strong at</span>
+                <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 16, padding: "22px 24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(166,192,131,0.16)", color: "#A6C083", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>A</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 700, color: "#E7DECD" }}>Already strong at</span>
                   </div>
-                  <p style={{ fontSize: 14, lineHeight: 1.55, color: "#948B7C", margin: "0 0 22px" }}>Proven on your résumé — the foundation every match is built from.</p>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#A6C083", marginBottom: 14 }}>Already on your résumé</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {HAVE.map((h) => (
                       <span key={h} style={sageSm}><span style={{ color: "#A6C083" }}>✓</span> {h}</span>
@@ -205,26 +225,18 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
                 </div>
 
                 {/* B: gaps */}
-                <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 20, padding: 30 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                    <span style={{ width: 26, height: 26, borderRadius: 8, background: "rgba(216,142,106,0.18)", color: "#E0A579", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>B</span>
-                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 20, color: HEADING }}>What still stands in the way</span>
+                <div style={{ background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 16, padding: "22px 24px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(216,142,106,0.18)", color: "#E0A579", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>B</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 700, color: "#E7DECD" }}>Gaps to close</span>
                   </div>
-                  <p style={{ fontSize: 14, lineHeight: 1.55, color: "#948B7C", margin: "0 0 22px" }}>The skills your target roles keep asking for — your clearest next moves.</p>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: ACCENT, marginBottom: 16 }}>The market keeps asking</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {SKILLS.map((s) => (
-                      <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ width: 120, flexShrink: 0, fontSize: 13.5, fontWeight: 600, color: "#C9BFAD" }}>{s.name}</div>
-                        <div style={{ flex: 1, height: 8, borderRadius: 6, background: "rgba(230,210,170,0.08)", overflow: "hidden" }}><div style={{ height: "100%", width: s.w, borderRadius: 6, background: "linear-gradient(90deg,#D98E6A,#C15F3C)" }} /></div>
-                        <div style={{ width: 48, textAlign: "right", fontSize: 12, color: "#8A8172" }}>{s.n}</div>
-                      </div>
+                      <span key={s.name} style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(216,142,106,0.10)", border: "1px solid rgba(216,142,106,0.22)", color: "#E7DECD", fontSize: 13, fontWeight: 600, padding: "6px 12px", borderRadius: 999 }}>{s.name} <span style={{ color: "#8A8172", fontWeight: 500 }}>{s.n}</span></span>
                     ))}
                   </div>
                 </div>
               </div>
-
-              <p style={{ textAlign: "center", fontSize: 14.5, color: "#8A8172", margin: "28px auto 0", maxWidth: 560 }}>Strengths you build from, gaps you close — that&apos;s the route to where you want to go.</p>
             </div>
           </div>
         </section>
@@ -232,57 +244,160 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {/* COMMUNITY — mentor connect */}
         <section id="community" style={{ position: "relative", zIndex: 1, background: "#1A1712", borderTop: "1px solid rgba(230,210,170,0.07)", padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)" }}>
           <div style={{ maxWidth: 1160, margin: "0 auto" }}>
-            <div style={{ maxWidth: 660, marginBottom: 52 }}>
-              <div style={kicker}>You&apos;re not alone in this</div>
+            <div style={{ maxWidth: 660, marginBottom: 40 }}>
+              <div style={kicker}>03 · You&apos;re not the first</div>
               <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.6vw,50px)", lineHeight: 1.08, margin: "0 0 20px" }}>Walk the path with people <span style={{ fontStyle: "italic", color: "#D98E6A" }}>already on it.</span></h2>
-              <p style={{ fontSize: 16.5, lineHeight: 1.6, color: "#A79E8D", margin: 0, maxWidth: 600 }}>drizzle introduces you to people one or two steps ahead on the same trajectory — for honest advice, warm referrals, and the reminder that the leap you&apos;re making has been made before.</p>
+              <p style={{ fontSize: 16.5, lineHeight: 1.6, color: "#A79E8D", margin: 0, maxWidth: 600 }}>drizzle introduces you to people a step or two ahead on your exact path — for honest advice, warm intros, and proof the leap is makeable.</p>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20, marginBottom: 32 }}>
+            {/* you are here */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 30 }}>
+              <span style={{ width: 44, height: 44, borderRadius: "50%", flexShrink: 0, background: "#211D18", border: "2px dashed rgba(216,142,106,0.55)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, letterSpacing: "0.05em", color: "#E7DECD" }}>YOU</span>
+              <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 19, color: HEADING }}>Here now — <span style={{ fontStyle: "italic", color: "#D98E6A" }}>Data Analyst.</span></span>
+              <span style={{ fontSize: 14.5, color: "#8A8172" }}>Here&apos;s who&apos;s just up ahead on your path.</span>
+            </div>
+
+            {/* mentor cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(318px,1fr))", gap: 20, alignItems: "stretch" }}>
               {PEERS.map((p) => (
-                <div key={p.name} className="lp-pillar" style={{ ...pillar, padding: "26px 26px 22px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-                    <div style={{ width: 48, height: 48, borderRadius: "50%", flexShrink: 0, background: p.grad, display: "flex", alignItems: "center", justifyContent: "center", color: "#F3ECDE", fontWeight: 700, fontSize: 15, border: "1px solid rgba(255,240,210,0.12)" }}>{p.initials}</div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 16, color: HEADING }}>{p.name}</div>
-                      <div style={{ fontSize: 13, color: "#948B7C" }}>{p.now}</div>
+                <div key={p.name} className="lp-pillar" style={{ display: "flex", flexDirection: "column", background: "#211D18", border: "1px solid rgba(230,210,170,0.10)", borderRadius: 18, padding: "clamp(22px,2.4vw,26px)", boxShadow: "0 26px 60px -46px rgba(0,0,0,0.9)" }}>
+                  <div style={{ marginBottom: 18 }}><span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#E0A579", background: "rgba(216,142,106,0.10)", border: "1px solid rgba(216,142,106,0.24)", borderRadius: 999, padding: "6px 12px" }}><span style={{ fontSize: 8, letterSpacing: "-2px" }}>▲</span> {p.stepsLabel}</span></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.photo} alt="" width={56} height={56} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0, boxShadow: "0 0 0 1px rgba(255,240,210,0.16), 0 6px 16px -6px rgba(0,0,0,0.6)" }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 16.5, fontWeight: 700, color: HEADING, lineHeight: 1.2 }}>{p.name}</div>
+                      <div style={{ fontSize: 13.5, color: "#948B7C", marginTop: 2 }}>{p.role} · {p.company}</div>
+                      <div style={{ fontSize: 12, color: "#7C7365", marginTop: 4 }}>Mentored {p.mentored} on this path</div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", background: "rgba(230,210,170,0.04)", border: "1px solid rgba(230,210,170,0.08)", borderRadius: 11, padding: "11px 13px", marginBottom: 18 }}>
-                    <span style={{ fontSize: 13, color: "#948B7C" }}>{p.from}</span>
+                  <div style={{ marginTop: 18, display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap", background: "rgba(230,210,170,0.035)", border: "1px solid rgba(230,210,170,0.07)", borderRadius: 12, padding: "12px 15px" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8A8172" }}>Their leap</span>
+                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 16, color: "#948B7C" }}>{p.from}</span>
                     <span style={{ color: ACCENT, fontWeight: 700 }}>→</span>
-                    <span style={{ fontSize: 13, color: "#E7DECD", fontWeight: 600 }}>{p.to}</span>
+                    <span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 17, color: "#F4EEE1" }}>{p.to}</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <span style={sageSm}><span style={{ color: "#A6C083" }}>✓</span> {p.shared}</span>
-                    <a className="lp-ghost" href="/api/auth/linkedin" style={{ border: "1px solid rgba(230,210,170,0.18)", color: "#D6CCBA", fontWeight: 600, fontSize: 13, padding: "8px 16px", borderRadius: 10 }}>Connect</a>
+                  <p style={{ margin: "16px 0 0", fontFamily: '"Newsreader", Georgia, serif', fontStyle: "italic", fontSize: 15.5, lineHeight: 1.5, color: "#D8CFBE" }}>&ldquo;{p.quote}&rdquo;</p>
+                  <div style={{ marginTop: "auto", paddingTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+                    <span style={{ ...sageSm, alignSelf: "flex-start" }}><span style={{ color: "#A6C083" }}>✓</span> {p.shared}</span>
+                    <a className="lp-ghost" href="/api/auth/linkedin" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: "rgba(216,142,106,0.12)", border: "1px solid rgba(216,142,106,0.3)", color: "#F1D9C6", fontWeight: 600, fontSize: 14.5, padding: "12px 18px", borderRadius: 11 }}>Request intro <span style={{ color: ACCENT }}>→</span></a>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ marginTop: 30, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
               <div style={{ display: "flex" }}>
-                <div style={{ ...stackAv, background: "linear-gradient(140deg,#D98E6A,#C15F3C)" }}>RN</div>
-                <div style={{ ...stackAv, background: "linear-gradient(140deg,#C89B6A,#A9673A)", marginLeft: -10 }}>TF</div>
-                <div style={{ ...stackAv, background: "linear-gradient(140deg,#8FA36E,#5F7A44)", marginLeft: -10 }}>JK</div>
-                <div style={{ ...stackAv, background: "rgba(230,210,170,0.10)", color: "#C9BFAD", marginLeft: -10 }}>+</div>
+                {["men/45", "women/12", "men/76"].map((f, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={f} src={`https://randomuser.me/api/portraits/${f}.jpg`} alt="" width={36} height={36} style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", border: "2px solid #1A1712", marginLeft: i ? -11 : 0 }} />
+                ))}
               </div>
-              <span style={{ fontSize: 14.5, color: "#948B7C" }}><span style={{ color: "#C9BFAD", fontWeight: 600 }}>200+ people</span> one step ahead on your exact path.</span>
+              <span style={{ fontSize: 15, color: "#948B7C" }}><span style={{ color: "#C9BFAD", fontWeight: 600 }}>200+ more</span> climbing the same path right now.</span>
             </div>
-
-            {/* inspirational figures — famous people who made dramatic trajectory
-                shifts. reinforces "the leap you're making has been made before" */}
-            <FamousPivots />
           </div>
         </section>
 
-        {/* AT COST */}
-        <section id="cost" style={{ position: "relative", zIndex: 1, background: "#1A1712", borderTop: "1px solid rgba(230,210,170,0.07)", padding: "clamp(80px,11vw,130px) clamp(20px,5vw,40px)" }}>
-          <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 9, border: "1px solid rgba(166,192,131,0.28)", background: "rgba(166,192,131,0.08)", borderRadius: 999, padding: "7px 16px", marginBottom: 28, fontSize: 12.5, fontWeight: 700, letterSpacing: "0.04em", color: "#A6C083" }}>RUNS AT COST</div>
-            <h2 style={{ ...h2Serif, fontSize: "clamp(30px,5vw,52px)", lineHeight: 1.12, margin: "0 0 24px", textWrap: "balance" }}>Built after watching good people face a lost job <span style={{ fontStyle: "italic", color: "#D98E6A" }}>alone.</span></h2>
-            <p style={{ fontSize: "clamp(17px,2.2vw,20px)", lineHeight: 1.6, color: "#A79E8D", margin: "0 auto", maxWidth: 600 }}>So drizzle doesn&apos;t profit off the search. You pay only what it takes to keep the lights on — nothing more. When you&apos;re between jobs, that matters.</p>
+        {/* AT COST · pricing + "I'm broke" mode */}
+        <section id="cost" style={{ position: "relative", zIndex: 1, background: "#1A1712", borderTop: "1px solid rgba(230,210,170,0.07)", padding: "clamp(72px,10vw,120px) clamp(20px,5vw,40px)" }}>
+          <div style={{ maxWidth: 1160, margin: "0 auto" }}>
+            <div style={{ maxWidth: 660, margin: "0 auto clamp(40px,5vw,56px)", textAlign: "center" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 9, border: "1px solid rgba(166,192,131,0.28)", background: "rgba(166,192,131,0.08)", borderRadius: 999, padding: "7px 16px", marginBottom: 22, fontSize: 12.5, fontWeight: 700, letterSpacing: "0.04em", color: "#A6C083" }}>04 · Runs at cost</div>
+              <h2 style={{ ...h2Serif, fontSize: "clamp(30px,4.4vw,48px)", lineHeight: 1.12, margin: "0 0 16px", textWrap: "balance" }}>Priced to keep the lights on — <span style={{ fontStyle: "italic", color: "#D98E6A" }}>never to profit.</span></h2>
+              <p style={{ fontSize: "clamp(16px,2vw,18px)", lineHeight: 1.6, color: "#A79E8D", margin: 0 }}>Free while you&apos;re finding your footing — step up only when you want more.</p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(268px,1fr))", gap: 18, alignItems: "stretch", maxWidth: 1040, margin: "0 auto" }}>
+              {/* FREE */}
+              <div style={priceCard}>
+                <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 22, color: HEADING }}>Free</div>
+                <div style={{ fontSize: 13.5, color: "#8A8172", margin: "4px 0 20px" }}>While you&apos;re finding your footing</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 22 }}><span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 44, color: "#F4EEE1", lineHeight: 1 }}>$0</span><span style={{ fontSize: 14, color: "#8A8172" }}>/mo</span></div>
+                <div style={{ height: 1, background: "rgba(230,210,170,0.09)", marginBottom: 20 }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 13, marginBottom: 28 }}>
+                  {["Your trajectory map & honest match scores", "5 tailored recommendations / mo", "Résumé diagnostic — strengths & gaps", "Sign up as a mentor — offer help & earn"].map((t) => (
+                    <div key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}><span style={pTick}>✓</span><span style={{ fontSize: 14.5, color: "#B9B0A0" }}>{t}</span></div>
+                  ))}
+                </div>
+                <a className="lp-ghost" href="/api/auth/linkedin" style={priceBtn}>Start free</a>
+              </div>
+
+              {/* STARTER */}
+              <div style={priceCard}>
+                <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 22, color: HEADING }}>Starter</div>
+                <div style={{ fontSize: 13.5, color: "#8A8172", margin: "4px 0 20px" }}>About two coffees a month</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 22 }}><span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 44, color: "#F4EEE1", lineHeight: 1 }}>$9.99</span><span style={{ fontSize: 14, color: "#8A8172" }}>/mo</span></div>
+                <div style={{ height: 1, background: "rgba(230,210,170,0.09)", marginBottom: 20 }} />
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#948B7C", marginBottom: 14 }}>Everything in Free, plus</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 13, marginBottom: 28 }}>
+                  {["20 tailored recommendations / mo", "1 mentor call / mo", "2 warm intros / mo", "5 résumé edits / mo"].map((t) => (
+                    <div key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}><span style={pTick}>✓</span><span style={{ fontSize: 14.5, color: "#B9B0A0" }}>{t}</span></div>
+                  ))}
+                </div>
+                <a className="lp-ghost" href="/api/auth/linkedin" style={priceBtn}>Choose Starter</a>
+              </div>
+
+              {/* PRO */}
+              <div style={{ ...priceCard, position: "relative", background: "linear-gradient(#241C15, #211D18)", border: "1px solid rgba(216,142,106,0.42)", boxShadow: "0 30px 70px -44px rgba(216,142,106,0.5)" }}>
+                <div style={{ position: "absolute", top: -11, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#E39B72,#C15F3C)", color: "#221008", fontWeight: 800, fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", padding: "6px 14px", borderRadius: 999, whiteSpace: "nowrap" }}>Most chosen</div>
+                <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 22, color: "#F6EFE2" }}>Pro</div>
+                <div style={{ fontSize: 13.5, color: "#B79A82", margin: "4px 0 20px" }}>For an all-in search</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 22 }}><span style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 44, color: "#FBF4E9", lineHeight: 1 }}>$19.99</span><span style={{ fontSize: 14, color: "#B79A82" }}>/mo</span></div>
+                <div style={{ height: 1, background: "rgba(216,142,106,0.22)", marginBottom: 20 }} />
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#C79A7C", marginBottom: 14 }}>Everything in Starter, plus</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 13, marginBottom: 28 }}>
+                  {["50 tailored recommendations / mo", "5 mentor calls / mo", "5 warm intros / mo", "Unlimited résumé edits", "Early access to new roles as they surface"].map((t) => (
+                    <div key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}><span style={pTickWarm}>✓</span><span style={{ fontSize: 14.5, color: "#D6CCBB" }}>{t}</span></div>
+                  ))}
+                </div>
+                <a className="lp-cta" href="/api/auth/linkedin" style={{ marginTop: "auto", textAlign: "center", background: "linear-gradient(135deg,#E39B72,#C15F3C)", color: "#fff", fontWeight: 700, fontSize: 15, padding: "14px 20px", borderRadius: 12, boxShadow: "0 16px 34px -14px rgba(216,142,106,0.7)", display: "block" }}>Choose Pro</a>
+              </div>
+            </div>
+
+            {/* "I'm broke" mode */}
+            <div style={{ marginTop: "clamp(30px,4vw,44px)", maxWidth: 1040, marginLeft: "auto", marginRight: "auto", borderRadius: 20, border: "1px solid rgba(230,210,170,0.14)", background: "#1E1A15", padding: "clamp(28px,3.4vw,40px)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: "clamp(24px,4vw,44px)", alignItems: "center" }}>
+                {/* cinematic panel */}
+                <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", minHeight: 248, borderRadius: 16, overflow: "hidden", background: "linear-gradient(#100D09 0%, #16110C 48%, #241812 100%)", boxShadow: "inset 0 0 0 1px rgba(230,210,170,0.08), inset 0 -50px 100px -40px rgba(193,95,60,0.28)" }}>
+                  <div style={{ position: "absolute", left: "50%", bottom: "-14%", transform: "translateX(-50%)", width: "70%", height: "52%", borderRadius: "50%", background: "radial-gradient(circle, rgba(230,150,96,0.55), rgba(216,120,80,0.12) 55%, transparent 72%)", filter: "blur(6px)" }} />
+                  <div className="lp-rain" style={{ position: "absolute", inset: "-24px 0 0 0", backgroundImage: "repeating-linear-gradient(102deg, transparent 0, transparent 13px, rgba(230,220,205,0.05) 13px, rgba(230,220,205,0.05) 14px)", pointerEvents: "none" }} />
+                  <svg viewBox="0 0 400 320" preserveAspectRatio="xMidYMax meet" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} aria-hidden>
+                    <defs>
+                      <linearGradient id="pathG" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#E39B72" stopOpacity="0.55" /><stop offset="1" stopColor="#E39B72" stopOpacity="0" /></linearGradient>
+                      <linearGradient id="figRim" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#E39B72" stopOpacity="0" /><stop offset="1" stopColor="#F0B98C" stopOpacity="0.5" /></linearGradient>
+                    </defs>
+                    <path d="M200,300 C170,230 120,190 96,120" fill="none" stroke="url(#pathG)" strokeWidth="1.5" strokeDasharray="2 8" strokeLinecap="round" opacity="0.6" />
+                    <path d="M200,300 C232,232 282,192 306,120" fill="none" stroke="url(#pathG)" strokeWidth="1.5" strokeDasharray="2 8" strokeLinecap="round" opacity="0.6" />
+                    <path className="lp-pathpulse" d="M200,300 C200,224 200,180 200,108" fill="none" stroke="url(#pathG)" strokeWidth="2.4" strokeDasharray="3 7" strokeLinecap="round" />
+                    <circle cx="200" cy="104" r="4.5" fill="#F3C79C" /><circle cx="200" cy="104" r="10" fill="#F0B98C" opacity="0.25" />
+                    <g><path d="M181,196 C182,180 218,180 219,196 C223,220 222,252 220,276 C219,281 181,281 180,276 C178,252 177,220 181,196 Z" fill="#0B0806" /><ellipse cx="200" cy="181" rx="18" ry="21" fill="#0B0806" /><ellipse cx="200" cy="176" rx="13.5" ry="15" fill="#0B0806" /><path d="M181,196 C182,180 218,180 219,196 C223,220 222,252 220,276" fill="none" stroke="url(#figRim)" strokeWidth="1" /></g>
+                  </svg>
+                  <div style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 90px 30px rgba(8,6,5,0.7)", pointerEvents: "none" }} />
+                  <div style={{ position: "absolute", left: 0, right: 0, bottom: 18, textAlign: "center", padding: "0 20px", pointerEvents: "none" }}>
+                    <div style={{ fontFamily: '"Newsreader", Georgia, serif', fontStyle: "italic", fontSize: "clamp(14px,1.8vw,16px)", color: "#F1E3D3", textShadow: "0 2px 12px rgba(0,0,0,0.6)" }}>Which way now?</div>
+                  </div>
+                </div>
+                {/* content */}
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                    <Mark size={24} color="#B4AA98" />
+                    <h3 style={{ ...h2Serif, fontWeight: 500, fontSize: "clamp(25px,3.2vw,32px)", margin: 0, lineHeight: 1 }}>&ldquo;I&apos;m broke&rdquo; mode</h3>
+                  </div>
+                  <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "#A79E8D", margin: "16px 0 0" }}>Everything in Pro — free for now, pay it forward when you land. We built drizzle after watching good people face a lost job alone; this is that moment.</p>
+                  <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {["Full Pro access — no card required", "Pay it forward once you're back on your feet"].map((t) => (
+                      <div key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}><span style={pTickMono}>✓</span><span style={{ fontSize: 14.5, color: "#B9B0A0" }}>{t}</span></div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                    <a className="lp-ghost" href="/api/auth/linkedin" style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid rgba(230,210,170,0.28)", background: "rgba(230,210,170,0.06)", color: HEADING, fontWeight: 700, fontSize: 15, padding: "13px 24px", borderRadius: 12, whiteSpace: "nowrap" }}>Reach out <span style={{ color: "#B4AA98" }}>→</span></a>
+                    <span style={{ fontSize: 12.5, color: "#8A8172", maxWidth: 170 }}>Approved by a real person — usually same day.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ textAlign: "center", fontSize: 13.5, color: "#7C7365", margin: "26px auto 0", maxWidth: 520 }}>Cancel anytime — no lock-in, ever.</p>
           </div>
         </section>
 
@@ -295,6 +410,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <p style={{ fontSize: 18, color: "#A79E8D", margin: "0 0 36px", maxWidth: 460 }}>One sign-in with LinkedIn and your copilot starts learning who you&apos;re becoming.</p>
             <LinkedInCTA />
             <div style={{ fontSize: 13, color: "#7C7365", marginTop: 18 }}>We only read your name, email, and photo to set up your account.</div>
+
+            {/* aspirational figures — pop in one at a time, just below the CTA */}
+            <FamousPivots />
           </div>
         </section>
 
