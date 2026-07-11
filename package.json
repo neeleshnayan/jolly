@@ -12,7 +12,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "jobs:fetch": "tsx worker/fetch-jobs.ts",
-    "build:rank-core": "esbuild src/lib/opportunities/rank-core.ts --bundle --format=esm --platform=neutral --outfile=supabase/functions/rank/_core.mjs"
+    "build:rank-core": "esbuild src/lib/opportunities/rank-core.ts --bundle --format=esm --platform=neutral --outfile=supabase/functions/rank/_core.mjs",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
