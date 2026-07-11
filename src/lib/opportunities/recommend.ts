@@ -3,14 +3,13 @@
  * and pick a 3-role "spectrum" to prime the mentor before a call. Uses the
  * CACHED scoring vector (recomputed only when missing) so this is cheap.
  */
-import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
-import { db } from "@/db";
-import { certifications, education, experiences, insights, opportunities, profiles, rankingSignals, resumeThemes, skills } from "@/db/schema";
+import { sql } from "drizzle-orm";
+import { db, withScopedDb } from "@/db";
 import { deriveCandidateQuals, hardGate } from "./gates";
 import { applyQualOverrides } from "@/lib/profile/about";
-import { computeAndSaveScoring, getSavedScoring, recomputeScoringInBackground } from "@/lib/scoring/persist";
-import { getPreferences, type Preferences } from "@/lib/preferences";
-import { learnDrift, applyDrift, type LearnedDrift } from "./learn";
+import { computeAndSaveScoring, recomputeScoringInBackground } from "@/lib/scoring/persist";
+import { type Preferences } from "@/lib/preferences";
+import { distillSignals, applyDrift, type LearnedDrift } from "./learn";
 import { inferCurrency, inferCountry } from "@/lib/format/comp";
 import { toUSD, fmtMoney } from "@/lib/format/currency";
 import { scoreMatch } from "./match";
@@ -51,37 +50,6 @@ export type RankedJob = {
   gaps: string[];
   why: string;
 };
-
-async function userVector(userId: string, wait = false): Promise<ScoringVector | null> {
-  const saved = await getSavedScoring(userId);
-  // fresh cache → serve it.
-  if (saved.scoring && !saved.stale) return saved.scoring as unknown as ScoringVector;
-  // no vector at all (brand-new user) → must compute inline; there's nothing to
-  // show otherwise. Rare: it's computed on upload, so a vector normally exists.
-  if (!saved.scoring) {
-    try {
-      return (await computeAndSaveScoring(userId)) as unknown as ScoringVector;
-    } catch {
-      return null;
-    }
-  }
-  // stale, but we HAVE a usable vector. Reads must not block on the big-model
-  // recompute — serve the cached one now and refresh in the background so the
-  // next read is fresh. Only an explicit user Refresh (wait) pays to see the
-  // updated ranking immediately.
-  if (wait) {
-    try {
-      return (await computeAndSaveScoring(userId)) as unknown as ScoringVector;
-    } catch {
-      return saved.scoring as unknown as ScoringVector;
-    }
-  }
-  // NOT on Cloudflare: a floating background promise (no ctx.waitUntil) making
-  // network calls wedges the Worker isolate — the next request then fast-fails.
-  // Serve the cached vector; the 4090 box (or an explicit Refresh) recomputes it.
-  if (process.env.DEPLOY_TARGET !== "cloudflare") recomputeScoringInBackground(userId);
-  return saved.scoring as unknown as ScoringVector;
-}
 
 function whySummary(m: { fit: number; reasons: string[]; gaps: string[] }): string {
   const pct = Math.round(m.fit * 100);
@@ -190,142 +158,121 @@ function locationRefine(pref: Preferences, remote: string | null, location: stri
   return { factor, reason, gap, exclude: false as const };
 }
 
-export type RankOutcome = { matches: RankedJob[]; learning: { active: boolean; events: number; confidence: number } };
+export type RankOutcome = {
+  matches: RankedJob[];
+  learning: { active: boolean; events: number; confidence: number };
+  /** the user's skills as canonical keys — returned so callers (the matches
+   *  route's skill radar) don't need their own DB round-trips */
+  userSkillKeys: string[];
+};
 
 export async function rankMatches(userId: string): Promise<RankedJob[]> {
   return (await rankMatchesWithMeta(userId)).matches;
 }
 
 export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolean }): Promise<RankOutcome> {
-  const base = await userVector(userId, opts?.wait ?? false);
-  if (!base) return { matches: [], learning: { active: false, events: 0, confidence: 0 } };
-  // visibility: global roles for everyone + THIS user's private bookmarks
-  const [me] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  // ONE round-trip: every ranking input, gathered WHERE THE DATA LIVES — the
+  // get_ranking_inputs Postgres RPC (tools/create-ranking-rpc.ts). The old ~12-query
+  // fan-out was fine from Node, but from a Cloudflare Worker each query was an
+  // ocean round-trip to the DB region and the request kept blowing past the
+  // Workers hang limit (the intermittent matches 500s). The validated blend math
+  // below is unchanged — only the gathering moved into the DB.
+  type RpcPoolRow = {
+    id: string; title: string | null; company: string | null; location: string | null;
+    remote: string | null; compMin: number | null; compMax: number | null;
+    domain: string | null; url: string | null; source: string | null;
+    vector: unknown; facts: unknown; rawText: string | null; trajDist: number | null;
+  };
+  type RpcInputs = {
+    profile: { id: string; scoring: Record<string, unknown> | null; scoringStale: boolean | null; preferences: Preferences | null; aboutOverrides: unknown } | null;
+    experiences: { startDate: string | null }[];
+    education: { degree: string | null }[];
+    certifications: { name: string | null; issuer: string | null }[];
+    skills: string[];
+    themes: ({ kind?: string; role?: string; pending?: boolean } | null)[];
+    insights: { dimension: string; content: string | null }[];
+    signals: { kind: string; vector: unknown }[];
+    dismissed: string[];
+    pool: RpcPoolRow[];
+  };
+  // scoped client: on CF this is ONE fresh client → ONE query → end()-ed
+  // in-request, the strictest TCP discipline Workers allow (leftover sockets
+  // were poisoning isolates). On Node it's just the shared pool.
+  const rpcRes = (await withScopedDb((d) =>
+    d.execute(sql`SELECT get_ranking_inputs(${userId}::uuid, ${TRUSTED_MODELS}::text[], null) AS inputs`),
+  )) as unknown;
+  // postgres-js (Node) returns the row array directly; node-postgres (CF scoped
+  // client) returns a Result with .rows — normalize.
+  const rpcRows = (Array.isArray(rpcRes) ? rpcRes : (rpcRes as { rows: unknown[] }).rows) as { inputs: RpcInputs }[];
+  const inputs = rpcRows[0]?.inputs;
+  if (!inputs) return { matches: [], learning: { active: false, events: 0, confidence: 0 }, userSkillKeys: [] };
+  const me = inputs.profile;
+
+  // scoring vector: fresh cache → serve; missing (brand-new user) → compute inline;
+  // stale → serve cached + refresh in the background (Node only — a floating
+  // promise wedges a Worker isolate); explicit Refresh (wait) recomputes inline.
+  let base = (me?.scoring ?? null) as unknown as ScoringVector | null;
+  const stale = !!me?.scoringStale;
+  if (!base) {
+    try { base = (await computeAndSaveScoring(userId)) as unknown as ScoringVector; } catch { base = null; }
+  } else if (stale && opts?.wait) {
+    try { base = (await computeAndSaveScoring(userId)) as unknown as ScoringVector; } catch { /* keep cached */ }
+  } else if (stale && process.env.DEPLOY_TARGET !== "cloudflare") {
+    recomputeScoringInBackground(userId);
+  }
+  if (!base) return { matches: [], learning: { active: false, events: 0, confidence: 0 }, userSkillKeys: [] };
+
   // Layer 2: the mentor call is the prior, behavior is the evidence — drift a
   // rank-time COPY of the vector toward what they actually choose (±0.15 max)
-  const drift: LearnedDrift | null = me ? await learnDrift(me.id) : null;
+  const drift: LearnedDrift | null = me ? distillSignals(inputs.signals ?? []) : null;
   const vec = applyDrift(base, drift);
   // hard requirements are pass/fail — derive what this candidate can prove,
   // then apply any facts they've pinned on the About page (the user knows)
-  const [candExps, candEdu, candCerts, candProfile] = me
-    ? await Promise.all([
-        db.select({ startDate: experiences.startDate }).from(experiences).where(eq(experiences.profileId, me.id)),
-        db.select({ degree: education.degree }).from(education).where(eq(education.profileId, me.id)),
-        db.select({ name: certifications.name, issuer: certifications.issuer }).from(certifications).where(eq(certifications.profileId, me.id)),
-        db.select({ aboutOverrides: profiles.aboutOverrides }).from(profiles).where(eq(profiles.id, me.id)).limit(1),
-      ])
-    : [[], [], [], []];
   const quals = applyQualOverrides(
-    deriveCandidateQuals({ experiences: candExps, education: candEdu, certifications: candCerts }),
-    (candProfile[0]?.aboutOverrides ?? null) as Parameters<typeof applyQualOverrides>[1],
+    deriveCandidateQuals({ experiences: inputs.experiences ?? [], education: inputs.education ?? [], certifications: inputs.certifications ?? [] }),
+    (me?.aboutOverrides ?? null) as Parameters<typeof applyQualOverrides>[1],
   );
   // the direction agreed on the mentor call: when a call lands on a target
   // role, fillTargetTheme writes it — and the ranking should FOLLOW the call.
-  // Roles whose title/domain matches the agreed direction float up with an
-  // explicit "why" so the user sees the conversation change their list.
-  // direction, as NATURAL TEXT (the target role phrase + aspiration/value
-  // sentences) — the embedding wants meaning, not word-bags. The word-bags are
-  // still derived below for the lexical fallback + the "you set this" reason.
-  const targetRole: string = me
-    ? await db
-        .select({ latentAttributes: resumeThemes.latentAttributes })
-        .from(resumeThemes)
-        .where(eq(resumeThemes.profileId, me.id))
-        .then((rows) => rows.map((r) => r.latentAttributes as { kind?: string; role?: string; pending?: boolean } | null).find((a) => a?.kind === "target_role" && a.role && !a.pending)?.role ?? "")
-        .catch(() => "")
-    : "";
-  const aspireSents: string[] = me
-    ? await db
-        .select({ dimension: insights.dimension, content: insights.content })
-        .from(insights)
-        .where(eq(insights.profileId, me.id))
-        .orderBy(desc(insights.createdAt))
-        .limit(20)
-        .then((rows) => rows.filter((r) => r.dimension === "aspiration" || r.dimension === "value").slice(0, 3).map((r) => r.content ?? "").filter(Boolean))
-        .catch(() => [])
-    : [];
+  const targetRole: string = (inputs.themes ?? []).find((a) => a?.kind === "target_role" && a.role && !a.pending)?.role ?? "";
+  const aspireSents: string[] = (inputs.insights ?? [])
+    .filter((r) => r.dimension === "aspiration" || r.dimension === "value")
+    .slice(0, 3)
+    .map((r) => r.content ?? "")
+    .filter(Boolean);
   const targetWords = targetRole ? targetRole.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2) : [];
   const aspireWords = [...new Set(aspireSents.slice(0, 2).flatMap((s) => contentWords(s)))];
-  // embed the direction ONCE per ranking (~50ms) — reused across every role
+  // embed the direction ONCE per ranking (~50ms, local nomic) — on Cloudflare
+  // embed() fails fast → lexical trajectory fallback (see lib/embeddings)
   const directionText = directionEmbedText(targetRole, aspireSents);
   let directionVec: number[] | null = null;
   if (directionText) { try { directionVec = (await embed([directionText]))[0] ?? null; } catch { /* fall back to lexical */ } }
   // what the résumé PROVES — the evidence half of fit
-  const mySkills: string[] = me
-    ? await db
-        .select({ name: skills.name })
-        .from(skills)
-        .where(eq(skills.profileId, me.id))
-        .then((rows) => rows.map((r) => normSkill(r.name)).filter(Boolean))
-        .catch(() => [])
-    : [];
-  const visible = me
-    ? or(eq(opportunities.visibility, "global"), eq(opportunities.addedByProfileId, me.id))
-    : eq(opportunities.visibility, "global");
-  const [allRoles, pref] = await Promise.all([
-    // only vectorized roles — a pending row's empty vector would fake 0.5 on
-    // every axis and rank as a meaningless mid-pack match.
-    // only TRUSTED-model vectors — granite-era rows scored ~0.6 on every axis
-    // (see lib/jobs/vectorize), so ranking on them surfaced Sales-AE-for-an-
-    // engineer nonsense. Honest matching means a shorter real list that grows
-    // as the backfill re-does rows, not a long list ranked on mush. Samples
-    // (curated, hand-vectored) stay in regardless — they carry no model stamp.
-    // 500-row window: newest-first limit(100) was silently DROPPING older
-    // roles from ranking as new batches vectorized (they vanished from the
-    // user's list). Scoring is in-process arithmetic, so the real cost is
-    // payload — revisit with per-user precomputed scores past ~1k roles.
-    db
-      // Trajectory (semantic direction match) is computed IN POSTGRES via pgvector
-      // (`embedding_vec <=> :dir` → cosine distance), so the 768-float vectors never
-      // leave the DB — just one distance float per row. This killed the ~4MB payload
-      // that made the query slow/flaky through Hyperdrive on Workers, and it lets CF
-      // do real semantic trajectory (no embedding compute on the Worker). rawText is
-      // a legacy summary fallback (≤220 chars ever used), so cap it too.
-      .select({
-        id: opportunities.id,
-        title: opportunities.title,
-        company: opportunities.company,
-        location: opportunities.location,
-        remote: opportunities.remote,
-        compMin: opportunities.compMin,
-        compMax: opportunities.compMax,
-        domain: opportunities.domain,
-        url: opportunities.url,
-        source: opportunities.source,
-        vector: opportunities.vector,
-        facts: opportunities.facts,
-        rawText: sql<string | null>`left(${opportunities.rawText}, 300)`.as("rawText"),
-        trajDist: directionVec
-          ? sql<number | null>`embedding_vec <=> ${`[${directionVec.join(",")}]`}::vector`.as("trajDist")
-          : sql<number | null>`null`.as("trajDist"),
-      })
-      .from(opportunities)
-      .where(and(
-        isNotNull(opportunities.vectorizedAt),
-        or(inArray(opportunities.vectorizeModel, TRUSTED_MODELS), eq(opportunities.source, "sample")),
-        visible,
-      ))
-      .orderBy(desc(opportunities.createdAt))
-      .limit(500),
-    getPreferences(userId),
-  ]);
+  const mySkills: string[] = (inputs.skills ?? []).map((s) => normSkill(s)).filter(Boolean);
+  const pref: Preferences = (me?.preferences ?? {}) as Preferences;
+
+  // semantic trajectory: pgvector computes the cosine distance in-DB; this tiny
+  // follow-up returns (id, distance) pairs only — the 768-float vectors never
+  // leave Postgres. Node-only in practice (needs the direction embedding).
+  const distMap = new Map<string, number>();
+  if (directionVec && (inputs.pool ?? []).length) {
+    try {
+      const lit = `[${directionVec.join(",")}]`;
+      const ids = inputs.pool.map((p) => p.id);
+      const rows = (await db.execute(
+        sql`SELECT id, (embedding_vec <=> ${lit}::vector)::float8 AS d FROM opportunities WHERE id = ANY(${ids}::uuid[]) AND embedding_vec IS NOT NULL`,
+      )) as unknown as { id: string; d: number }[];
+      for (const r of rows) distMap.set(r.id, r.d);
+    } catch { /* lexical fallback */ }
+  }
+
   // "Not for me" is a promise: dismissed roles never rank again for this user.
-  const dismissed = me
-    ? new Set(
-        (
-          await db
-            .select({ opportunityId: rankingSignals.opportunityId })
-            .from(rankingSignals)
-            .where(and(eq(rankingSignals.profileId, me.id), eq(rankingSignals.kind, "dismiss")))
-        ).map((r) => r.opportunityId),
-      )
-    : new Set<string>();
   // Curated fixtures are a FALLBACK, not content: the moment real ATS-fetched
-  // roles exist, only real ones are ranked. (Samples stay in the DB so an empty
-  // deployment still demos, but users should never see them next to real jobs.)
-  const undismissed = allRoles.filter((r) => !dismissed.has(r.id));
+  // roles exist, only real ones are ranked.
+  const dismissed = new Set(inputs.dismissed ?? []);
+  const undismissed = (inputs.pool ?? []).filter((r) => !dismissed.has(r.id));
   const real = undismissed.filter((r) => r.source !== "sample");
-  const roles = real.length ? real : undismissed;
+  const roles = (real.length ? real : undismissed).map((r) => ({ ...r, trajDist: distMap.get(r.id) ?? null }));
   const ranked = roles
     .map((r) => {
       const v = (r.vector ?? {}) as OpportunityVector;
@@ -445,6 +392,7 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
   return {
     matches: [...head, ...tail],
     learning: { active: !!drift && drift.confidence > 0, events: drift?.events ?? 0, confidence: drift?.confidence ?? 0 },
+    userSkillKeys: mySkills,
   };
 }
 

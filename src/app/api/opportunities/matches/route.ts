@@ -7,9 +7,6 @@
  * (the explicit Refresh button) to wait for the fresh ranking.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { profiles, skills } from "@/db/schema";
 import { resolveUserId } from "@/lib/auth/user";
 import { rankMatchesWithMeta, pickSpectrum, type RankedJob } from "@/lib/opportunities/recommend";
 import { canonSkillKey } from "@/lib/skills/canon";
@@ -50,15 +47,28 @@ function skillRadar(matches: RankedJob[], userSkills: string[], learned: Map<str
 }
 
 export async function GET(req: NextRequest) {
+  // progress marks: `wrangler tail` shows exactly where a failing request dies
+  const t0 = Date.now();
+  const mark = (s: string) => console.log(`[matches] ${s} +${Date.now() - t0}ms`);
+  mark("start");
   const userId = await resolveUserId(req.nextUrl.searchParams.get("u"));
   if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-
+  mark("auth");
   const wait = req.nextUrl.searchParams.get("refresh") === "1";
-  const { matches, learning } = await rankMatchesWithMeta(userId, { wait });
+  const { matches, learning, userSkillKeys } = await rankMatchesWithMeta(userId, { wait });
+  mark(`ranked ${matches.length}`);
+  // diagnostic: same RPC + ranking, near-zero response payload — separates
+  // "DB call fails" from "response construction/size fails" on Workers
+  if (req.nextUrl.searchParams.get("lite") === "1") {
+    return NextResponse.json({ ok: true, count: matches.length, top: matches.slice(0, 3).map((m) => m.title) });
+  }
   const spectrum = pickSpectrum(matches);
-  const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
-  const mySkills = p ? await db.select({ name: skills.name }).from(skills).where(eq(skills.profileId, p.id)) : [];
-  const learned = await getLearnedSkillCasing(); // cached ~10 min; harvests casing from the pool
-  const radar = skillRadar(matches, mySkills.map((s) => s.name ?? ""), learned);
+  // userSkillKeys rides along from the ranking RPC — zero extra DB round-trips
+  // here. Learned casing is skipped on CF (its pool-wide scan is Node-cached;
+  // cosmetic only — canon + title-case fallback still applies).
+  const learned = process.env.DEPLOY_TARGET === "cloudflare" ? new Map<string, string>() : await getLearnedSkillCasing();
+  mark("casing");
+  const radar = skillRadar(matches, userSkillKeys, learned);
+  mark("done");
   return NextResponse.json({ ok: true, count: matches.length, matches, spectrum, learning, skillRadar: radar });
 }
