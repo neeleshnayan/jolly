@@ -15,6 +15,7 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^['"]|['"].*$/g, "");
 }
 process.env.LLM_PROVIDER_VECTORIZE = "ollama";
+process.env.EMBED_INLINE = "0"; // extract with gemma resident; embed in one pass after (no VRAM thrash)
 const arg = (k: string, d: number) => Number(process.argv.find((a) => a.startsWith(`--${k}=`))?.split("=")[1] ?? d);
 const N = arg("n", 100);
 const BATCH = arg("batch", 0); // 0 = no cooldown; else pause after every BATCH rows
@@ -63,6 +64,16 @@ async function main() {
       console.log(`  — cooldown ${COOLDOWN}s —`);
       await sleep(COOLDOWN);
     }
+  }
+  // Phase 2 — embeddings (nomic only, gemma idle → no eviction)
+  const { and, isNotNull, isNull, eq } = await import("drizzle-orm");
+  const { embed, roleEmbedText } = await import("../src/lib/embeddings");
+  const need = await db.select({ id: opportunities.id, title: opportunities.title, facts: opportunities.facts }).from(opportunities)
+    .where(and(isNotNull(opportunities.vectorizedAt), isNull(opportunities.embedding)));
+  console.log(`embedding pass: ${need.length} rows…`);
+  for (let i = 0; i < need.length; i += 32) {
+    const b = need.slice(i, i + 32);
+    try { const vecs = await embed(b.map((r) => roleEmbedText((r.facts ?? {}) as Record<string, never>, r.title))); await Promise.all(b.map((r, j) => (vecs[j] ? db.update(opportunities).set({ embedding: vecs[j] }).where(eq(opportunities.id, r.id)) : Promise.resolve()))); } catch { /* skip batch */ }
   }
   console.log(`\ndone: ${ok} ok, ${fail} failed. Now run: npx tsx tools/anchors.ts && npx tsx tools/match-sanity.ts`);
   process.exit(0);

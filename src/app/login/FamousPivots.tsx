@@ -60,6 +60,14 @@ export default function FamousPivots() {
   const g = GREATS[i];
   return (
     <div style={{ marginTop: "clamp(56px,8vw,90px)", width: "100%", maxWidth: 1120 }}>
+      {/* preload every portrait up front so each pop shows the photo instantly,
+          not a flash of initials while it lazy-loads */}
+      <div aria-hidden style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0, pointerEvents: "none" }}>
+        {GREATS.map((x) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={x.name} src={x.img} alt="" width={1} height={1} />
+        ))}
+      </div>
       <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#8A8172", marginBottom: 28 }}>Every career you admire began as an unlikely pivot</div>
       <div style={{ display: "flex", justifyContent: "center", minHeight: 176 }}>
         <div className="lp-pivot" style={{ width: 360, maxWidth: "100%", opacity: vis ? 1 : 0, transform: vis ? "translateY(0) scale(1)" : "translateY(10px) scale(0.97)", transition: "opacity 0.45s ease, transform 0.45s ease" }}>

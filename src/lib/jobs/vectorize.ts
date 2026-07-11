@@ -162,10 +162,15 @@ export function applyRowAuthority(out: OpportunityExtraction, row: RowMeta): voi
  *  prompt bump re-queue exactly the stale rows and nothing else. */
 export async function writeVectorization(id: string, out: OpportunityExtraction, model: string | null, row: RowMeta): Promise<void> {
   const facts = { ...out.facts, prompt_v: VECTORIZE_PROMPT_VERSION };
-  // semantic trajectory embedding — generated in the same write so the sweep
-  // fills it too. ~50ms; a failure must not lose the (expensive) extraction.
+  // semantic trajectory embedding. INLINE by default (single-row API path), but
+  // batch sweeps set EMBED_INLINE=0: on a 23GB card gemma3:27b already fills VRAM,
+  // so calling nomic between rows EVICTS gemma and forces a ~30s reload every row
+  // (the VRAM sawtooth). Batch runs skip it here and fill embeddings in one
+  // nomic-only pass afterwards, keeping gemma resident throughout extraction.
   let embedding: number[] | null = null;
-  try { embedding = (await embed([roleEmbedText(out.facts, row.title)]))[0] ?? null; } catch { /* fill later via embed backfill */ }
+  if (process.env.EMBED_INLINE !== "0") {
+    try { embedding = (await embed([roleEmbedText(out.facts, row.title)]))[0] ?? null; } catch { /* fill later via embed backfill */ }
+  }
   await db
     .update(opportunities)
     .set({
