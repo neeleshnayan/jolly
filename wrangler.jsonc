@@ -22,8 +22,7 @@
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "b860d77a3d36481393cbd3e35a5d911a" }
   ],
-  // DB-chatty app + Tokyo Supabase: let Cloudflare run the Worker NEAR THE DB
-  // instead of near the visitor — fewer long-haul round-trips per request.
-  "placement": { "mode": "smart" },
+  // (Smart Placement removed: the Worker no longer does heavy DB work — it fetches
+  // the Supabase Edge ranker, which lives next to the DB. Run near the visitor.)
   "observability": { "enabled": true }
 }
