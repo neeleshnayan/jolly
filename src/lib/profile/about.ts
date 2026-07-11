@@ -7,7 +7,10 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { education, experiences, profiles } from "@/db/schema";
-import { deriveCandidateQuals, DEGREES, type CandidateQuals, type Credential, type Degree } from "@/lib/opportunities/gates";
+import { deriveCandidateQuals, type Credential, type Degree } from "@/lib/opportunities/gates";
+// applyQualOverrides is pure math — it lives in rank-core (shared with the Deno
+// ranker). Re-exported here so its many importers are unaffected.
+export { applyQualOverrides } from "@/lib/opportunities/rank-core";
 
 export type AboutOverrides = {
   yearsExperience?: number;
@@ -34,21 +37,6 @@ const DEGREE_ORDER: (Degree | "none")[] = ["phd", "md", "jd", "mba", "masters", 
 export const highestOf = (creds: Set<Credential>): Degree | "none" =>
   DEGREE_ORDER.find((d): d is Degree => d !== "none" && creds.has(d)) ?? "none";
 
-/** The quals the ranking gates should use: derivation with pins applied.
- *  A pinned degree replaces the DEGREES only — licenses (CPA, bar, RN…) come
- *  from the certifications rail and survive the pin. */
-export function applyQualOverrides(derived: CandidateQuals, o: AboutOverrides | null): CandidateQuals {
-  if (!o) return derived;
-  let credentials = derived.credentials;
-  if (o.highestDegree !== undefined) {
-    credentials = new Set([...derived.credentials].filter((c) => !(DEGREES as readonly string[]).includes(c)));
-    if (o.highestDegree !== "none") credentials.add(o.highestDegree);
-  }
-  return {
-    yearsExperience: o.yearsExperience ?? derived.yearsExperience,
-    credentials,
-  };
-}
 
 export async function getAboutFacts(userId: string): Promise<AboutFacts | null> {
   const [p] = await db
