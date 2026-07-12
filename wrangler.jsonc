@@ -20,7 +20,7 @@
     "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFscmpraXF6bnZ2cm54YnZic3RjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxMDUzMzQsImV4cCI6MjA5ODY4MTMzNH0.H8VuLwo-xhqPJezH96V4MV4ZTKqQgDrXIIQDg_QYk6A",
     "DEEPGRAM_ALLOW_RAW": "1",
     "LLM_PROVIDER_MENTOR": "openrouter",
-    "OPENROUTER_MODEL": "google/gemma-4-31b-it:free",
+    "OPENROUTER_MODEL": "openai/gpt-4o-mini",
     "LLM_FALLBACK_LOCAL": "false",
     "OPENROUTER_APP_URL": "https://drizzle.drizzlenetwork.workers.dev",
     "VOICE_PROVIDER": "deepgram"

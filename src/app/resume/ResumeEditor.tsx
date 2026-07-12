@@ -630,7 +630,7 @@ export default function ResumeEditor({
       .catch(() => {});
   }, [userId]);
   const wrapBullets = (arr: string[]) => arr.map((t) => ({ text: `<p>${t}</p>` }));
-  async function redesign(jd?: string, onlyKeywords?: string[], guidance?: string[]) {
+  async function redesign(jd?: string, onlyKeywords?: string[], guidance?: string[], addedSkills?: Skill[]) {
     setRedesigning(true);
     setRedesignErr("");
     try {
@@ -654,8 +654,12 @@ export default function ResumeEditor({
       const content = j.content ?? { experiences: [], projects: [] };
       const em = new Map<string, string[]>(content.experiences.map((c: { id: string; bullets: string[] }) => [c.id, c.bullets]));
       const pm = new Map<string, string[]>(content.projects.map((c: { id: string; bullets: string[] }) => [c.id, c.bullets]));
+      // include skills the wizard just added (their setData hasn't landed in
+      // `data` yet) so PROPOSED matches CURRENT — deduped by id
+      const extraSkills = (addedSkills ?? []).filter((a) => !data.skills.some((s) => s.id === a.id));
       const proposed: FullProfile = {
         ...data,
+        skills: [...data.skills, ...extraSkills],
         profile: { ...data.profile, styleConfig: style },
         experiences: data.experiences.map((e) => (em.has(e.id) ? { ...e, bullets: wrapBullets(em.get(e.id)!) } : e)),
         projects: data.projects.map((p) => (pm.has(p.id) ? { ...p, bullets: wrapBullets(pm.get(p.id)!) } : p)),
@@ -904,7 +908,7 @@ export default function ResumeEditor({
 
   /** Used ONLY from the wizard, where the user explicitly ticked the skill —
    *  their attestation, not the model's guess. */
-  async function addSkillExplicit(name: string) {
+  async function addSkillExplicit(name: string): Promise<Skill | null> {
     const res = await fetch("/api/profile/entry", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -912,9 +916,11 @@ export default function ResumeEditor({
     });
     const json = await res.json();
     if (!json.id) throw new Error(json.error || "Add failed");
-    setData((d) => ({ ...d, skills: [...d.skills, { id: json.id, name, category: null }] }));
+    const skill: Skill = { id: json.id, name, category: null };
+    setData((d) => ({ ...d, skills: [...d.skills, skill] }));
     save("skill", json.id, { name });
     setSkillRadar((r) => r.map((e) => (e.skill === name ? { ...e, have: true } : e)));
+    return skill; // returned so the redesign can include it without a stale-closure race
   }
 
   // ---- the redesign wizard: target → skills → tips → run ----
@@ -927,8 +933,11 @@ export default function ResumeEditor({
     setWizardOpen(false);
     setStatus("Preparing redesign…");
     try {
-      // 1) the user's ticked skills — explicit attestation, added for real
-      for (const s of cfg.addSkills) await addSkillExplicit(s);
+      // 1) the user's ticked skills — explicit attestation, added for real.
+      //    Collect them so the redesign includes them in PROPOSED directly (the
+      //    setData above hasn't re-rendered by the time redesign reads `data`).
+      const addedSkills: Skill[] = [];
+      for (const s of cfg.addSkills) { const sk = await addSkillExplicit(s); if (sk) addedSkills.push(sk); }
       // 2) resolve the target JD (a picked opportunity reuses the apply-kit read)
       let jdText = cfg.pastedJd?.trim() || undefined;
       let jobTitle: string | undefined;
@@ -940,7 +949,7 @@ export default function ResumeEditor({
       // set BEFORE the slow letter draft — the user may accept the diff first
       pendingHandoff.current = cfg.opportunityId && jobTitle ? { id: cfg.opportunityId, title: jobTitle, letter: false } : null;
       setStatus("");
-      await redesign(jdText, cfg.addSkills.length ? cfg.addSkills : undefined, cfg.guidance);
+      await redesign(jdText, cfg.addSkills.length ? cfg.addSkills : undefined, cfg.guidance, addedSkills);
       // 3) the letter drafts while the diff is on screen; it lands in the ✉ tab
       //    with its own saved version — a failed letter never voids the redesign
       if (cfg.wantLetter) {

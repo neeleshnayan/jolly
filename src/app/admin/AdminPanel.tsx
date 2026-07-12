@@ -642,7 +642,7 @@ export default function AdminPanel() {
             <b>bge-m3 embeddings</b>
             <span className="admin-note" style={{ margin: 0 }}>
               {bge
-                ? `${(bge.total ?? 0) - bge.bgeNeeded}/${bge.total ?? 0} embedded · ${bge.bgeNeeded} to go · ${bge.gemma4Needed} need gemma4 first`
+                ? `${(bge.total ?? 0) - bge.bgeNeeded}/${bge.total ?? 0} embedded · ${bge.bgeNeeded} to go${bge.gemma4Needed ? ` · ${bge.gemma4Needed} on an older extractor (fine for bge)` : ""}`
                 : "loading…"}
             </span>
             <label className="admin-knob">
