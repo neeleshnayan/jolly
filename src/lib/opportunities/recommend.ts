@@ -28,6 +28,17 @@ function rows<T>(res: unknown): T[] {
   return (Array.isArray(res) ? res : (res as { rows: unknown[] }).rows) as T[];
 }
 
+/**
+ * drizzle's `sql` expands an interpolated JS array into a param LIST `($1,$2,…)`,
+ * which Postgres reads as a `record` — so `${jsArray}::text[]` throws 42846
+ * "cannot cast type record to text[]". Bind a Postgres array LITERAL as a single
+ * scalar param instead, then cast THAT (`$1::text[]` / `$1::uuid[]` are valid).
+ * Elements are double-quoted (safe for text[], uuid[], etc.) and escaped.
+ */
+function pgArrayLit(xs: readonly string[]): string {
+  return `{${xs.map((x) => `"${String(x).replace(/(["\\])/g, "\\$1")}"`).join(",")}}`;
+}
+
 export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolean }): Promise<RankOutcome> {
   const empty: RankOutcome = { matches: [], learning: { active: false, events: 0, confidence: 0 }, userSkillKeys: [] };
   // ONE round-trip: every ranking input, gathered WHERE THE DATA LIVES — the
@@ -35,7 +46,7 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
   // gives CF a fresh, in-request-closed client (leftover sockets poisoned isolates);
   // on Node it's the shared pool.
   const rpcRes = await withScopedDb((d) =>
-    d.execute(sql`SELECT get_ranking_inputs(${userId}::uuid, ${TRUSTED_MODELS}::text[], null) AS inputs`),
+    d.execute(sql`SELECT get_ranking_inputs(${userId}::uuid, ${pgArrayLit(TRUSTED_MODELS)}::text[], null) AS inputs`),
   );
   const inputs = rows<{ inputs: RpcInputs }>(rpcRes)[0]?.inputs;
   if (!inputs) return empty;
@@ -70,7 +81,7 @@ export async function rankMatchesWithMeta(userId: string, opts?: { wait?: boolea
         const lit = `[${directionVec.join(",")}]`;
         const ids = inputs.pool.map((p) => p.id);
         const distRes = await withScopedDb((d) =>
-          d.execute(sql`SELECT id, (embedding_vec <=> ${lit}::vector)::float8 AS d FROM opportunities WHERE id = ANY(${ids}::uuid[]) AND embedding_vec IS NOT NULL`),
+          d.execute(sql`SELECT id, (embedding_vec <=> ${lit}::vector)::float8 AS d FROM opportunities WHERE id = ANY(${pgArrayLit(ids)}::uuid[]) AND embedding_vec IS NOT NULL`),
         );
         const distMap = new Map(rows<{ id: string; d: number }>(distRes).map((r) => [r.id, r.d]));
         for (const p of inputs.pool) p.trajDist = distMap.get(p.id) ?? p.trajDist ?? null;
