@@ -9,6 +9,9 @@ import { resolveUserId } from "@/lib/auth/user";
 
 export const runtime = "nodejs";
 
+// dev always allows the raw-key fallback; prod only when explicitly opted in.
+const allowRaw = () => process.env.NODE_ENV !== "production" || process.env.DEEPGRAM_ALLOW_RAW === "1";
+
 export async function GET() {
   if (!(await resolveUserId(null))) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const key = process.env.DEEPGRAM_API_KEY;
@@ -25,13 +28,16 @@ export async function GET() {
       return NextResponse.json({ token: j.access_token, expiresIn: j.expires_in, raw: false });
     }
     const errText = (await r.text()).slice(0, 200);
-    if (process.env.NODE_ENV !== "production") {
+    // Demo escape hatch: DEEPGRAM_ALLOW_RAW=1 lets prod fall back to the raw key
+    // when grant is forbidden (the key's role can't mint scoped tokens). Ships the
+    // key to the client — only acceptable for a throwaway/auto-expiring demo key.
+    if (allowRaw()) {
       return NextResponse.json({ token: key, raw: true, grantError: `grant ${r.status}: ${errText}` });
     }
     return NextResponse.json({ error: `grant ${r.status}: ${errText}` }, { status: 502 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (process.env.NODE_ENV !== "production") return NextResponse.json({ token: key, raw: true, grantError: msg });
+    if (allowRaw()) return NextResponse.json({ token: key, raw: true, grantError: msg });
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

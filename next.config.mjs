@@ -8,6 +8,9 @@
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 
 const nextConfig = {
+  // NOTE: OpenNext hardcodes `.next` (reads .next/required-server-files.json), so
+  // a custom distDir doesn't work — the CF build shares .next with `next dev`.
+  // Consequence: a CF build corrupts a running dev server; restart dev after.
   // pdf/docx parsers + native canvas are node libs — keep them out of the bundler.
   // On CF the native ones are aliased to empty (below), so they must NOT also be
   // in serverExternalPackages (external wins over the alias → the require survives

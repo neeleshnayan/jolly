@@ -19,7 +19,9 @@ const VISION_MODEL = process.env.RESUME_VISION_MODEL ?? "llama3.2-vision";
 // prod runs vision on Cloudflare Workers AI; local dev on Ollama. (llama3.2-vision
 // is dead on this local Ollama — mllama arch — so local uses gemma4; CF runs the
 // real llama-3.2-11b-vision. See the compute-split note.)
-const VISION_PROVIDER = (process.env.RESUME_VISION_PROVIDER ?? "ollama").toLowerCase();
+// Same demarcation as the LLM: localhost → ollama; Cloudflare → OpenRouter
+// (gemma-4 multimodal, off the CF neuron cap). Explicit RESUME_VISION_PROVIDER wins.
+const VISION_PROVIDER = (process.env.RESUME_VISION_PROVIDER ?? (process.env.DEPLOY_TARGET === "cloudflare" ? "openrouter" : "ollama")).toLowerCase();
 const CF_VISION_MODEL = process.env.CF_VISION_MODEL ?? "@cf/meta/llama-3.2-11b-vision-instruct";
 
 /** Whether the vision parse path is enabled. */
@@ -68,10 +70,42 @@ async function transcribeViaCloudflare(imagesBase64: string[]): Promise<string> 
   return (j.choices?.[0]?.message?.content ?? "").trim();
 }
 
+/** OpenRouter vision transcription (gemma-4 multimodal — off the CF neuron cap). */
+async function transcribeViaOpenRouter(imagesBase64: string[]): Promise<string> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY not set for vision");
+  const model = process.env.OPENROUTER_VISION_MODEL ?? process.env.OPENROUTER_MODEL ?? "google/gemma-4-26b-a4b-it:free";
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${key}`,
+      "content-type": "application/json",
+      ...(process.env.OPENROUTER_APP_URL ? { "HTTP-Referer": process.env.OPENROUTER_APP_URL } : {}),
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...imagesBase64.map((b) => ({ type: "image_url" as const, image_url: { url: `data:image/png;base64,${b}` } })),
+            { type: "text" as const, text: TRANSCRIBE_PROMPT },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenRouter vision ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return (j.choices?.[0]?.message?.content ?? "").trim();
+}
+
 /** One vision call → the page's Markdown. Per-page (not multi-image) so it stays
- *  robust across vision models that handle a single image best. Routes to CF in
- *  prod (RESUME_VISION_PROVIDER=cloudflare), Ollama locally. */
+ *  robust across vision models that handle a single image best. Prod → OpenRouter,
+ *  local → Ollama (CF Workers AI still available via RESUME_VISION_PROVIDER). */
 async function transcribeImages(imagesBase64: string[]): Promise<string> {
+  if (VISION_PROVIDER === "openrouter") return transcribeViaOpenRouter(imagesBase64);
   if (VISION_PROVIDER === "cloudflare") return transcribeViaCloudflare(imagesBase64);
   const res = await fetch(`${BASE}/api/chat`, {
     method: "POST",

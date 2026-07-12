@@ -3,8 +3,7 @@
  * stash it in a short-lived cookie (CSRF guard), and redirect to LinkedIn.
  */
 import { NextResponse } from "next/server";
-import crypto from "crypto";
-import { authorizeUrl, linkedinConfigured } from "@/lib/auth/linkedin";
+import { authorizeUrl, linkedinConfigured, makeState } from "@/lib/auth/linkedin";
 
 export const runtime = "nodejs";
 
@@ -12,7 +11,9 @@ export async function GET() {
   if (!linkedinConfigured()) {
     return NextResponse.json({ error: "LinkedIn is not configured" }, { status: 500 });
   }
-  const state = crypto.randomUUID();
+  // Signed, self-verifying state (survives cookie-less mobile Safari). The cookie
+  // is still set as a secondary desktop check but is no longer load-bearing.
+  const state = makeState();
   const res = NextResponse.redirect(authorizeUrl(state));
   res.cookies.set("li_state", state, {
     httpOnly: true,

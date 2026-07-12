@@ -20,7 +20,11 @@ const PROVIDERS: Record<string, LLMProvider> = {
  */
 export function getProvider(task?: string): LLMProvider {
   const specific = task ? process.env[`LLM_PROVIDER_${task.toUpperCase()}`] : undefined;
-  const name = (specific ?? process.env.LLM_PROVIDER ?? "ollama").toLowerCase();
+  // Clean dev/prod demarcation: localhost → ollama (local, free); Cloudflare →
+  // openrouter (no ollama in a Worker). DEPLOY_TARGET is the ONE switch; an
+  // explicit LLM_PROVIDER / LLM_PROVIDER_<TASK> still overrides it.
+  const envDefault = process.env.DEPLOY_TARGET === "cloudflare" ? "openrouter" : "ollama";
+  const name = (specific ?? process.env.LLM_PROVIDER ?? envDefault).toLowerCase();
   const provider = PROVIDERS[name];
   if (!provider) throw new Error(`Unknown LLM provider: ${name}`);
   return withLocalFallback(provider);
@@ -36,7 +40,10 @@ export function getProvider(task?: string): LLMProvider {
  * LLM_FALLBACK_LOCAL=false.
  */
 function withLocalFallback(primary: LLMProvider): LLMProvider {
-  if (primary.name === "ollama" || process.env.LLM_FALLBACK_LOCAL === "false") return primary;
+  // On Cloudflare there IS no local ollama (falling back to localhost:11434 gets a
+  // CF 1003), so never wrap the fallback there — a primary failure must surface,
+  // not chase an unreachable host. This is what broke "redesign with AI" on prod.
+  if (primary.name === "ollama" || process.env.DEPLOY_TARGET === "cloudflare" || process.env.LLM_FALLBACK_LOCAL === "false") return primary;
   return {
     ...primary,
     async extractStructured(req) {
