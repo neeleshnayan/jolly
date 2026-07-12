@@ -29,11 +29,18 @@ import { embed, roleEmbedText } from "@/lib/embeddings";
 // gemma3 runs end to end (~27s/JD); the tiered seam stays so a future small
 // model that PASSES the flatness audit (tools/vector-flatness.ts) can slot back
 // into FAST via env without touching code.
-export const FAST_MODEL = process.env.VECTORIZE_FAST_MODEL ?? "gemma3:27b";
-export const STRONG_MODEL = process.env.VECTORIZE_STRONG_MODEL ?? "gemma3:27b";
+// gemma4:26b — bakeoff-validated ~= gemma3:27b quality at ~3x speed (~10s/role
+// vs ~31s). Switched the crunch to it; gemma3:27b stays TRUSTED below so the
+// existing (gemma3-stamped) pool keeps ranking while we re-crunch to gemma4.
+export const FAST_MODEL = process.env.VECTORIZE_FAST_MODEL ?? "gemma4:26b";
+export const STRONG_MODEL = process.env.VECTORIZE_STRONG_MODEL ?? "gemma4:26b";
 /** Models whose stored vectors we currently trust — the backfill redoes any row
- *  stamped by a model NOT in this set (e.g. every granite-era row). */
-export const TRUSTED_MODELS = [...new Set([FAST_MODEL, STRONG_MODEL])];
+ *  stamped by a model NOT in this set (e.g. every granite-era row). gemma3:27b is
+ *  kept here through the gemma3→gemma4 transition so the current pool still ranks;
+ *  drop it (this constant → just FAST/STRONG) once every row is re-crunched on
+ *  gemma4 (force-backfill the whole pool — now practical at 3x speed). */
+export const LEGACY_TRUSTED = ["gemma3:27b"];
+export const TRUSTED_MODELS = [...new Set([FAST_MODEL, STRONG_MODEL, ...LEGACY_TRUSTED])];
 const CTX = Number(process.env.OLLAMA_VECTORIZE_NUM_CTX ?? 16384);
 const JD_CHARS = Number(process.env.OLLAMA_VECTORIZE_JD_CHARS ?? 16000);
 

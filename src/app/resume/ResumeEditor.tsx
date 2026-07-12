@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { apiFetch } from "@/lib/client/api-fetch";
 import { downloadOrPrintPdf } from "@/lib/client/pdf";
+import { liveAts } from "@/lib/client/ats";
 import AtsRing from "../AtsRing";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -896,6 +897,11 @@ export default function ResumeEditor({
       return { ...r, have: mine.some((m) => m === k || m.includes(k) || k.includes(m)) };
     });
   })();
+  // live ATS: the server extracted the JD's keywords once; re-run the SAME
+  // hit-test (lib/client/ats — byte-identical) against the current résumé so the
+  // ✓/✗ chips and score move as you edit, no re-check round-trip.
+  const displayAts = ats ? liveAts(ats, data as unknown as Parameters<typeof liveAts>[1]) : null;
+
   /** Used ONLY from the wizard, where the user explicitly ticked the skill —
    *  their attestation, not the model's guess. */
   async function addSkillExplicit(name: string) {
@@ -1911,23 +1917,23 @@ export default function ResumeEditor({
                       </button>
                     </div>
                     {letterErr && <div className="ai-err">{letterErr}</div>}
-                    {ats && (
+                    {displayAts && (
                       <div className="ats-result">
                         <div className="ats-score-row">
-                          <AtsRing score={ats.score} />
+                          <AtsRing score={displayAts.score} />
                           <span className="ats-score-side">
                             <span className="ats-score-label">keyword match — what a screen sees, not what you&apos;re worth</span>
                             {atsPrev && (
-                              <span className={`ats-delta ${ats.score > atsPrev.score ? "up" : ats.score < atsPrev.score ? "down" : ""}`}>
-                                {ats.score === atsPrev.score
+                              <span className={`ats-delta ${displayAts.score > atsPrev.score ? "up" : displayAts.score < atsPrev.score ? "down" : ""}`}>
+                                {displayAts.score === atsPrev.score
                                   ? `unchanged since last check`
-                                  : `${atsPrev.score}% last check → ${ats.score > atsPrev.score ? "+" : ""}${ats.score - atsPrev.score}`}
+                                  : `${atsPrev.score}% last check → ${displayAts.score > atsPrev.score ? "+" : ""}${displayAts.score - atsPrev.score}`}
                               </span>
                             )}
                           </span>
                         </div>
                         <div className="ats-chips">
-                          {ats.required.map((k, i) => (
+                          {displayAts.required.map((k, i) => (
                             <span key={`r${i}`} className={`ats-chip ${k.hit ? "hit" : "miss"}`} title={k.hit ? "on your résumé" : "missing — add it if it's true"}>
                               {k.hit ? "✓" : "✗"} {k.term}
                               {!k.hit && (
@@ -1942,7 +1948,7 @@ export default function ResumeEditor({
                               )}
                             </span>
                           ))}
-                          {ats.preferred.map((k, i) => (
+                          {displayAts.preferred.map((k, i) => (
                             <span key={`p${i}`} className={`ats-chip pref ${k.hit ? "hit" : "miss"}`} title="nice-to-have">
                               {k.hit ? "✓" : "○"} {k.term}
                               {!k.hit && (
@@ -1958,13 +1964,13 @@ export default function ResumeEditor({
                             </span>
                           ))}
                         </div>
-                        {ats.required.some((k) => !k.hit) && (
+                        {displayAts.required.some((k) => !k.hit) && (
                           <div className="ats-note">
                             ✎ weaves one term into bullets that already prove it; <b>Tailor résumé</b> weaves all of them.
                             Missing something you actually have? Add it — never claim what isn&apos;t true.
                           </div>
                         )}
-                        <div className="ats-recheck-hint">After applying a rewrite, run the check again to see the score move.</div>
+                        <div className="ats-recheck-hint">✓/✗ and the score update live as you edit. Re-run only to refresh keywords for a different JD.</div>
                       </div>
                     )}
                   </div>
@@ -2026,10 +2032,10 @@ export default function ResumeEditor({
           targets={targetOptions}
           missingSkills={liveRadar.filter((r) => !r.have)}
           jobGaps={
-            ats
+            displayAts
               ? [
-                  ...ats.required.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "required" as const })),
-                  ...ats.preferred.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "preferred" as const })),
+                  ...displayAts.required.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "required" as const })),
+                  ...displayAts.preferred.filter((k) => !k.hit).map((k) => ({ term: k.term, kind: "preferred" as const })),
                 ]
                   // drop duration/experience/credential REQUIREMENTS — they're not
                   // skills you can tick "genuinely yours" and add to your Skills
