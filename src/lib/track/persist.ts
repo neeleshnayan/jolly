@@ -62,7 +62,30 @@ export async function ensureStarterThemes(userId: string) {
  *  the pending TBD seed, and creating one if neither exists. The old version only
  *  matched the TBD *name*, so call 2+ (after the theme was renamed) silently
  *  no-op'd and the ranking direction froze at whatever call 1 decided. */
-export async function fillTargetTheme(userId: string, role: string, rationale: string) {
+/**
+ * A JD is not a direction. Distill a role LABEL (often a specific posting title —
+ * "Senior GTM Engineer, Marketing Operations (Remote, UK&I) — Fixed Term @ Webflow")
+ * into a durable career-TRAJECTORY phrase ("Senior GTM Engineer, Marketing
+ * Operations"): drop the company, office/location, and employment-type noise;
+ * keep role family + domain + altitude. Deterministic (no LLM) so it's free +
+ * instant. Domain parens like "(Web3/FinTech)" are kept — that's trajectory, not
+ * noise. This is the "keywords that resonate as a trajectory" seam.
+ */
+const LOC_OR_TYPE = /\b(remote|hybrid|onsite|on-site|contract|fixed[-\s]?term|full[-\s]?time|part[-\s]?time|intern(ship)?|temp(orary)?|uk&?i|emea|apac|amer|us|usa|uk|india|london|nyc|new york|san francisco|sf|bangalore|bengaluru|remote-first|w-?2|c2c)\b/i;
+export function distillDirection(raw: string): string {
+  let s = (raw || "").trim();
+  s = s.split(/\s+@\s+/)[0]; // drop "@ Company"
+  // drop parens ONLY when they're location/employment noise (keep domain parens)
+  s = s.replace(/\s*\(([^)]*)\)/g, (m, inner) => (LOC_OR_TYPE.test(inner) ? "" : m));
+  // drop a trailing "— Fixed Term / - Remote / – 6 months" style tail
+  s = s.replace(/\s*[-–—]\s*[^-–—]*$/g, (m) => (LOC_OR_TYPE.test(m) || /\d+\s*months?/i.test(m) ? "" : m));
+  s = s.replace(/,?\s*\b(remote|hybrid|onsite)\b/gi, ""); // stray work-mode words
+  s = s.replace(/\s{2,}/g, " ").replace(/[\s,–—-]+$/g, "").trim();
+  return s || raw.trim();
+}
+
+export async function fillTargetTheme(userId: string, rawRole: string, rationale: string) {
+  const role = distillDirection(rawRole); // JD → trajectory
   const pid = await profileIdFor(userId);
   const themes = await db
     .select({ id: resumeThemes.id, name: resumeThemes.name, latentAttributes: resumeThemes.latentAttributes })
