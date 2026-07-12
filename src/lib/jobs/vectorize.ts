@@ -41,6 +41,11 @@ export const STRONG_MODEL = process.env.VECTORIZE_STRONG_MODEL ?? "gemma4:26b";
  *  gemma4 (force-backfill the whole pool — now practical at 3x speed). */
 export const LEGACY_TRUSTED = ["gemma3:27b"];
 export const TRUSTED_MODELS = [...new Set([FAST_MODEL, STRONG_MODEL, ...LEGACY_TRUSTED])];
+/** integer-column guard: round decimals, drop NaN/±Inf/null → null */
+const toInt = (v: unknown): number | null => {
+  const n = Number(v);
+  return v == null || !Number.isFinite(n) ? null : Math.round(n);
+};
 const CTX = Number(process.env.OLLAMA_VECTORIZE_NUM_CTX ?? 16384);
 const JD_CHARS = Number(process.env.OLLAMA_VECTORIZE_JD_CHARS ?? 16000);
 
@@ -185,8 +190,10 @@ export async function writeVectorization(id: string, out: OpportunityExtraction,
       facts,
       ...(embedding ? { embedding } : {}),
       remote: out.facts.remote ?? undefined,
-      compMin: out.facts.comp_min ?? null,
-      compMax: out.facts.comp_max ?? null,
+      // comp_* are integer columns; models occasionally emit a decimal
+      // (e.g. gemma4 → "63003.2"), which Postgres rejects. Round to int.
+      compMin: toInt(out.facts.comp_min),
+      compMax: toInt(out.facts.comp_max),
       companyStage: out.facts.company_stage,
       domain: out.facts.domain || null,
       vectorizedAt: sql`now()`,
