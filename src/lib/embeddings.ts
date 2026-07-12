@@ -49,6 +49,43 @@ export async function embed(texts: string[]): Promise<number[][]> {
   return ((await r.json()) as { embeddings: number[][] }).embeddings;
 }
 
+// bge-m3 (1024d) — the model we run BOTH sides so cosines are comparable: local
+// ollama for bulk pool embedding (free, on the 4090), CF Workers AI for the
+// real-time per-user direction embed (CF has no ollama). bge is symmetric — no
+// search_query/document prefixes (unlike nomic), so callers pass plain text.
+const BGE_MODEL = process.env.EMBED_BGE_MODEL ?? "bge-m3"; // ollama tag
+const OR_BGE_MODEL = process.env.OPENROUTER_BGE_MODEL ?? "baai/bge-m3"; // OpenRouter slug
+
+/** Batch-embed with bge-m3 → 1024d vectors (the `embedding_bge` column). Cloud
+ *  path is OpenRouter (same model as the local pool → comparable cosines, and it
+ *  sidesteps CF's Workers-AI neuron cap); local path is ollama. Routes to
+ *  OpenRouter on CF (no ollama there) or when EMBED_PROVIDER=openrouter. */
+export async function embedBge(texts: string[]): Promise<number[][]> {
+  if (!texts.length) return [];
+  const useOpenRouter = process.env.EMBED_PROVIDER === "openrouter" || process.env.DEPLOY_TARGET === "cloudflare";
+  if (useOpenRouter) {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key) throw new Error("OpenRouter bge: OPENROUTER_API_KEY missing");
+    const r = await fetch("https://openrouter.ai/api/v1/embeddings", {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: OR_BGE_MODEL, input: texts }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) throw new Error(`openrouter bge ${r.status}: ${(await r.text()).slice(0, 150)}`);
+    const j = (await r.json()) as { data: { embedding: number[]; index: number }[] };
+    return j.data.slice().sort((a, b) => a.index - b.index).map((d) => d.embedding); // preserve input order
+  }
+  const r = await fetch(`${BASE}/api/embed`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: BGE_MODEL, input: texts }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!r.ok) throw new Error(`bge embed ${r.status}`);
+  return ((await r.json()) as { embeddings: number[][] }).embeddings;
+}
+
 /** The text that REPRESENTS a role for trajectory matching — what it IS, not
  *  its rubric scores. Title + plain-English summary + skills. */
 export function roleEmbedText(facts: { title?: string; summary?: string; must_have_skills?: string[]; domain?: string }, title?: string | null): string {

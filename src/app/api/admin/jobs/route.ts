@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
   const model = p.get("model") ?? ""; // exact model, or "none" for un-stamped
   const missing = p.get("missing") ?? ""; // comp | yoe | remote — field is empty
   const flagged = p.get("flagged") === "1"; // needs_review self-flag
+  const embed = p.get("embed") ?? ""; // bge | none — bge-embedding status
 
   const conds: SQL[] = [];
   if (status === "pending") conds.push(isNull(opportunities.vectorizedAt));
@@ -66,6 +67,8 @@ export async function GET(req: NextRequest) {
   if (missing === "yoe") conds.push(sql`(${opportunities.facts} ->> 'min_years_experience') is null`);
   if (missing === "remote") conds.push(or(isNull(opportunities.remote), eq(opportunities.remote, "unknown"))!);
   if (flagged) conds.push(sql`(${opportunities.facts} ->> 'needs_review')::boolean is true`);
+  if (embed === "bge") conds.push(sql`embedding_bge is not null`);
+  else if (embed === "none") conds.push(sql`embedding_bge is null and vectorized_at is not null`);
   const where = conds.length ? and(...conds) : undefined;
 
   // sequential on one warm socket (see metrics route — the pooler punishes
@@ -89,6 +92,7 @@ export async function GET(req: NextRequest) {
       promptV: sql<number | null>`(${opportunities.facts} ->> 'prompt_v')::int`,
       needsReview: sql<boolean>`coalesce((${opportunities.facts} ->> 'needs_review')::boolean, false)`,
       hasEmbedding: sql<boolean>`${opportunities.embedding} is not null`,
+      hasBge: sql<boolean>`embedding_bge is not null`,
     })
     .from(opportunities)
     .where(where)

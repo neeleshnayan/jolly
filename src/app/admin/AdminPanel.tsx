@@ -72,6 +72,7 @@ type JobRow = {
   promptV: number | null;
   needsReview: boolean;
   hasEmbedding: boolean;
+  hasBge: boolean;
 };
 
 export default function AdminPanel() {
@@ -121,6 +122,17 @@ export default function AdminPanel() {
   }
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [pending, setPending] = useState(0);
+  // bge-m3 pool embedding (local ollama) — backlog counts + one-click run
+  const [bge, setBge] = useState<{ gemma4Needed: number; bgeNeeded: number; total?: number } | null>(null);
+  const [bgeBusy, setBgeBusy] = useState(false);
+  const [bgeTarget, setBgeTarget] = useState("200");
+  const [bgeMsg, setBgeMsg] = useState<string | null>(null);
+  const refreshBge = () =>
+    fetch("/api/admin/embed-bge", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j.ok) setBge({ gemma4Needed: j.gemma4Needed, bgeNeeded: j.bgeNeeded, total: j.total }); })
+      .catch(() => {});
+  useEffect(() => { void refreshBge(); }, []);
   const [tab, setTab] = useState<Tab>("usage");
   const [jobsTotal, setJobsTotal] = useState(0);
   const [jobStatus, setJobStatus] = useState<"all" | "pending" | "vectorized">("all");
@@ -128,9 +140,10 @@ export default function AdminPanel() {
   const [jobModel, setJobModel] = useState(""); // "" = any, or a model / "none"
   const [jobMissing, setJobMissing] = useState<"" | "comp" | "yoe" | "remote">("");
   const [jobFlagged, setJobFlagged] = useState(false);
+  const [jobEmbed, setJobEmbed] = useState<"" | "bge" | "none">(""); // bge-embedding filter
   const [jobPage, setJobPage] = useState(0);
   const PAGE = 50;
-  type JobFilter = { status: "all" | "pending" | "vectorized"; q: string; model: string; missing: string; flagged: boolean; page: number };
+  type JobFilter = { status: "all" | "pending" | "vectorized"; q: string; model: string; missing: string; flagged: boolean; embed: string; page: number };
   type Stats = {
     verticals: { vertical: string; total: number; done: number }[];
     boards: { company: string | null; total: number; done: number }[];
@@ -143,7 +156,7 @@ export default function AdminPanel() {
   // post-inference refresh — reloads what the user is actually looking at.
   // (A stale closure here once refreshed the "all" list while the operator sat
   // on the vectorized tab, hiding freshly processed jobs.)
-  const jobParamsRef = useRef<JobFilter>({ status: "all", q: "", model: "", missing: "", flagged: false, page: 0 });
+  const jobParamsRef = useRef<JobFilter>({ status: "all", q: "", model: "", missing: "", flagged: false, embed: "", page: 0 });
 
   // paged on purpose — a 500-row dump once crashed the operator's browser
   const loadJobs = useCallback(async (over?: Partial<JobFilter>) => {
@@ -155,6 +168,7 @@ export default function AdminPanel() {
       if (next.model) params.set("model", next.model);
       if (next.missing) params.set("missing", next.missing);
       if (next.flagged) params.set("flagged", "1");
+      if (next.embed) params.set("embed", next.embed);
       const r = await fetch(`/api/admin/jobs?${params}`, { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
@@ -237,6 +251,38 @@ export default function AdminPanel() {
     } finally {
       setInferring(false);
       setProg(null);
+    }
+  }
+
+  // bge-m3 embedding (local ollama). Loops in 500-row server batches until it hits
+  // the target row count — or, in drain mode, until the whole pool is embedded —
+  // streaming live progress so an operator can watch it work and walk away.
+  async function runBge(drainAll = false) {
+    setBgeBusy(true);
+    const target = drainAll ? Infinity : Math.max(1, parseInt(bgeTarget, 10) || 200);
+    let done = 0;
+    setBgeMsg("Starting bge-m3 (local ollama)…");
+    try {
+      while (done < target) {
+        const batch = Math.min(500, drainAll ? 500 : target - done);
+        const r = await fetch("/api/admin/embed-bge", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ count: batch }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error);
+        done += j.embedded;
+        setBge((b) => (b ? { ...b, bgeNeeded: j.remaining } : b));
+        setBgeMsg(`Embedded ${done} this run · ${j.remaining} left in pool`);
+        if (j.embedded === 0 || j.remaining === 0) break; // drained / nothing eligible
+      }
+      setBgeMsg((m) => `${m ?? ""} — done ✓`);
+    } catch (e) {
+      setBgeMsg(`Failed after ${done}: ${e instanceof Error ? e.message : "unknown error"} (is bge-m3 pulled? \`ollama pull bge-m3\`)`);
+    } finally {
+      setBgeBusy(false);
+      void refreshBge();
     }
   }
 
@@ -591,6 +637,32 @@ export default function AdminPanel() {
             complete&quot;. Heads-up: inference competes with live mentor calls for the GPU — run it between calls.
           </p>
 
+          {/* bge-m3 pool embedding: local ollama, feeds the CF real-time recs. */}
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <b>bge-m3 embeddings</b>
+            <span className="admin-note" style={{ margin: 0 }}>
+              {bge
+                ? `${(bge.total ?? 0) - bge.bgeNeeded}/${bge.total ?? 0} embedded · ${bge.bgeNeeded} to go · ${bge.gemma4Needed} need gemma4 first`
+                : "loading…"}
+            </span>
+            <label className="admin-knob">
+              rows&nbsp;
+              <input className="admin-count" type="number" min={1} max={5000} value={bgeTarget} onChange={(e) => setBgeTarget(e.target.value)} disabled={bgeBusy} />
+            </label>
+            <button className="btn-primary" onClick={() => void runBge(false)} disabled={bgeBusy || (bge?.bgeNeeded ?? 0) === 0}>
+              {bgeBusy ? "Embedding…" : "▶ Run"}
+            </button>
+            <button
+              className="ghost-btn"
+              onClick={() => void runBge(true)}
+              disabled={bgeBusy || (bge?.bgeNeeded ?? 0) === 0}
+              title="Loop 500 at a time until the whole pool is embedded — set it going and walk away"
+            >
+              ⤓ Drain all
+            </button>
+            {bgeMsg && <span className="admin-note" style={{ margin: 0 }}>· {bgeMsg}</span>}
+          </div>
+
           {inferring && prog && prog.total > 0 && (
             <div className="infer-progress">
               <div className="infer-progress-bar">
@@ -686,11 +758,22 @@ export default function AdminPanel() {
                 >
                   ⚑ flagged{stats?.missing.flaggedN ? ` ${stats.missing.flaggedN}` : ""}
                 </button>
+                {/* bge-embedding status filter */}
+                {([["bge", "bge ✓"], ["none", "no bge"]] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    className={`admin-tab${jobEmbed === k ? " active" : ""}`}
+                    onClick={() => { const v = jobEmbed === k ? "" : k; setJobEmbed(v); setJobPage(0); void loadJobs({ embed: v, page: 0 }); }}
+                    title={k === "bge" ? "Rows with a bge-m3 vector" : "Extracted rows still missing a bge-m3 vector"}
+                  >
+                    {label}
+                  </button>
+                ))}
               </span>
             </div>
             <table className="admin-table admin-jobs-table">
               <thead>
-                <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Model</th><th>Status</th><th>Added</th><th></th></tr>
+                <tr><th>Title</th><th>Company</th><th>Location</th><th>Style</th><th>Comp</th><th>Domain</th><th>Src</th><th>Model</th><th>Status</th><th>Embed</th><th>Added</th><th></th></tr>
               </thead>
               <tbody>
                 {jobs.map((j) => {
@@ -726,6 +809,11 @@ export default function AdminPanel() {
                         ) : "—"}
                       </td>
                       <td>{j.vectorizedAt ? <span style={{ whiteSpace: "nowrap" }} title={new Date(j.vectorizedAt).toLocaleString()}>✓ {fmtAgo(j.vectorizedAt)}</span> : <span className="admin-pending">pending</span>}</td>
+                      <td className="admin-dim" style={{ whiteSpace: "nowrap" }}>
+                        {j.hasBge ? <span title="bge-m3 embedded" style={{ color: "#7bc47f" }}>bge ✓</span>
+                          : j.vectorizedAt ? <span title="extracted but no bge vector yet" style={{ color: "#e0b45c" }}>needs bge</span>
+                          : <span className="admin-dim">—</span>}
+                      </td>
                       <td className="admin-dim">{fmtAgo(j.createdAt)}</td>
                       <td><button className="admin-del" onClick={() => void deleteJob(j.id)} title="Delete this job">✕</button></td>
                     </tr>,
