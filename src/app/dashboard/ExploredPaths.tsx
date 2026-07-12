@@ -22,6 +22,13 @@ type Path = {
   lastVisitedAt: string;
 };
 
+// Title Case for direction tags ("marketing automation engineering" → "Marketing
+// Automation Engineering"), preserving domain acronyms (AI, ML, GTM, UX, …).
+const ACRONYMS = new Set(["ai", "ml", "gtm", "ux", "ui", "api", "saas", "hr", "qa", "devops", "seo", "b2b", "b2c", "llm", "nlp", "ar", "vr", "iot", "crm"]);
+function titleCase(s: string): string {
+  return s.replace(/[A-Za-z0-9']+/g, (w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)));
+}
+
 function ago(iso: string): string {
   const d = Math.max(0, Date.now() - Date.parse(iso));
   const day = 86400000;
@@ -72,12 +79,19 @@ export default function ExploredPaths({ userId }: { userId: string }) {
       <div className="explored-grid">
         {paths.map((p) => {
           const why = typeof p.summary?.why === "string" ? (p.summary.why as string) : "";
+          // a direction is a trajectory theme, not a JD — show the LLM-minted
+          // directionTag; fall back to the raw label for pre-tag legacy rows
+          const hasTag = typeof p.summary?.directionTag === "string";
+          const heading = titleCase(hasTag ? (p.summary!.directionTag as string) : p.label);
+          // proof-point: the concrete role@company that sparked this direction —
+          // small, muted, so the theme leads and the example just grounds it
+          const example = hasTag ? `${p.label}${p.company ? ` @ ${displayCompany(p.company)}` : ""}` : "";
           const committed = !!p.committedAt;
           return (
             <div className={`explored-card${committed ? " committed" : ""}`} key={p.id}>
               {p.kind && <span className="explored-kind">{p.kind}</span>}
-              <div className="explored-label">{p.label}</div>
-              {p.company && <div className="explored-co">{displayCompany(p.company)}</div>}
+              <div className="explored-label">{heading}</div>
+              {example && <div className="explored-co">e.g. {example}</div>}
               {why && <div className="explored-why">{why}</div>}
               <div className="explored-meta">
                 explored {p.visitCount}×{p.visitCount > 1 ? "" : ""} · {ago(p.lastVisitedAt)}

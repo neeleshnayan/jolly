@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveUserId } from "@/lib/auth/user";
 import { listExploredPaths, recordExploredPath, markCommitted } from "@/lib/explored/persist";
+import { mintDirectionTag } from "@/lib/explored/direction-tag";
 import { fillTargetTheme } from "@/lib/track/persist";
 
 export const runtime = "nodejs";
@@ -31,14 +32,19 @@ export async function POST(req: Request) {
     const parsed = bodySchema.parse(await req.json());
     const userId = await resolveUserId(parsed.userId);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    // A JD is not a direction: the label anchors the branch (raw role, stable for
+    // dedup on re-dive), but what we SHOW and commit to is a high-level thematic
+    // direction the LLM names from it. Timestamped so directions form a dated trail.
+    const why = typeof parsed.summary?.why === "string" ? parsed.summary.why : null;
+    const { directionTag, taggedAt } = await mintDirectionTag({ title: parsed.label, why, kind: parsed.kind });
     const id = await recordExploredPath(userId, {
       label: parsed.label,
       company: parsed.company ?? null,
       kind: parsed.kind ?? null,
       source: parsed.source,
-      summary: parsed.summary,
+      summary: { ...(parsed.summary ?? {}), directionTag, taggedAt },
     });
-    return NextResponse.json({ ok: true, id });
+    return NextResponse.json({ ok: true, id, directionTag });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Bad request" }, { status: 400 });
   }

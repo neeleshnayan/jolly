@@ -59,8 +59,9 @@ export async function recordExploredPath(userId: string, input: ExploredInput): 
 }
 
 /** Mark a branch committed — the paid step-up moment (intro + apply kit). Scoped
- *  to the user's own paths. This is the pricing-gate signal. Returns the path's
- *  label so the caller can make it the user's target direction (recs retune). */
+ *  to the user's own paths. This is the pricing-gate signal. Returns the thematic
+ *  directionTag (falling back to the raw label) so the caller can make it the
+ *  user's target direction (recs retune toward the theme, not the JD). */
 export async function markCommitted(userId: string, id: string): Promise<{ label: string } | null> {
   const [p] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
   if (!p) return null;
@@ -68,8 +69,10 @@ export async function markCommitted(userId: string, id: string): Promise<{ label
     .update(exploredPaths)
     .set({ committedAt: new Date() })
     .where(and(eq(exploredPaths.id, id), eq(exploredPaths.profileId, p.id)))
-    .returning({ label: exploredPaths.label });
-  return row ? { label: row.label } : null;
+    .returning({ label: exploredPaths.label, summary: exploredPaths.summary });
+  if (!row) return null;
+  const tag = typeof row.summary?.directionTag === "string" ? row.summary.directionTag : null;
+  return { label: tag || row.label };
 }
 
 /** All branches for a user, most-recently-visited first. Read-only (no profile create). */
