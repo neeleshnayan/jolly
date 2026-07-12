@@ -192,7 +192,7 @@ export function useDeepgramAgent(opts: { model?: string } = {}) {
             language: "en",
             listen: { provider: { type: "deepgram", model: "nova-3" } },
             think: { provider: { type: "anthropic", model }, prompt, functions: DEEPGRAM_FUNCTIONS },
-            speak: { provider: { type: "deepgram", model: "aura-2-pluto-en" } }, // deep, calm, empathetic baritone — the mentor voice
+            speak: { provider: { type: "deepgram", model: process.env.NEXT_PUBLIC_DG_VOICE ?? "aura-orion-en" } }, // aura-1 (GA on all plans); aura-2 needs plan access → silent TTS
             greeting,
           },
         }),
