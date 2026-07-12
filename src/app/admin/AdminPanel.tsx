@@ -209,6 +209,12 @@ export default function AdminPanel() {
     }
   }
 
+  // graceful stop — the run finishes the current row, embeds what completed, exits
+  async function stopCrunch() {
+    setFetchLog((l) => [...l, "⏹ Stop requested — finishing the current row, then embedding what completed…"]);
+    try { await fetch("/api/admin/run-inference", { method: "DELETE" }); } catch { /* best effort */ }
+  }
+
   // phase 2 — GPU inference, fully operator-controlled: total, batch, cooldown
   async function runInference() {
     setInferring(true);
@@ -565,6 +571,16 @@ export default function AdminPanel() {
                     ? `♻ Backfill up to ${Math.min(Number(inferCount) || 10, 2000)}`
                     : `▶ Vectorize ${Math.min(Number(inferCount) || 10, pending || 0)} job${Math.min(Number(inferCount) || 10, pending || 0) === 1 ? "" : "s"}`}
               </button>
+              {inferring && (
+                <button
+                  className="ghost-btn"
+                  onClick={() => void stopCrunch()}
+                  title="Finish the current row, embed what completed, then stop."
+                  style={{ borderColor: "#ef4444", color: "#ef4444" }}
+                >
+                  ⏹ Stop
+                </button>
+              )}
             </span>
           </div>
           <p className="admin-note">

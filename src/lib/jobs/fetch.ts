@@ -154,6 +154,13 @@ export function resetInferenceProgress(): void {
   progress.current = null;
 }
 
+// Cooperative stop: the admin "Stop" button sets this; the run loops check it
+// between rows and exit cleanly (already-extracted rows still get embedded).
+let stopRequested = false;
+export function stopInference(): void {
+  stopRequested = true;
+}
+
 /**
  * Evidence-based "is a run active?" — the in-memory mutex above dies whenever
  * Next dev re-instantiates this module (HMR), so mid-run the UI would say idle
@@ -240,6 +247,7 @@ export async function runInference(opts?: {
   progress.failed = 0;
   progress.current = null;
   progress.startedAt = Date.now();
+  stopRequested = false; // fresh run clears any stale stop request
   await releaseLiveModel(); // free the voice model's VRAM first
 
   const fastModel = tiered ? FAST_MODEL : undefined; // undefined → provider default (legacy single-model)
@@ -261,9 +269,11 @@ export async function runInference(opts?: {
 
   // ── Pass 1: fast model (or the single default when !tiered) ──
   for (let i = 0; i < rows.length; i += batchSize) {
+    if (stopRequested) { log("⏹ Stopped by user — embedding what completed."); break; }
     const batch = rows.slice(i, i + batchSize);
     log(`Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(rows.length / batchSize)}:`);
     for (const row of batch) {
+      if (stopRequested) break;
       progress.current = row.title;
       try {
         const out = await extractRole(row.rawText ?? "", fastModel);
@@ -297,7 +307,9 @@ export async function runInference(opts?: {
     if (FAST_MODEL !== STRONG_MODEL) await unloadModel(FAST_MODEL); // same model → keep it warm
     log(`Escalated ${escalate.length} to ${STRONG_MODEL}:`);
     for (let i = 0; i < escalate.length; i += batchSize) {
+      if (stopRequested) break;
       for (const { id, row } of escalate.slice(i, i + batchSize)) {
+        if (stopRequested) break;
         progress.current = row.title;
         try {
           const out = await extractRole(row.rawText ?? "", STRONG_MODEL);

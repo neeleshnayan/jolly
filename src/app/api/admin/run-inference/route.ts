@@ -5,13 +5,22 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth/admin";
-import { runInference, inferenceProgress, resetInferenceProgress, recentInferenceActivity } from "@/lib/jobs/fetch";
+import { runInference, inferenceProgress, resetInferenceProgress, recentInferenceActivity, stopInference } from "@/lib/jobs/fetch";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
 
 /** GET — live progress of the current (or last) inference run. Poll while running.
  *  `activeSecondsAgo` is the DB-evidence signal (survives dev-mode module resets). */
+/** Cooperative stop — the run loop exits after the current row (already-extracted
+ *  rows still get embedded). Also resets the mutex so the next run can start. */
+export async function DELETE() {
+  const adminId = await requireAdmin();
+  if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  stopInference();
+  return NextResponse.json({ ok: true, stopping: true });
+}
+
 export async function GET() {
   const adminId = await requireAdmin();
   if (!adminId) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
