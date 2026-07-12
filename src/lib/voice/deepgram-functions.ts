@@ -30,4 +30,18 @@ export const DEEPGRAM_FUNCTIONS = [
       required: ["role_title"],
     },
   },
+  {
+    name: "introduce_mentor",
+    description:
+      "ALWAYS call this the instant you name or bring up a specific person from the user's mentor circle (someone who's already made a similar move). It surfaces that person's card on screen. Never say a circle person's name without also calling this — the card is what makes the introduction real.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "the person's full name, e.g. Arjun Mehta" },
+        move: { type: "string", description: "their career move in arrow form, e.g. 'Analyst at Goldman Sachs → VP Product at Razorpay'" },
+        why: { type: "string", description: "one short line on why they're relevant to this user" },
+      },
+      required: ["name"],
+    },
+  },
 ];

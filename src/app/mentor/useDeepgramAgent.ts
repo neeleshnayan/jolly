@@ -17,6 +17,7 @@ const OUT_RATE = 24000;
 
 export type DgTurn = { role: "you" | "mentor"; text: string };
 export type DgCard = { kind?: string; title: string; company: string; why?: string };
+export type DgMentor = { name: string; move: string; why?: string };
 export type DgMode = "idle" | "connecting" | "listening" | "thinking" | "speaking";
 
 const GREETING = "Hey — good to see you. What's on your mind about where your career's headed right now?";
@@ -32,6 +33,7 @@ export function useDeepgramAgent(opts: { model?: string } = {}) {
   const [status, setStatus] = useState("idle");
   const [turns, setTurns] = useState<DgTurn[]>([]);
   const [cards, setCards] = useState<DgCard[]>([]);
+  const [mentors, setMentors] = useState<DgMentor[]>([]);
   const [error, setError] = useState<string | null>(null);
   const levelRef = useRef(0);
 
@@ -92,6 +94,7 @@ export function useDeepgramAgent(opts: { model?: string } = {}) {
     setError(null);
     setTurns([]);
     setCards([]);
+    setMentors([]);
     setStatus("getting mic…");
     let stream: MediaStream;
     try {
@@ -168,6 +171,16 @@ export function useDeepgramAgent(opts: { model?: string } = {}) {
               body: JSON.stringify({ label: args.role_title, company: args.company, kind: "A DIFFERENT PATH", source: "deepgram_dive" }),
             });
             content = `Saved — the user is now exploring ${String(args.role_title ?? "this path")}.`;
+          } else if (name === "introduce_mentor") {
+            const nm = String(args.name ?? "").trim();
+            if (nm) {
+              setMentors((prev) =>
+                prev.some((p) => p.name === nm)
+                  ? prev
+                  : [...prev, { name: nm, move: String(args.move ?? "").trim(), why: String(args.why ?? "").trim() || undefined }],
+              );
+            }
+            content = `Surfaced ${nm || "that person"}'s card on screen for them.`;
           } else {
             content = `Unknown function ${name}`;
           }
@@ -255,5 +268,5 @@ export function useDeepgramAgent(opts: { model?: string } = {}) {
     ws.onerror = () => setError("voice socket error");
   }, [model, playPCM]);
 
-  return { live, mode, status, turns, cards, error, levelRef, start, stop };
+  return { live, mode, status, turns, cards, mentors, error, levelRef, start, stop };
 }

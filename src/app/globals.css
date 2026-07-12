@@ -2430,7 +2430,7 @@ textarea.f { line-height: 1.55; }
   color: var(--muted);
   margin-bottom: 12px;
 }
-.call-roles-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.call-roles-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .call-role {
   background: var(--paper);
   border: 1px solid var(--line);

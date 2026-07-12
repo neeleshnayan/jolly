@@ -35,10 +35,11 @@ export async function buildDeepgramAgentPrompt(userId: string): Promise<{ prompt
   // Tools are a FALLBACK, not a reflex. You already have their spectrum of roles
   // loaded above — speak from those. Over-calling makes role cards pop up at random
   // and clutters the call; call a tool only when it genuinely adds something.
-  const tools = `\n\nYOU HAVE LIVE TOOLS — use them SPARINGLY:
-- You already hold a spectrum of real roles for them (above). Talk from THOSE. Only call fetch_recommendations if they steer toward a genuinely NEW direction those don't cover, AND they've clearly leaned into exploring it — never on a passing mention or a single word. When in doubt, keep talking, don't call.
-- Only when they truly settle on ONE role to go deep on, CALL open_path for it.
-Never announce a tool call.`;
+  const tools = `\n\nYOU HAVE LIVE TOOLS:
+- You hold a spectrum of real roles for them (above) — speak from THOSE. The moment they lean into a direction, or you name a concrete role worth exploring, CALL fetch_recommendations so real roles surface as CARDS they can see — those visible cards are a core part of this experience, so don't be shy. (Not on a single stray word, but any genuine interest in a direction should surface cards.)
+- When they settle on ONE role to go deep on, CALL open_path for it.
+- The INSTANT you name someone from their circle (e.g. "I've got Arjun Mehta — he went from Analyst at Goldman Sachs to VP Product at Razorpay…"), CALL introduce_mentor with that person's name and move. The card on screen is what makes the introduction real — never name a circle person without calling it.
+Never announce a tool call. NEVER write or speak stage directions, tone labels, or anything in [square brackets] — say only your actual words to the person.`;
 
   return { prompt: `${core}\n${delta}${tools}`.trim(), greeting };
 }

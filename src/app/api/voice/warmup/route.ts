@@ -22,6 +22,12 @@ export async function POST(req: Request) {
   if (!(await resolveUserId(typeof body.userId === "string" ? body.userId : null))) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
+  // Deepgram warms its own agent on connect — skip the ollama/whisper/kokoro
+  // preload entirely. This is the local turn-based (MentorCall) path's optimisation
+  // only; on the Deepgram/CF path it just makes stray voicebox/OpenRouter calls.
+  if ((process.env.VOICE_PROVIDER ?? "").toLowerCase() === "deepgram" || process.env.DEPLOY_TARGET === "cloudflare") {
+    return NextResponse.json({ ok: true, skipped: "deepgram" });
+  }
   await Promise.allSettled([
     // load the live model without generating (Ollama loads on an empty request)
     fetch(`${OLLAMA}/api/generate`, {
