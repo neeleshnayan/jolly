@@ -17,6 +17,11 @@ export async function GET() {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return NextResponse.json({ error: "DEEPGRAM_API_KEY not set" }, { status: 500 });
 
+  // The Voice Agent WS authenticates cleanly with the raw key; scoped grant tokens
+  // have been unreliable as the WS subprotocol. When raw is allowed (dev, or prod
+  // with DEEPGRAM_ALLOW_RAW=1 for a throwaway key), skip grant and return the key.
+  if (allowRaw()) return NextResponse.json({ token: key, raw: true });
+
   try {
     const r = await fetch("https://api.deepgram.com/v1/auth/grant", {
       method: "POST",
