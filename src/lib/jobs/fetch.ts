@@ -13,6 +13,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { opportunities } from "@/db/schema";
 import { releaseLiveModel } from "@/llm/ollama";
+import { embed, roleEmbedText } from "@/lib/embeddings";
 import { COMPANIES } from "./companies";
 import { fetchBoard } from "./ats";
 import { FAST_MODEL, STRONG_MODEL, TRUSTED_MODELS, extractRole, escalationReason, applyRowAuthority, writeVectorization, cleanSkills, unloadModel } from "./vectorize";
@@ -248,6 +249,16 @@ export async function runInference(opts?: {
   const modelDesc = !tiered ? "" : FAST_MODEL === STRONG_MODEL ? ` — ${FAST_MODEL} end to end` : ` — ${FAST_MODEL} → escalate to ${STRONG_MODEL}`;
   log(`${force ? "Re-vectorizing" : "Vectorizing"} ${rows.length} job(s)${modelDesc}, ${batchSize}/batch, ${Math.round(sleepMs / 1000)}s cooldown.`);
 
+  // Defer embeddings: keep the extractor RESIDENT through both passes (embedding
+  // inline loads nomic per row, which evicts the 22GB extractor → reload → the
+  // VRAM sawtooth). Collect ids, then embed everything in ONE nomic pass after a
+  // single model swap. Also writes embedding_vec (the pgvector column the ranking
+  // RPC actually uses) — inline writes only the legacy jsonb, so fresh crunches
+  // were silently losing semantic trajectory.
+  const embedIds: string[] = [];
+  const priorInline = process.env.EMBED_INLINE;
+  process.env.EMBED_INLINE = "0";
+
   // ── Pass 1: fast model (or the single default when !tiered) ──
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize);
@@ -264,6 +275,7 @@ export async function runInference(opts?: {
           log(`  ↑ ${row.title} — ${reason}, escalating`);
         } else {
           await writeVectorization(row.id, out, fastModel ?? null, row);
+          embedIds.push(row.id);
           vectorized++;
           progress.done = vectorized;
           log(`  + ${row.title}`);
@@ -292,6 +304,7 @@ export async function runInference(opts?: {
           applyRowAuthority(out, row);
           cleanSkills(out.facts); // scrub the strong model's skills too
           await writeVectorization(id, out, STRONG_MODEL, row);
+          embedIds.push(id);
           vectorized++;
           progress.done = vectorized;
           log(`  + ${row.title} (strong)`);
@@ -307,6 +320,37 @@ export async function runInference(opts?: {
       }
     }
   }
+
+  // ── deferred embed pass: ONE extractor→nomic swap, then nomic embeds all rows
+  // in this run. Writes BOTH embedding (legacy jsonb) and embedding_vec (pgvector,
+  // used by the ranking RPC) so semantic trajectory is live for fresh rows. ──
+  if (embedIds.length) {
+    try {
+      await unloadModel(STRONG_MODEL); // free the extractor's VRAM before nomic
+      log(`Embedding ${embedIds.length} role(s) — nomic, one pass (no per-row swap)…`);
+      const toEmbed = await db
+        .select({ id: opportunities.id, title: opportunities.title, facts: opportunities.facts })
+        .from(opportunities)
+        .where(inArray(opportunities.id, embedIds));
+      let embedded = 0;
+      for (let i = 0; i < toEmbed.length; i += 32) {
+        const b = toEmbed.slice(i, i + 32);
+        const vecs = await embed(b.map((r) => roleEmbedText((r.facts ?? {}) as Parameters<typeof roleEmbedText>[0], r.title)));
+        await Promise.all(
+          b.map((r, j) =>
+            vecs[j]?.length
+              ? db.execute(sql`UPDATE opportunities SET embedding = ${JSON.stringify(vecs[j])}::jsonb, embedding_vec = ${`[${vecs[j].join(",")}]`}::vector WHERE id = ${r.id}`)
+              : Promise.resolve(),
+          ),
+        );
+        embedded += b.length;
+      }
+      log(`Embedded ${embedded}.`);
+    } catch (e) {
+      log(`Embed pass failed: ${(e as Error).message} — rankings use lexical trajectory until re-embedded.`);
+    }
+  }
+  process.env.EMBED_INLINE = priorInline;
 
   progress.running = false;
   progress.current = null;
