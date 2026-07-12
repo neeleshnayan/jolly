@@ -22,7 +22,11 @@
     "LLM_PROVIDER_MENTOR": "openrouter",
     "OPENROUTER_MODEL": "google/gemma-4-31b-it:free",
     "LLM_FALLBACK_LOCAL": "false",
-    "OPENROUTER_APP_URL": "https://drizzle.drizzlenetwork.workers.dev"
+    "OPENROUTER_APP_URL": "https://drizzle.drizzlenetwork.workers.dev",
+    "VOICE_PROVIDER": "openrouter",
+    "OPENROUTER_STT_MODEL": "openai/whisper-large-v3-turbo",
+    "OPENROUTER_TTS_MODEL": "hexgrad/kokoro-82m",
+    "OPENROUTER_TTS_VOICE": "am_michael"
   },
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "b860d77a3d36481393cbd3e35a5d911a" }
