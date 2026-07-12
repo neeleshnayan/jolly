@@ -327,7 +327,7 @@ export default function Recommendations({ userId, onTracked }: { userId: string;
   const skillFilterLabel = activeRadar?.skill ?? skillFilter; // display form, never the raw key
 
   return (
-    <section className="dash-section">
+    <section className="dash-section" id="recommendations">
       {retuneBanner}
       <div className="dash-section-head">
         <h2>Recommended for you</h2>

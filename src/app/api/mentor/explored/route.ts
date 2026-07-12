@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveUserId } from "@/lib/auth/user";
 import { listExploredPaths, recordExploredPath, markCommitted } from "@/lib/explored/persist";
+import { fillTargetTheme } from "@/lib/track/persist";
 
 export const runtime = "nodejs";
 
@@ -50,8 +51,16 @@ export async function PATCH(req: Request) {
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
     const userId = await resolveUserId(null);
     if (!userId) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-    await markCommitted(userId, id);
-    return NextResponse.json({ ok: true });
+    const committed = await markCommitted(userId, id);
+    // Commit = "this is my direction now" → make it the target role so the
+    // recommendations re-rank toward it (trajectory + the "you set this" reason).
+    // Best-effort: the commit itself already succeeded.
+    if (committed?.label) {
+      try {
+        await fillTargetTheme(userId, committed.label, "You committed to this path from your dashboard.");
+      } catch { /* retune is best-effort — commit still stands */ }
+    }
+    return NextResponse.json({ ok: true, retuned: !!committed?.label });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Bad request" }, { status: 400 });
   }

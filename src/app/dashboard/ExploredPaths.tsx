@@ -45,8 +45,15 @@ export default function ExploredPaths({ userId }: { userId: string }) {
   async function commit(id: string) {
     setCommitting(id);
     try {
-      await fetch("/api/mentor/explored", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+      const r = await fetch("/api/mentor/explored", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+      const j = await r.json().catch(() => ({}));
       setPaths((ps) => ps?.map((p) => (p.id === id ? { ...p, committedAt: new Date().toISOString() } : p)) ?? ps);
+      // committing set this path as the target direction → send them up to the
+      // recommendations, which re-rank toward it (the ?retuning banner + refetch)
+      if (j?.retuned) {
+        window.location.assign("/dashboard?retuning=1#recommendations");
+        return;
+      }
     } catch {
       /* leave the button; they can retry */
     } finally {
