@@ -211,7 +211,7 @@ export default function AdminPanel() {
 
   // graceful stop — the run finishes the current row, embeds what completed, exits
   async function stopCrunch() {
-    setFetchLog((l) => [...l, "⏹ Stop requested — finishing the current row, then embedding what completed…"]);
+    setFetchLog((l) => [...(l ?? []), "⏹ Stop requested — finishing the current row, then embedding what completed…"]);
     try { await fetch("/api/admin/run-inference", { method: "DELETE" }); } catch { /* best effort */ }
   }
 
