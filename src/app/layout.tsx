@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ThemeToggle from "./ThemeToggle";
-import KeepWarm from "./KeepWarm";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
@@ -37,7 +36,6 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         {children}
         <ThemeToggle />
-        <KeepWarm />
       </body>
     </html>
   );
